@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="ur" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BAGA HMS - لائسنس ایکٹیویشن</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #059669 0%, #0d9488 50%, #0284c7 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+    .container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px 35px;
+      width: 460px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.3);
+    }
+    .logo {
+      width: 70px;
+      height: 70px;
+      background: linear-gradient(135deg, #059669, #0d9488);
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      box-shadow: 0 8px 25px rgba(5, 150, 105, 0.3);
+    }
+    .logo svg { width: 38px; height: 38px; fill: white; }
+    .title {
+      text-align: center;
+      font-size: 24px;
+      font-weight: 700;
+      color: #1f2937;
+      margin-bottom: 5px;
+    }
+    .subtitle {
+      text-align: center;
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 25px;
+    }
+    .version {
+      text-align: center;
+      font-size: 11px;
+      color: #9ca3af;
+      margin-bottom: 25px;
+      direction: ltr;
+    }
+    .form-group {
+      margin-bottom: 18px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 2px solid #e5e7eb;
+      border-radius: 10px;
+      font-size: 15px;
+      transition: border-color 0.2s;
+      outline: none;
+      direction: ltr;
+      text-align: center;
+      letter-spacing: 1px;
+      font-family: 'Consolas', 'Courier New', monospace;
+    }
+    input:focus {
+      border-color: #059669;
+      box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+    }
+    input:disabled {
+      background: #f3f4f6;
+      color: #9ca3af;
+    }
+    .btn {
+      width: 100%;
+      padding: 13px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #059669, #0d9488);
+      color: white;
+      box-shadow: 0 4px 15px rgba(5, 150, 105, 0.3);
+    }
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(5, 150, 105, 0.4);
+    }
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .btn-outline {
+      background: transparent;
+      color: #6b7280;
+      border: 2px solid #e5e7eb;
+      margin-top: 10px;
+    }
+    .btn-outline:hover {
+      border-color: #059669;
+      color: #059669;
+    }
+    .status {
+      margin-top: 15px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+    }
+    .status.error {
+      display: block;
+      background: #fef2f2;
+      color: #dc2626;
+      border: 1px solid #fecaca;
+    }
+    .status.success {
+      display: block;
+      background: #f0fdf4;
+      color: #16a34a;
+      border: 1px solid #bbf7d0;
+    }
+    .status.loading {
+      display: block;
+      background: #eff6ff;
+      color: #2563eb;
+      border: 1px solid #bfdbfe;
+    }
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #93c5fd;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .divider {
+      text-align: center;
+      margin: 20px 0;
+      color: #d1d5db;
+      font-size: 12px;
+    }
+    .info-box {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 14px;
+      margin-top: 15px;
+      display: none;
+    }
+    .info-box.visible { display: block; }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 0;
+      font-size: 13px;
+    }
+    .info-row .label { color: #6b7280; }
+    .info-row .value { color: #1f2937; font-weight: 600; direction: ltr; }
+    .machine-id {
+      font-size: 10px;
+      color: #9ca3af;
+      text-align: center;
+      margin-top: 15px;
+      direction: ltr;
+      word-break: break-all;
+    }
+    .update-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #1f2937;
+      color: white;
+      padding: 8px 20px;
+      font-size: 12px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .update-bar.visible { display: flex; }
+    .progress-bar {
+      width: 120px;
+      height: 4px;
+      background: #374151;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-bar .fill {
+      height: 100%;
+      background: #10b981;
+      transition: width 0.3s;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-4v-4H6v-4h4V6h4v4h4v4z"/></svg>
+    </div>
+    <div class="title">BAGA Hospital</div>
+    <div class="subtitle">ہسپتال مینجمنٹ سسٹم - لائسنس ایکٹیویشن</div>
+    <div class="version" id="version">v2.5.0</div>
+    
+    <!-- License Input -->
+    <div id="inputSection">
+      <div class="form-group">
+        <label>لائسنس کلید درج کریں</label>
+        <input type="text" id="licenseKey" placeholder="BAGA-XXXXX-XXXXX" autocomplete="off" />
+      </div>
+      
+      <button class="btn btn-primary" id="activateBtn" onclick="activateLicense()">
+        ایکٹیویٹ کریں
+      </button>
+      
+      <div class="status" id="status"></div>
+      
+      <!-- Current License Info -->
+      <div class="info-box" id="licenseInfo">
+        <div class="info-row">
+          <span class="label">ہسپتال:</span>
+          <span class="value" id="infoHospital">-</span>
+        </div>
+        <div class="info-row">
+          <span class="label">دورانیہ:</span>
+          <span class="value" id="infoDuration">-</span>
+        </div>
+        <div class="info-row">
+          <span class="label">میعاد ختم:</span>
+          <span class="value" id="infoExpiry">-</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="divider">--- یا ---</div>
+    
+    <button class="btn btn-outline" id="changeBtn" onclick="changeLicense()" style="display:none;">
+      لائسنس تبدیل کریں
+    </button>
+    
+    <div class="machine-id" id="machineId"></div>
+  </div>
+  
+  <!-- Update Notification Bar -->
+  <div class="update-bar" id="updateBar">
+    <span id="updateText">اپڈیٹ چیک ہو رہا ہے...</span>
+    <div class="progress-bar" id="progressBar" style="display:none;">
+      <div class="fill" id="progressFill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <script>
+    const activateBtn = document.getElementById('activateBtn');
+    const licenseInput = document.getElementById('licenseKey');
+    const statusDiv = document.getElementById('status');
+    const changeBtn = document.getElementById('changeBtn');
+    const licenseInfoBox = document.getElementById('licenseInfo');
+    const inputSection = document.getElementById('inputSection');
+    
+    // Get version and machine ID
+    window.electronAPI.getAppVersion().then(v => {
+      document.getElementById('version').textContent = 'v' + v;
+    });
+    window.electronAPI.getMachineId().then(id => {
+      document.getElementById('machineId').textContent = 'مشین آئی ڈی: ' + id;
+    });
+    
+    // Listen for updates
+    window.electronAPI.onUpdateStatus((data) => {
+      const bar = document.getElementById('updateBar');
+      const text = document.getElementById('updateText');
+      const progressBar = document.getElementById('progressBar');
+      const progressFill = document.getElementById('progressFill');
+      
+      if (data.status === 'checking') {
+        bar.classList.add('visible');
+        text.textContent = 'اپڈیٹ چیک ہو رہا ہے...';
+        progressBar.style.display = 'none';
+      } else if (data.status === 'available') {
+        bar.classList.add('visible');
+        text.textContent = `نیا نسخہ ${data.version} دستیاب ہے - ڈاؤنلوڈ ہو رہا ہے...`;
+      } else if (data.status === 'downloading') {
+        progressBar.style.display = 'block';
+        progressFill.style.width = data.percent + '%';
+        text.textContent = `ڈاؤنلوڈ ہو رہا ہے: ${data.percent}%`;
+      } else if (data.status === 'downloaded') {
+        text.textContent = `نسخہ ${data.version} ڈاؤنلوڈ ہو گیا!`;
+      } else if (data.status === 'error') {
+        bar.classList.remove('visible');
+      } else if (data.status === 'not-available') {
+        bar.classList.remove('visible');
+      }
+    });
+    
+    // Check existing license
+    async function checkExistingLicense() {
+      try {
+        const info = await window.electronAPI.getLicenseInfo();
+        if (info.license) {
+          // License exists - show info
+          document.getElementById('infoHospital').textContent = info.license.hospitalName || '-';
+          document.getElementById('infoDuration').textContent = getDurationLabel(info.license.licenseDuration);
+          document.getElementById('infoExpiry').textContent = info.license.expiryDate || 'لائف ٹائم';
+          
+          licenseInfoBox.classList.add('visible');
+          changeBtn.style.display = 'block';
+          inputSection.style.display = 'none';
+          
+          // Open main window after a moment
+          setTimeout(() => openMainWindow(), 1500);
+        }
+      } catch (e) {
+        console.error('License check error:', e);
+      }
+    }
+    
+    function getDurationLabel(d) {
+      const map = {
+        '1_month': '1 ماہ',
+        '3_months': '3 ماہ',
+        '6_months': '6 ماہ',
+        '1_year': '1 سال',
+        'lifetime': 'لائف ٹائم',
+      };
+      return map[d] || d || '-';
+    }
+    
+    async function activateLicense() {
+      const key = licenseInput.value.trim();
+      if (!key) {
+        showStatus('براہ کرم لائسنس کلید درج کریں', 'error');
+        return;
+      }
+      
+      activateBtn.disabled = true;
+      activateBtn.textContent = 'چیک ہو رہا ہے...';
+      showStatus('لائسنس تصدیق ہو رہی ہے...', 'loading');
+      
+      try {
+        const result = await window.electronAPI.activateLicense(key);
+        
+        if (result.success) {
+          showStatus('لائسنس کامیابی سے ایکٹیویٹ ہو گیا!', 'success');
+          
+          // Show license info
+          document.getElementById('infoHospital').textContent = result.data.hospitalName || '-';
+          document.getElementById('infoDuration').textContent = getDurationLabel(result.data.licenseDuration);
+          document.getElementById('infoExpiry').textContent = result.data.expiryDate || 'لائف ٹائم';
+          licenseInfoBox.classList.add('visible');
+          
+          // Open main window
+          setTimeout(() => openMainWindow(), 1500);
+        } else {
+          showStatus(result.error || 'لائسنس ناموزوں ہے', 'error');
+          activateBtn.disabled = false;
+          activateBtn.textContent = 'ایکٹیویٹ کریں';
+        }
+      } catch (error) {
+        showStatus('کنکشن ایرر - انٹرنیٹ چیک کریں', 'error');
+        activateBtn.disabled = false;
+        activateBtn.textContent = 'ایکٹیویٹ کریں';
+      }
+    }
+    
+    async function changeLicense() {
+      await window.electronAPI.resetLicense();
+      licenseInfoBox.classList.remove('visible');
+      changeBtn.style.display = 'none';
+      inputSection.style.display = 'block';
+      licenseInput.value = '';
+      licenseInput.focus();
+    }
+    
+    function showStatus(message, type) {
+      statusDiv.className = 'status ' + type;
+      if (type === 'loading') {
+        statusDiv.innerHTML = message + '<span class="spinner"></span>';
+      } else {
+        statusDiv.textContent = message;
+      }
+    }
+    
+    function openMainWindow() {
+      const { ipcRenderer } = require('electron');
+      ipcRenderer.send('open-main-window');
+    }
+    
+    // Allow Enter key to activate
+    licenseInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') activateLicense();
+    });
+    
+    // Initialize
+    checkExistingLicense();
+    licenseInput.focus();
+  </script>
+</body>
+</html>

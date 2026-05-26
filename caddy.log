@@ -1,0 +1,7 @@
+{"level":"info","ts":1778844923.6638305,"msg":"using config from file","file":"Caddyfile"}
+{"level":"info","ts":1778844923.664839,"msg":"adapted config to JSON","adapter":"caddyfile"}
+{"level":"info","ts":1778844923.6657639,"logger":"admin","msg":"admin endpoint started","address":"localhost:2019","enforce_origin":false,"origins":["//localhost:2019","//[::1]:2019","//127.0.0.1:2019"]}
+{"level":"warn","ts":1778844923.6660044,"logger":"http.auto_https","msg":"server is listening only on the HTTP port, so no automatic HTTPS will be applied to this server","server_name":"srv0","http_port":80}
+{"level":"info","ts":1778844923.6661444,"logger":"tls.cache.maintenance","msg":"started background certificate maintenance","cache":"0xc00025f480"}
+{"level":"info","ts":1778844923.666615,"logger":"tls.cache.maintenance","msg":"stopped background certificate maintenance","cache":"0xc00025f480"}
+Error: loading initial config: loading new config: http app module: start: listening on :80: listen tcp :80: bind: permission denied

@@ -1,0 +1,74 @@
+{
+  "name": "baga-hms",
+  "version": "2.5.0",
+  "private": true,
+  "description": "BAGA Hospital Management System",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "electron:dev": "concurrently \"next build && next start\" \"wait-on http://localhost:3000 && electron .\"",
+    "electron:build": "next build && electron-builder --win --x64",
+    "electron:build:portable": "next build && electron-builder --win portable --x64",
+    "electron:start": "electron .",
+    "dist": "electron-builder --win --x64 --publish never"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.4.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^1.16.0",
+    "next": "14.2.35",
+    "react": "^18",
+    "react-dom": "^18",
+    "shadcn": "^4.7.0",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.6.0",
+    "tw-animate-css": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "concurrently": "^9.1.2",
+    "electron": "^35.1.5",
+    "electron-builder": "^26.0.12",
+    "electron-updater": "^6.3.9",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.baga.hospital.hms",
+    "productName": "BAGA Hospital Management System",
+    "copyright": "Copyright 2024 BAGA Hospital",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "electron/**/*",
+      "out/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "mohsin-rasheedbaga",
+      "repo": "baga-hms"
+    }
+  }
+}
