@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ur" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BAGA HMS - لائسنس ایکٹیویشن</title>
+  <title>BAGA HMS - License Activation</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -52,7 +52,6 @@
       font-size: 11px;
       color: #9ca3af;
       margin-bottom: 25px;
-      direction: ltr;
     }
     .form-group {
       margin-bottom: 18px;
@@ -72,7 +71,6 @@
       font-size: 15px;
       transition: border-color 0.2s;
       outline: none;
-      direction: ltr;
       text-align: center;
       letter-spacing: 1px;
       font-family: 'Consolas', 'Courier New', monospace;
@@ -177,13 +175,12 @@
       font-size: 13px;
     }
     .info-row .label { color: #6b7280; }
-    .info-row .value { color: #1f2937; font-weight: 600; direction: ltr; }
+    .info-row .value { color: #1f2937; font-weight: 600; }
     .machine-id {
       font-size: 10px;
       color: #9ca3af;
       text-align: center;
       margin-top: 15px;
-      direction: ltr;
       word-break: break-all;
     }
     .update-bar {
@@ -221,51 +218,48 @@
       <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-4v-4H6v-4h4V6h4v4h4v4z"/></svg>
     </div>
     <div class="title">BAGA Hospital</div>
-    <div class="subtitle">ہسپتال مینجمنٹ سسٹم - لائسنس ایکٹیویشن</div>
+    <div class="subtitle">Hospital Management System - License Activation</div>
     <div class="version" id="version">v2.5.0</div>
     
-    <!-- License Input -->
     <div id="inputSection">
       <div class="form-group">
-        <label>لائسنس کلید درج کریں</label>
+        <label>Enter your license key</label>
         <input type="text" id="licenseKey" placeholder="BAGA-XXXXX-XXXXX" autocomplete="off" />
       </div>
       
       <button class="btn btn-primary" id="activateBtn" onclick="activateLicense()">
-        ایکٹیویٹ کریں
+        Activate
       </button>
       
       <div class="status" id="status"></div>
       
-      <!-- Current License Info -->
       <div class="info-box" id="licenseInfo">
         <div class="info-row">
-          <span class="label">ہسپتال:</span>
+          <span class="label">Hospital:</span>
           <span class="value" id="infoHospital">-</span>
         </div>
         <div class="info-row">
-          <span class="label">دورانیہ:</span>
+          <span class="label">Duration:</span>
           <span class="value" id="infoDuration">-</span>
         </div>
         <div class="info-row">
-          <span class="label">میعاد ختم:</span>
+          <span class="label">Expires:</span>
           <span class="value" id="infoExpiry">-</span>
         </div>
       </div>
     </div>
     
-    <div class="divider">--- یا ---</div>
+    <div class="divider">--- or ---</div>
     
     <button class="btn btn-outline" id="changeBtn" onclick="changeLicense()" style="display:none;">
-      لائسنس تبدیل کریں
+      Change License
     </button>
     
     <div class="machine-id" id="machineId"></div>
   </div>
   
-  <!-- Update Notification Bar -->
   <div class="update-bar" id="updateBar">
-    <span id="updateText">اپڈیٹ چیک ہو رہا ہے...</span>
+    <span id="updateText">Checking for updates...</span>
     <div class="progress-bar" id="progressBar" style="display:none;">
       <div class="fill" id="progressFill" style="width:0%"></div>
     </div>
@@ -279,15 +273,13 @@
     const licenseInfoBox = document.getElementById('licenseInfo');
     const inputSection = document.getElementById('inputSection');
     
-    // Get version and machine ID
     window.electronAPI.getAppVersion().then(v => {
       document.getElementById('version').textContent = 'v' + v;
     });
     window.electronAPI.getMachineId().then(id => {
-      document.getElementById('machineId').textContent = 'مشین آئی ڈی: ' + id;
+      document.getElementById('machineId').textContent = 'Machine ID: ' + id;
     });
     
-    // Listen for updates
     window.electronAPI.onUpdateStatus((data) => {
       const bar = document.getElementById('updateBar');
       const text = document.getElementById('updateText');
@@ -296,17 +288,17 @@
       
       if (data.status === 'checking') {
         bar.classList.add('visible');
-        text.textContent = 'اپڈیٹ چیک ہو رہا ہے...';
+        text.textContent = 'Checking for updates...';
         progressBar.style.display = 'none';
       } else if (data.status === 'available') {
         bar.classList.add('visible');
-        text.textContent = `نیا نسخہ ${data.version} دستیاب ہے - ڈاؤنلوڈ ہو رہا ہے...`;
+        text.textContent = 'New version ' + data.version + ' available - downloading...';
       } else if (data.status === 'downloading') {
         progressBar.style.display = 'block';
         progressFill.style.width = data.percent + '%';
-        text.textContent = `ڈاؤنلوڈ ہو رہا ہے: ${data.percent}%`;
+        text.textContent = 'Downloading: ' + data.percent + '%';
       } else if (data.status === 'downloaded') {
-        text.textContent = `نسخہ ${data.version} ڈاؤنلوڈ ہو گیا!`;
+        text.textContent = 'Version ' + data.version + ' downloaded!';
       } else if (data.status === 'error') {
         bar.classList.remove('visible');
       } else if (data.status === 'not-available') {
@@ -314,21 +306,18 @@
       }
     });
     
-    // Check existing license
     async function checkExistingLicense() {
       try {
         const info = await window.electronAPI.getLicenseInfo();
         if (info.license) {
-          // License exists - show info
           document.getElementById('infoHospital').textContent = info.license.hospitalName || '-';
           document.getElementById('infoDuration').textContent = getDurationLabel(info.license.licenseDuration);
-          document.getElementById('infoExpiry').textContent = info.license.expiryDate || 'لائف ٹائم';
+          document.getElementById('infoExpiry').textContent = info.license.expiryDate || 'Lifetime';
           
           licenseInfoBox.classList.add('visible');
           changeBtn.style.display = 'block';
           inputSection.style.display = 'none';
           
-          // Open main window after a moment
           setTimeout(() => openMainWindow(), 1500);
         }
       } catch (e) {
@@ -338,11 +327,11 @@
     
     function getDurationLabel(d) {
       const map = {
-        '1_month': '1 ماہ',
-        '3_months': '3 ماہ',
-        '6_months': '6 ماہ',
-        '1_year': '1 سال',
-        'lifetime': 'لائف ٹائم',
+        '1_month': '1 Month',
+        '3_months': '3 Months',
+        '6_months': '6 Months',
+        '1_year': '1 Year',
+        'lifetime': 'Lifetime',
       };
       return map[d] || d || '-';
     }
@@ -350,37 +339,35 @@
     async function activateLicense() {
       const key = licenseInput.value.trim();
       if (!key) {
-        showStatus('براہ کرم لائسنس کلید درج کریں', 'error');
+        showStatus('Please enter a license key', 'error');
         return;
       }
       
       activateBtn.disabled = true;
-      activateBtn.textContent = 'چیک ہو رہا ہے...';
-      showStatus('لائسنس تصدیق ہو رہی ہے...', 'loading');
+      activateBtn.textContent = 'Verifying...';
+      showStatus('Validating license...', 'loading');
       
       try {
         const result = await window.electronAPI.activateLicense(key);
         
         if (result.success) {
-          showStatus('لائسنس کامیابی سے ایکٹیویٹ ہو گیا!', 'success');
+          showStatus('License activated successfully!', 'success');
           
-          // Show license info
           document.getElementById('infoHospital').textContent = result.data.hospitalName || '-';
           document.getElementById('infoDuration').textContent = getDurationLabel(result.data.licenseDuration);
-          document.getElementById('infoExpiry').textContent = result.data.expiryDate || 'لائف ٹائم';
+          document.getElementById('infoExpiry').textContent = result.data.expiryDate || 'Lifetime';
           licenseInfoBox.classList.add('visible');
           
-          // Open main window
           setTimeout(() => openMainWindow(), 1500);
         } else {
-          showStatus(result.error || 'لائسنس ناموزوں ہے', 'error');
+          showStatus(result.error || 'Invalid license key', 'error');
           activateBtn.disabled = false;
-          activateBtn.textContent = 'ایکٹیویٹ کریں';
+          activateBtn.textContent = 'Activate';
         }
       } catch (error) {
-        showStatus('کنکشن ایرر - انٹرنیٹ چیک کریں', 'error');
+        showStatus('Connection error - please check your internet', 'error');
         activateBtn.disabled = false;
-        activateBtn.textContent = 'ایکٹیویٹ کریں';
+        activateBtn.textContent = 'Activate';
       }
     }
     
@@ -407,12 +394,10 @@
       ipcRenderer.send('open-main-window');
     }
     
-    // Allow Enter key to activate
     licenseInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') activateLicense();
     });
     
-    // Initialize
     checkExistingLicense();
     licenseInput.focus();
   </script>
