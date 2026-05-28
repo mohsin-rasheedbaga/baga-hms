@@ -8,7 +8,7 @@ const { autoUpdater } = require('electron-updater');
 // ============================================================
 // CONFIGURATION
 // ============================================================
-const APP_VERSION = '2.5.0';
+const APP_VERSION = '2.5.1';
 const API_BASE = 'https://baga-hospital-api.vercel.app';
 const SERVER_PORT = 18765;
 const STORE_PATH = path.join(app.getPath('userData'), 'baga-store.json');
@@ -88,10 +88,10 @@ autoUpdater.on('update-downloaded', (info) => {
   // Notify user
   dialog.showMessageBox({
     type: 'info',
-    title: 'اپڈیٹ ڈاؤنلوڈ ہو گیا',
-    message: `نسخہ ${info.version} ڈاؤنلوڈ ہو گیا ہے۔`,
-    detail: 'ایپلیکیشن بند کرنے پر نیا نسخہ انسٹال ہو جائے گا۔ کیا آپ ابھی ری اسٹارٹ کرنا چاہیں گے؟',
-    buttons: ['ابھی ری اسٹارٹ کریں', 'بعد میں']
+    title: 'Update Downloaded',
+    message: `Version ${info.version} has been downloaded.`,
+    detail: 'The new version will be installed when the application closes. Would you like to restart now?',
+    buttons: ['Restart Now', 'Later']
   }).then((result) => {
     if (result.response === 0) {
       autoUpdater.quitAndInstall();
@@ -274,6 +274,8 @@ ipcMain.handle('license-activate', async (event, licenseKey) => {
     const machineId = getMachineId();
     const store = getStore();
     
+    console.log('[License] Activating:', licenseKey, 'Machine:', machineId);
+    
     // Call API to check and activate license
     const response = await fetch(`${API_BASE}/api/license/check`, {
       method: 'POST',
@@ -285,6 +287,7 @@ ipcMain.handle('license-activate', async (event, licenseKey) => {
     });
     
     const data = await response.json();
+    console.log('[License] API response:', JSON.stringify(data));
     
     if (data.valid) {
       // Save license info locally
@@ -304,11 +307,11 @@ ipcMain.handle('license-activate', async (event, licenseKey) => {
       
       return { success: true, data: store.license };
     } else {
-      return { success: false, error: data.error || 'لائسنس ناموزوں ہے' };
+      return { success: false, error: data.error || 'Invalid license key' };
     }
   } catch (error) {
-    console.error('License activation error:', error);
-    return { success: false, error: 'انٹرنیٹ کنکشن نہیں۔ براہ کرم انٹرنیٹ چیک کریں۔' };
+    console.error('[License] Activation error:', error);
+    return { success: false, error: 'Connection error - please check your internet and try again.' };
   }
 });
 
@@ -330,6 +333,8 @@ ipcMain.handle('api-login', async (event, { username, password }) => {
     const store = getStore();
     const licenseKey = store.license ? store.license.key : null;
     
+    console.log('[Login] Attempt:', username, 'License:', licenseKey ? 'yes' : 'no');
+    
     const response = await fetch(`${API_BASE}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -341,15 +346,16 @@ ipcMain.handle('api-login', async (event, { username, password }) => {
     });
     
     const data = await response.json();
+    console.log('[Login] API response:', response.status, JSON.stringify(data).substring(0, 200));
     
     if (response.ok && data.success !== false) {
       return { success: true, user: data };
     } else {
-      return { success: false, error: data.error || 'لاگ ان ناکام' };
+      return { success: false, error: data.error || 'Login failed - invalid username or password' };
     }
   } catch (error) {
-    console.error('Login API error:', error);
-    return { success: false, error: 'انٹرنیٹ کنکشن نہیں۔ براہ کرم انٹرنیٹ چیک کریں۔' };
+    console.error('[Login] API error:', error);
+    return { success: false, error: 'Connection error - please check your internet and try again.' };
   }
 });
 
@@ -397,6 +403,7 @@ ipcMain.on('open-main-window', () => {
 app.whenReady().then(async () => {
   console.log(`[BAGA HMS] v${APP_VERSION} starting...`);
   console.log(`[BAGA HMS] Machine ID: ${getMachineId()}`);
+  console.log(`[BAGA HMS] API Base: ${API_BASE}`);
   
   // Start HTTP server
   await startServer();
