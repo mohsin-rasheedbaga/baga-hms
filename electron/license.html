@@ -390,8 +390,7 @@
     }
     
     function openMainWindow() {
-      const { ipcRenderer } = require('electron');
-      ipcRenderer.send('open-main-window');
+      window.electronAPI.openMainWindow();
     }
     
     licenseInput.addEventListener('keypress', (e) => {
