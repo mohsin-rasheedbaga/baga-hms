@@ -44,7 +44,7 @@ export default function AppHeader() {
   const handleLogout = () => {
     localStorage.removeItem('baga_role');
     localStorage.removeItem('baga_user');
-    router.push('/login');
+    window.location.href = '/login';
   };
 
   const handleCheckUpdate = () => {

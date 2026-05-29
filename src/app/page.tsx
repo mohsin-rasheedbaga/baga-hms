@@ -9,11 +9,11 @@ export default function Home() {
   useEffect(() => {
     const role = localStorage.getItem('baga_role');
     if (role) {
-      router.push(`/${role}`);
+      window.location.href = `/${role}`;
     } else {
-      router.push('/login');
+      window.location.href = '/login';
     }
-  }, [router]);
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center">

@@ -51,15 +51,16 @@ export default function LoginPage() {
       try {
         const result = await (window as any).bagaAPI.apiLogin({ username, password });
         if (result.success) {
-          localStorage.setItem('baga_role', result.user.role || 'reception');
+          const role = result.user.role || 'reception';
+          localStorage.setItem('baga_role', role);
           localStorage.setItem('baga_user', JSON.stringify({
-            role: result.user.role || 'reception',
+            role: role,
             name: result.user.full_name || result.user.username,
             username: result.user.username,
-            hospitalName: result.user.hospital_name,
+            hospitalName: result.hospital?.name || result.user.hospital_name || '',
           }));
           toast.success('Login successful!');
-          router.push(`/${result.user.role || 'reception'}`);
+          window.location.href = `/${role}`;
         } else {
           toast.error(result.error || 'Login failed - invalid username or password');
         }
