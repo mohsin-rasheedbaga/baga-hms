@@ -17,7 +17,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-pulse text-gray-400">لوڈ ہو رہا ہے...</div>
+      <div className="animate-pulse text-gray-400">Loading...</div>
     </div>
   );
 }

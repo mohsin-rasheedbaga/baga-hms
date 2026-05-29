@@ -8,7 +8,7 @@ const { autoUpdater } = require('electron-updater');
 // ============================================================
 // CONFIGURATION
 // ============================================================
-const APP_VERSION = '2.6.0';
+const APP_VERSION = '2.6.1';
 const API_BASE = 'https://baga-hospital-api.vercel.app';
 const SERVER_PORT = 18765;
 const STORE_PATH = path.join(app.getPath('userData'), 'baga-store.json');

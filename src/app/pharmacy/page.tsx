@@ -66,7 +66,7 @@ export default function PharmacyPage() {
     saveData(updated);
     setData(updated);
     setSelectedBill(bill);
-    toast.success('بل بن گیا');
+    toast.success('Bill created');
   };
 
   const collectPayment = () => {
@@ -81,7 +81,7 @@ export default function PharmacyPage() {
     setData(updated);
     setSelectedBill({ ...selectedBill, status: 'paid' });
     setShowPayment(false);
-    toast.success('ادائیگی ہو گئی');
+    toast.success('Payment received');
   };
 
   const dispense = () => {
@@ -95,7 +95,7 @@ export default function PharmacyPage() {
     saveData(updated);
     setData(updated);
     setSelectedBill({ ...selectedBill, status: 'dispensed' });
-    toast.success('دوائیں دی گئیں');
+    toast.success('Medicine dispensed');
   };
 
   const togglePaymentLocation = (val: boolean) => {
@@ -106,7 +106,7 @@ export default function PharmacyPage() {
     };
     saveData(updated);
     setData(updated);
-    toast.success(`ادائیگی: ${val ? 'فارمیسی' : 'ریسپشن'}`);
+    toast.success(`Payment: ${val ? 'Pharmacy' : 'Reception'}`);
   };
 
   return (
@@ -118,19 +118,19 @@ export default function PharmacyPage() {
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
               <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center"><Clock className="w-5 h-5 text-amber-600" /></div>
-              <div><p className="text-2xl font-bold">{pendingBills.length}</p><p className="text-xs text-gray-500">زیر التوا</p></div>
+              <div><p className="text-2xl font-bold">{pendingBills.length}</p><p className="text-xs text-gray-500">Pending</p></div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
               <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center"><CreditCard className="w-5 h-5 text-emerald-600" /></div>
-              <div><p className="text-2xl font-bold">{paidBills.length}</p><p className="text-xs text-gray-500">ادا شدہ</p></div>
+              <div><p className="text-2xl font-bold">{paidBills.length}</p><p className="text-xs text-gray-500">Paid</p></div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
               <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center"><Pill className="w-5 h-5 text-purple-600" /></div>
-              <div><p className="text-2xl font-bold">{dispensedBills.length}</p><p className="text-xs text-gray-500">دیا گیا</p></div>
+              <div><p className="text-2xl font-bold">{dispensedBills.length}</p><p className="text-xs text-gray-500">Dispensed</p></div>
             </CardContent>
           </Card>
         </div>
@@ -141,14 +141,14 @@ export default function PharmacyPage() {
             <div className="flex items-center gap-3">
               <CreditCard className="w-5 h-5 text-gray-600" />
               <div>
-                <p className="font-medium text-sm">ادائیگی کی جگہ</p>
-                <p className="text-xs text-gray-500">ادائیگی کہاں جمع کریں</p>
+                <p className="font-medium text-sm">Payment Location</p>
+                <p className="text-xs text-gray-500">Where to collect payment</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-500">ریسپشن</span>
+              <span className="text-sm text-gray-500">Reception</span>
               <Switch checked={collectHere} onCheckedChange={togglePaymentLocation} />
-              <span className="text-sm font-medium">فارمیسی</span>
+              <span className="text-sm font-medium">Pharmacy</span>
             </div>
           </CardContent>
         </Card>
@@ -156,11 +156,11 @@ export default function PharmacyPage() {
         {/* Prescriptions List */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">نسخے - فارمیسی</CardTitle>
+            <CardTitle className="text-lg">Prescriptions - Pharmacy</CardTitle>
           </CardHeader>
           <CardContent>
             {visitWithRx.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">کوئی نسخہ نہیں</p>
+              <p className="text-gray-500 text-center py-8">No prescriptions</p>
             ) : (
               <div className="space-y-2">
                 {visitWithRx.map(visit => {
@@ -186,11 +186,11 @@ export default function PharmacyPage() {
                         {bill && (
                           <Badge variant={bill.status === 'dispensed' ? 'default' : bill.status === 'paid' ? 'secondary' : 'outline'}
                             className={bill.status === 'dispensed' ? 'bg-emerald-600' : ''}>
-                            {bill.status === 'pending' ? 'زیر التوا' : bill.status === 'paid' ? 'ادا شدہ' : 'دیا گیا'}
+                            {bill.status === 'pending' ? 'Pending' : bill.status === 'paid' ? 'Paid' : 'Dispensed'}
                           </Badge>
                         )}
                         <Button size="sm" variant="outline" onClick={() => createBill(visit)}>
-                          {bill ? 'دیکھیں' : 'بل بنائیں'}
+                          {bill ? 'View' : 'Create Bill'}
                         </Button>
                       </div>
                     </div>
@@ -207,16 +207,16 @@ export default function PharmacyPage() {
             {selectedBill && (
               <>
                 <DialogHeader>
-                  <DialogTitle>بل - {selectedBill.patientName}</DialogTitle>
+                  <DialogTitle>Bill - {selectedBill.patientName}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-sm text-gray-500">پٹینٹ نمبر: {selectedBill.patientNumber}</p>
-                    <p className="text-sm text-gray-500">بل نمبر: {selectedBill.id.slice(-6).toUpperCase()}</p>
+                    <p className="text-sm text-gray-500">Patient No: {selectedBill.patientNumber}</p>
+                    <p className="text-sm text-gray-500">Bill No: {selectedBill.id.slice(-6).toUpperCase()}</p>
                   </div>
                   <div className="border rounded-lg divide-y">
                     <div className="p-2 font-bold text-sm bg-gray-50 grid grid-cols-3">
-                      <span>دوا</span><span>ڈوز</span><span>دورانیہ</span>
+                      <span>Medicine</span><span>Dosage</span><span>Duration</span>
                     </div>
                     {selectedBill.medicines.map((med, i) => (
                       <div key={i} className="p-2 text-sm grid grid-cols-3">
@@ -225,25 +225,25 @@ export default function PharmacyPage() {
                     ))}
                   </div>
                   <div className="flex items-center justify-between bg-emerald-50 rounded-lg p-4">
-                    <span className="font-bold">کل رقم:</span>
+                    <span className="font-bold">Total Amount:</span>
                     <span className="text-2xl font-bold text-emerald-700">Rs. {selectedBill.totalAmount.toLocaleString()}</span>
                   </div>
                   {selectedBill.status === 'pending' && !collectHere && (
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700 flex items-center gap-2">
                       <AlertCircle className="w-4 h-4" />
-                      ادائیگی ریسپشن میں جمع کروائیں
+                      Collect payment at reception
                     </div>
                   )}
                 </div>
                 <DialogFooter>
                   {selectedBill.status === 'pending' && collectHere && (
                     <Button onClick={() => { setPayAmount(String(selectedBill.totalAmount)); setShowPayment(true); }} className="bg-emerald-600 hover:bg-emerald-700">
-                      <CreditCard className="w-4 h-4 mr-1" /> ادائیگی کریں
+                      <CreditCard className="w-4 h-4 mr-1" /> Pay
                     </Button>
                   )}
                   {selectedBill.status === 'paid' && (
                     <Button onClick={dispense} className="bg-purple-600 hover:bg-purple-700">
-                      <Pill className="w-4 h-4 mr-1" /> دوائیں دیں
+                      <Pill className="w-4 h-4 mr-1" /> Dispense Medicine
                     </Button>
                   )}
                 </DialogFooter>
@@ -255,14 +255,14 @@ export default function PharmacyPage() {
         {/* Payment Dialog */}
         <Dialog open={showPayment} onOpenChange={setShowPayment}>
           <DialogContent>
-            <DialogHeader><DialogTitle>ادائیگی</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>Payment</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              <Label>رقم (Rs.)</Label>
+              <Label>Amount (Rs.)</Label>
               <Input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} dir="ltr" />
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowPayment(false)}>منسوخ</Button>
-              <Button onClick={collectPayment} className="bg-emerald-600 hover:bg-emerald-700">ادائیگی کریں</Button>
+              <Button variant="outline" onClick={() => setShowPayment(false)}>Cancel</Button>
+              <Button onClick={collectPayment} className="bg-emerald-600 hover:bg-emerald-700">Pay</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

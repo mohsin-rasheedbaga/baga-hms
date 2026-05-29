@@ -6,13 +6,13 @@ import { LogOut, Hospital, RefreshCw, Download, KeyRound, Shield } from 'lucide-
 import { useEffect, useState } from 'react';
 
 const roleLabels: Record<string, string> = {
-  reception: 'ریسپشن',
-  doctor: 'ڈاکٹر',
-  pharmacy: 'فارمیسی',
-  lab: 'لیب',
-  xray: 'ایکس ری',
-  ultrasound: 'الٹراساؤنڈ',
-  admin: 'ایڈمن',
+  reception: 'Reception',
+  doctor: 'Doctor',
+  pharmacy: 'Pharmacy',
+  lab: 'Lab',
+  xray: 'X-Ray',
+  ultrasound: 'Ultrasound',
+  admin: 'Admin',
 };
 
 export default function AppHeader() {
@@ -75,7 +75,7 @@ export default function AppHeader() {
         <div className="flex items-center gap-2">
           {role === 'reception' && (
             <Button variant="outline" size="sm" onClick={() => router.push('/reception')} className="text-xs">
-              ڈیش بورڈ
+              Dashboard
             </Button>
           )}
           {isElectron && (
@@ -86,9 +86,9 @@ export default function AppHeader() {
               className={`text-xs ${updateAvailable ? 'bg-blue-600 text-white' : 'text-gray-400'}`}
             >
               {updateAvailable ? (
-                <><Download className="w-3 h-3 mr-1" /> اپڈیٹ دستیاب</>
+                <><Download className="w-3 h-3 mr-1" /> Update Available</>
               ) : (
-                <><RefreshCw className="w-3 h-3 mr-1" /> اپڈیٹ</>
+                <><RefreshCw className="w-3 h-3 mr-1" /> Update</>
               )}
             </Button>
           )}
@@ -99,7 +99,7 @@ export default function AppHeader() {
             className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs"
           >
             <LogOut className="w-4 h-4 mr-1" />
-            لاگ آؤٹ
+            Logout
           </Button>
         </div>
       </div>

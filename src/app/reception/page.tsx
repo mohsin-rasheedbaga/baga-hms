@@ -19,7 +19,7 @@ import {
   Users, Clock, CreditCard, Phone, MapPin, User, FileText
 } from 'lucide-react';
 
-const doctors = ['ڈاکٹر محمد اشرف', 'ڈاکٹر ساجد رضا', 'ڈاکٹر نبیل احمد'];
+const doctors = ['Dr. Muhammad Ashraf', 'Dr. Sajid Raza', 'Dr. Nabeel Ahmad'];
 
 export default function ReceptionPage() {
   const [data, setData] = useState<HMSData | null>(null);
@@ -61,20 +61,20 @@ export default function ReceptionPage() {
   // Search patient by mobile
   const handleSearch = () => {
     if (!searchMobile.trim()) {
-      toast.error('موبائل نمبر درج کریں');
+      toast.error('Enter mobile number');
       return;
     }
     const results = data.patients.filter(p => p.mobile.includes(searchMobile.trim()));
     setSearchResults(results);
     if (results.length === 0) {
-      toast.error('کوئی مریض نہیں ملا');
+      toast.error('No patient found');
     }
   };
 
   // Register new patient
   const handleRegister = () => {
     if (!regForm.name.trim() || !regForm.relationName.trim() || !regForm.mobile.trim() || !regForm.age.trim() || !regForm.address.trim()) {
-      toast.error('تمام لازمی فیلڈز بھریں');
+      toast.error('Fill all required fields');
       return;
     }
 
@@ -96,7 +96,7 @@ export default function ReceptionPage() {
     setData(updated);
     setRegForm({ name: '', relationType: 'father', relationName: '', mobile: '', age: '', address: '', gender: 'male' });
     setShowRegister(false);
-    toast.success(`مریض رجسٹرڈ! ${newPatient.patientNumber}`);
+    toast.success(`Patient registered! ${newPatient.patientNumber}`);
   };
 
   // Renew card
@@ -110,7 +110,7 @@ export default function ReceptionPage() {
     saveData(updated);
     setData(updated);
     setSelectedPatient({ ...patient, cardStatus: 'active', updatedAt: new Date().toISOString() });
-    toast.success('کارد ری نیول ہو گیا');
+    toast.success('Card renewed');
   };
 
   // Create new visit
@@ -142,7 +142,7 @@ export default function ReceptionPage() {
     saveData(updated);
     setData(updated);
     setShowNewVisit(false);
-    toast.success(`نیا وزیٹ بن گیا! ${newVisit.visitNumber}`);
+    toast.success(`New visit created! ${newVisit.visitNumber}`);
   };
 
   // Edit patient
@@ -153,7 +153,7 @@ export default function ReceptionPage() {
 
   const handleEditSave = () => {
     if (!editForm.name?.trim() || !editForm.relationName?.trim() || !editForm.mobile?.trim() || !editForm.age?.trim() || !editForm.address?.trim()) {
-      toast.error('تمام لازمی فیلڈز بھریں');
+      toast.error('Fill all required fields');
       return;
     }
     const updated = {
@@ -166,7 +166,7 @@ export default function ReceptionPage() {
     setData(updated);
     setSelectedPatient(editForm as Patient);
     setShowEdit(false);
-    toast.success('مریض کی معلومات اپڈیٹ ہو گئیں');
+    toast.success('Patient info updated');
   };
 
   const patientVisits = selectedPatient ? data.visits.filter(v => v.patientId === selectedPatient.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)) : [];
@@ -184,7 +184,7 @@ export default function ReceptionPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{totalPatients}</p>
-                <p className="text-xs text-gray-500">کل مریض</p>
+                <p className="text-xs text-gray-500">Total Patients</p>
               </div>
             </CardContent>
           </Card>
@@ -195,7 +195,7 @@ export default function ReceptionPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{todayVisits.length}</p>
-                <p className="text-xs text-gray-500">آج کے وزیٹ</p>
+                <p className="text-xs text-gray-500">Today's Visits</p>
               </div>
             </CardContent>
           </Card>
@@ -206,7 +206,7 @@ export default function ReceptionPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{todayVisits.filter(v => v.status === 'waiting').length}</p>
-                <p className="text-xs text-gray-500">انتظار میں</p>
+                <p className="text-xs text-gray-500">Waiting</p>
               </div>
             </CardContent>
           </Card>
@@ -217,7 +217,7 @@ export default function ReceptionPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{todayVisits.filter(v => v.status === 'seen' || v.status === 'completed').length}</p>
-                <p className="text-xs text-gray-500">مکمل</p>
+                <p className="text-xs text-gray-500">Completed</p>
               </div>
             </CardContent>
           </Card>
@@ -227,17 +227,17 @@ export default function ReceptionPage() {
           <div className="flex items-center justify-between">
             <TabsList>
               <TabsTrigger value="register">
-                <UserPlus className="w-4 h-4 mr-1" /> نیا مریض
+                <UserPlus className="w-4 h-4 mr-1" /> New Patient
               </TabsTrigger>
               <TabsTrigger value="search">
-                <Search className="w-4 h-4 mr-1" /> تلاش
+                <Search className="w-4 h-4 mr-1" /> Search
               </TabsTrigger>
               <TabsTrigger value="today">
-                <Clock className="w-4 h-4 mr-1" /> آج کے وزیٹ
+                <Clock className="w-4 h-4 mr-1" /> Today's Visits
               </TabsTrigger>
             </TabsList>
             <Button variant="outline" size="sm" onClick={refreshData}>
-              <RefreshCw className="w-4 h-4 mr-1" /> ریفریش
+              <RefreshCw className="w-4 h-4 mr-1" /> Refresh
             </Button>
           </div>
 
@@ -245,60 +245,60 @@ export default function ReceptionPage() {
           <TabsContent value="register">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">نئے مریض کی رجسٹریشن</CardTitle>
+                <CardTitle className="text-lg">New Patient Registration</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>مریض کا نام <span className="text-red-500">*</span></Label>
-                    <Input value={regForm.name} onChange={e => setRegForm({ ...regForm, name: e.target.value })} placeholder="مثلاً محمد احمد" />
+                    <Label>Patient Name <span className="text-red-500">*</span></Label>
+                    <Input value={regForm.name} onChange={e => setRegForm({ ...regForm, name: e.target.value })} placeholder="e.g. Muhammad Ahmad" />
                   </div>
                   <div className="space-y-2">
                     <div className="flex gap-2 items-end">
                       <div className="flex-1 space-y-2">
-                        <Label>والد/شوہر کا نام <span className="text-red-500">*</span></Label>
-                        <Input value={regForm.relationName} onChange={e => setRegForm({ ...regForm, relationName: e.target.value })} placeholder="والد/شوہر کا نام" />
+                        <Label>Father/Husband Name <span className="text-red-500">*</span></Label>
+                        <Input value={regForm.relationName} onChange={e => setRegForm({ ...regForm, relationName: e.target.value })} placeholder="Father/Husband Name" />
                       </div>
                       <Select value={regForm.relationType} onValueChange={v => setRegForm({ ...regForm, relationType: v as 'father' | 'husband' })}>
                         <SelectTrigger className="w-32">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="father">والد</SelectItem>
-                          <SelectItem value="husband">شوہر</SelectItem>
+                          <SelectItem value="father">Father</SelectItem>
+                          <SelectItem value="husband">Husband</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>موبائل نمبر <span className="text-red-500">*</span></Label>
+                    <Label>Mobile Number <span className="text-red-500">*</span></Label>
                     <Input value={regForm.mobile} onChange={e => setRegForm({ ...regForm, mobile: e.target.value })} placeholder="03001234567" dir="ltr" />
                   </div>
                   <div className="space-y-2">
-                    <Label>عمر <span className="text-red-500">*</span></Label>
-                    <Input value={regForm.age} onChange={e => setRegForm({ ...regForm, age: e.target.value })} placeholder="مثلاً 35 سال" />
+                    <Label>Age <span className="text-red-500">*</span></Label>
+                    <Input value={regForm.age} onChange={e => setRegForm({ ...regForm, age: e.target.value })} placeholder="e.g. 35 years" />
                   </div>
                   <div className="space-y-2">
-                    <Label>جنس</Label>
+                    <Label>Gender</Label>
                     <Select value={regForm.gender} onValueChange={v => setRegForm({ ...regForm, gender: v as 'male' | 'female' })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="male">مرد</SelectItem>
-                        <SelectItem value="female">عورت</SelectItem>
+                        <SelectItem value="male">Male</SelectItem>
+                        <SelectItem value="female">Female</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>پتہ <span className="text-red-500">*</span></Label>
-                    <Input value={regForm.address} onChange={e => setRegForm({ ...regForm, address: e.target.value })} placeholder="مکمل پتہ" />
+                    <Label>Address <span className="text-red-500">*</span></Label>
+                    <Input value={regForm.address} onChange={e => setRegForm({ ...regForm, address: e.target.value })} placeholder="Full Address" />
                   </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-3">
                   <Button variant="outline" onClick={() => setRegForm({ name: '', relationType: 'father', relationName: '', mobile: '', age: '', address: '', gender: 'male' })}>
-                    صاف کریں
+                    Clear
                   </Button>
                   <Button onClick={handleRegister} className="bg-emerald-600 hover:bg-emerald-700">
-                    <UserPlus className="w-4 h-4 mr-1" /> رجسٹر کریں
+                    <UserPlus className="w-4 h-4 mr-1" /> Register
                   </Button>
                 </div>
               </CardContent>
@@ -309,26 +309,26 @@ export default function ReceptionPage() {
           <TabsContent value="search">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">موبائل نمبر سے تلاش</CardTitle>
+                <CardTitle className="text-lg">Search by Mobile Number</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex gap-3 mb-4">
                   <Input
                     value={searchMobile}
                     onChange={e => setSearchMobile(e.target.value)}
-                    placeholder="موبائل نمبر درج کریں..."
+                    placeholder="Enter mobile number..."
                     dir="ltr"
                     onKeyDown={e => e.key === 'Enter' && handleSearch()}
                     className="flex-1"
                   />
                   <Button onClick={handleSearch} className="bg-blue-600 hover:bg-blue-700">
-                    <Search className="w-4 h-4 mr-1" /> تلاش
+                    <Search className="w-4 h-4 mr-1" /> Search
                   </Button>
                 </div>
 
                 {searchResults.length > 0 && (
                   <div className="space-y-3">
-                    <p className="text-sm text-gray-500">{searchResults.length} مریض ملے</p>
+                    <p className="text-sm text-gray-500">{searchResults.length} patients found</p>
                     {searchResults.map(patient => (
                       <div
                         key={patient.id}
@@ -348,7 +348,7 @@ export default function ReceptionPage() {
                           <div className="text-right text-sm">
                             <p className="flex items-center gap-1 text-gray-500"><Phone className="w-3 h-3" />{patient.mobile}</p>
                             <Badge variant={patient.cardStatus === 'active' ? 'default' : 'destructive'} className="mt-1">
-                              {patient.cardStatus === 'active' ? 'فعال' : 'میعاد ختم'}
+                              {patient.cardStatus === 'active' ? 'Active' : 'Expired'}
                             </Badge>
                           </div>
                         </div>
@@ -364,11 +364,11 @@ export default function ReceptionPage() {
           <TabsContent value="today">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">آج کے وزیٹ - {format(new Date(), 'dd/MM/yyyy')}</CardTitle>
+                <CardTitle className="text-lg">Today Visits - {format(new Date(), 'dd/MM/yyyy')}</CardTitle>
               </CardHeader>
               <CardContent>
                 {todayVisits.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">آج کوئی وزیٹ نہیں</p>
+                  <p className="text-gray-500 text-center py-8">No visits today</p>
                 ) : (
                   <div className="space-y-2">
                     {todayVisits.map(visit => {
@@ -392,7 +392,7 @@ export default function ReceptionPage() {
                               'bg-emerald-600'
                             }
                           >
-                            {visit.status === 'waiting' ? 'انتظار' : visit.status === 'in-progress' ? 'جاری' : visit.status === 'seen' ? 'دیکھا' : 'مکمل'}
+                            {visit.status === 'waiting' ? 'Waiting' : visit.status === 'in-progress' ? 'In Progress' : visit.status === 'seen' ? 'Seen' : 'Completed'}
                           </Badge>
                         </div>
                       );
@@ -419,32 +419,32 @@ export default function ReceptionPage() {
                 <div className="space-y-4">
                   {/* Patient Info */}
                   <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-lg p-4">
-                    <div><span className="text-xs text-gray-500">نام:</span><p className="font-medium">{selectedPatient.name}</p></div>
-                    <div><span className="text-xs text-gray-500">{selectedPatient.relationType === 'father' ? 'والد' : 'شوہر'}:</span><p className="font-medium">{selectedPatient.relationName}</p></div>
-                    <div><span className="text-xs text-gray-500">موبائل:</span><p className="font-medium" dir="ltr">{selectedPatient.mobile}</p></div>
-                    <div><span className="text-xs text-gray-500">عمر:</span><p className="font-medium">{selectedPatient.age}</p></div>
-                    <div><span className="text-xs text-gray-500">پتہ:</span><p className="font-medium">{selectedPatient.address}</p></div>
-                    <div><span className="text-xs text-gray-500">جنس:</span><p className="font-medium">{selectedPatient.gender === 'male' ? 'مرد' : 'عورت'}</p></div>
+                    <div><span className="text-xs text-gray-500">Name:</span><p className="font-medium">{selectedPatient.name}</p></div>
+                    <div><span className="text-xs text-gray-500">{selectedPatient.relationType === 'father' ? 'Father' : 'Husband'}:</span><p className="font-medium">{selectedPatient.relationName}</p></div>
+                    <div><span className="text-xs text-gray-500">Mobile:</span><p className="font-medium" dir="ltr">{selectedPatient.mobile}</p></div>
+                    <div><span className="text-xs text-gray-500">Age:</span><p className="font-medium">{selectedPatient.age}</p></div>
+                    <div><span className="text-xs text-gray-500">Address:</span><p className="font-medium">{selectedPatient.address}</p></div>
+                    <div><span className="text-xs text-gray-500">Gender:</span><p className="font-medium">{selectedPatient.gender === 'male' ? 'Male' : 'Female'}</p></div>
                   </div>
 
                   {/* Actions */}
                   <div className="flex flex-wrap gap-2">
                     <Button size="sm" onClick={() => handleRenewCard(selectedPatient)} className="bg-blue-600 hover:bg-blue-700">
-                      <RefreshCw className="w-4 h-4 mr-1" /> کارد ری نیول
+                      <RefreshCw className="w-4 h-4 mr-1" /> Card Renewal
                     </Button>
                     <Button size="sm" onClick={() => setShowNewVisit(true)} className="bg-emerald-600 hover:bg-emerald-700">
-                      <CalendarPlus className="w-4 h-4 mr-1" /> نیا وزیٹ
+                      <CalendarPlus className="w-4 h-4 mr-1" /> New Visit
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => openEdit(selectedPatient)}>
-                      <Edit className="w-4 h-4 mr-1" /> ایڈٹ
+                      <Edit className="w-4 h-4 mr-1" /> Edit
                     </Button>
                   </div>
 
                   {/* Visit History */}
                   <div>
-                    <h3 className="font-bold text-sm mb-2">وزیٹ ہسٹری ({patientVisits.length})</h3>
+                    <h3 className="font-bold text-sm mb-2">Visit History ({patientVisits.length})</h3>
                     {patientVisits.length === 0 ? (
-                      <p className="text-sm text-gray-500">کوئی وزیٹ نہیں</p>
+                      <p className="text-sm text-gray-500">No visits</p>
                     ) : (
                       <div className="space-y-2 max-h-60 overflow-y-auto">
                         {patientVisits.map(visit => (
@@ -452,14 +452,14 @@ export default function ReceptionPage() {
                             <div className="flex items-center justify-between mb-1">
                               <span className="font-medium text-sm">{visit.visitNumber}</span>
                               <Badge variant={visit.status === 'waiting' ? 'outline' : visit.status === 'completed' ? 'default' : 'secondary'}>
-                                {visit.status === 'waiting' ? 'انتظار' : visit.status === 'in-progress' ? 'جاری' : visit.status === 'seen' ? 'دیکھا' : 'مکمل'}
+                                {visit.status === 'waiting' ? 'Waiting' : visit.status === 'in-progress' ? 'In Progress' : visit.status === 'seen' ? 'Seen' : 'Completed'}
                               </Badge>
                             </div>
                             <p className="text-xs text-gray-500">{visit.date} {visit.time} - {visit.doctorName}</p>
-                            {visit.diagnosis && <p className="text-sm mt-1">تشخیص: {visit.diagnosis}</p>}
+                            {visit.diagnosis && <p className="text-sm mt-1">Diagnosis: {visit.diagnosis}</p>}
                             {visit.prescription.length > 0 && (
                               <div className="mt-1">
-                                <span className="text-xs text-gray-500">نسخہ:</span>
+                                <span className="text-xs text-gray-500">Prescription:</span>
                                 <div className="flex flex-wrap gap-1 mt-1">
                                   {visit.prescription.map((med, i) => (
                                     <Badge key={i} variant="outline" className="text-xs">{med.medicine} {med.dosage}</Badge>
@@ -482,11 +482,11 @@ export default function ReceptionPage() {
         <Dialog open={showNewVisit} onOpenChange={setShowNewVisit}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>نیا وزیٹ بنائیں - {selectedPatient?.name}</DialogTitle>
+              <DialogTitle>Create New Visit - {selectedPatient?.name}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>ڈاکٹر منتخب کریں</Label>
+                <Label>Select Doctor</Label>
                 <Select value={visitDoctor} onValueChange={(v) => setVisitDoctor(v || '')}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -496,9 +496,9 @@ export default function ReceptionPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowNewVisit(false)}>منسوخ</Button>
+              <Button variant="outline" onClick={() => setShowNewVisit(false)}>Cancel</Button>
               <Button onClick={() => selectedPatient && handleNewVisit(selectedPatient)} className="bg-emerald-600 hover:bg-emerald-700">
-                وزیٹ بنائیں
+                Create Visit
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -508,57 +508,57 @@ export default function ReceptionPage() {
         <Dialog open={showEdit} onOpenChange={setShowEdit}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>مریض کی معلومات ایڈٹ کریں</DialogTitle>
+              <DialogTitle>Edit Patient Information</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>مریض کا نام <span className="text-red-500">*</span></Label>
+                <Label>Patient Name <span className="text-red-500">*</span></Label>
                 <Input value={editForm.name || ''} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
               </div>
               <div className="flex gap-2">
                 <div className="flex-1 space-y-2">
-                  <Label>والد/شوہر کا نام <span className="text-red-500">*</span></Label>
+                  <Label>Father/Husband Name <span className="text-red-500">*</span></Label>
                   <Input value={editForm.relationName || ''} onChange={e => setEditForm({ ...editForm, relationName: e.target.value })} />
                 </div>
                 <div className="w-32 space-y-2">
-                  <Label>رشتہ</Label>
+                  <Label>Relation</Label>
                   <Select value={editForm.relationType} onValueChange={v => setEditForm({ ...editForm, relationType: v as 'father' | 'husband' })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="father">والد</SelectItem>
-                      <SelectItem value="husband">شوہر</SelectItem>
+                      <SelectItem value="father">Father</SelectItem>
+                      <SelectItem value="husband">Husband</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>موبائل نمبر <span className="text-red-500">*</span></Label>
+                  <Label>Mobile Number <span className="text-red-500">*</span></Label>
                   <Input value={editForm.mobile || ''} onChange={e => setEditForm({ ...editForm, mobile: e.target.value })} dir="ltr" />
                 </div>
                 <div className="space-y-2">
-                  <Label>عمر <span className="text-red-500">*</span></Label>
+                  <Label>Age <span className="text-red-500">*</span></Label>
                   <Input value={editForm.age || ''} onChange={e => setEditForm({ ...editForm, age: e.target.value })} />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>پتہ <span className="text-red-500">*</span></Label>
+                <Label>Address <span className="text-red-500">*</span></Label>
                 <Input value={editForm.address || ''} onChange={e => setEditForm({ ...editForm, address: e.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label>جنس</Label>
+                <Label>Gender</Label>
                 <Select value={editForm.gender} onValueChange={v => setEditForm({ ...editForm, gender: v as 'male' | 'female' })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="male">مرد</SelectItem>
-                    <SelectItem value="female">عورت</SelectItem>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowEdit(false)}>منسوخ</Button>
-              <Button onClick={handleEditSave} className="bg-emerald-600 hover:bg-emerald-700">محفوظ کریں</Button>
+              <Button variant="outline" onClick={() => setShowEdit(false)}>Cancel</Button>
+              <Button onClick={handleEditSave} className="bg-emerald-600 hover:bg-emerald-700">Save</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

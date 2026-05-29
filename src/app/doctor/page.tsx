@@ -60,18 +60,18 @@ export default function DoctorPage() {
 
   const markAsInProgress = (visit: Visit) => {
     updateVisit({ ...visit, status: 'in-progress' });
-    toast.success('مریض کا علاج شروع');
+    toast.success('Treatment started');
   };
 
   const markAsSeen = (visit: Visit) => {
     updateVisit({ ...visit, status: 'seen' });
-    toast.success('مریض دیکھ دیا گیا');
+    toast.success('Patient seen');
   };
 
   const saveDiagnosis = (diagnosis: string) => {
     if (!selectedVisit) return;
     updateVisit({ ...selectedVisit, diagnosis });
-    toast.success('تشخیص محفوظ');
+    toast.success('Diagnosis saved');
   };
 
   const addPrescription = () => {
@@ -83,7 +83,7 @@ export default function DoctorPage() {
     updateVisit(updated);
     setRxForm({ medicine: '', dosage: '', frequency: '', duration: '' });
     setShowPrescription(false);
-    toast.success('دوا شامل');
+    toast.success('Medicine added');
   };
 
   const removePrescription = (idx: number) => {
@@ -110,7 +110,7 @@ export default function DoctorPage() {
     updateVisit({ ...selectedVisit, labTests: [...selectedVisit.labTests, order] });
     setLabForm({ testName: '', price: '' });
     setShowLabOrder(false);
-    toast.success('لیب ٹیسٹ آرڈر');
+    toast.success('Lab test ordered');
   };
 
   const addXray = () => {
@@ -128,7 +128,7 @@ export default function DoctorPage() {
     updateVisit({ ...selectedVisit, xrayOrders: [...selectedVisit.xrayOrders, order] });
     setXrayForm({ testName: '', price: '' });
     setShowXrayOrder(false);
-    toast.success('ایکس ری آرڈر');
+    toast.success('X-Ray ordered');
   };
 
   const addUltrasound = () => {
@@ -146,7 +146,7 @@ export default function DoctorPage() {
     updateVisit({ ...selectedVisit, ultrasoundOrders: [...selectedVisit.ultrasoundOrders, order] });
     setUsForm({ testName: '', price: '' });
     setShowUltrasoundOrder(false);
-    toast.success('الٹراساؤنڈ آرڈر');
+    toast.success('Ultrasound ordered');
   };
 
   const addSurgery = () => {
@@ -165,7 +165,7 @@ export default function DoctorPage() {
     updateVisit({ ...selectedVisit, surgeryOrder: order });
     setSurgForm({ surgeryType: '', totalCost: '', notes: '' });
     setShowSurgeryOrder(false);
-    toast.success('سرجری آرڈر');
+    toast.success('Surgery ordered');
   };
 
   const VisitCard = ({ visit }: { visit: Visit }) => {
@@ -191,20 +191,20 @@ export default function DoctorPage() {
           </div>
           <Badge variant={visit.status === 'waiting' ? 'outline' : visit.status === 'in-progress' ? 'default' : 'secondary'}
             className={visit.status === 'waiting' ? 'border-amber-400 text-amber-700' : visit.status === 'in-progress' ? 'bg-blue-600' : 'bg-emerald-600'}>
-            {visit.status === 'waiting' ? 'انتظار' : visit.status === 'in-progress' ? 'جاری' : visit.status === 'seen' ? 'دیکھا' : 'مکمل'}
+            {visit.status === 'waiting' ? 'Waiting' : visit.status === 'in-progress' ? 'In Progress' : visit.status === 'seen' ? 'Seen' : 'Completed'}
           </Badge>
         </div>
         <div className="flex items-center gap-4 text-xs text-gray-500">
           <span>{visit.time}</span>
           <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{visit.doctorName}</span>
-          {visit.diagnosis && <span>تشخیص: {visit.diagnosis}</span>}
+          {visit.diagnosis && <span>Diagnosis: {visit.diagnosis}</span>}
         </div>
         <div className="flex flex-wrap gap-1 mt-2">
-          {visit.prescription.length > 0 && <Badge variant="outline" className="text-xs bg-purple-50">نسخہ ({visit.prescription.length})</Badge>}
-          {visit.labTests.length > 0 && <Badge variant="outline" className="text-xs bg-orange-50">لیب ({visit.labTests.length})</Badge>}
-          {visit.xrayOrders.length > 0 && <Badge variant="outline" className="text-xs bg-cyan-50">ایکس ری ({visit.xrayOrders.length})</Badge>}
-          {visit.ultrasoundOrders.length > 0 && <Badge variant="outline" className="text-xs bg-pink-50">الٹراساؤنڈ ({visit.ultrasoundOrders.length})</Badge>}
-          {visit.surgeryOrder && <Badge variant="outline" className="text-xs bg-red-50">سرجری</Badge>}
+          {visit.prescription.length > 0 && <Badge variant="outline" className="text-xs bg-purple-50">Prescription ({visit.prescription.length})</Badge>}
+          {visit.labTests.length > 0 && <Badge variant="outline" className="text-xs bg-orange-50">Lab ({visit.labTests.length})</Badge>}
+          {visit.xrayOrders.length > 0 && <Badge variant="outline" className="text-xs bg-cyan-50">X-Ray ({visit.xrayOrders.length})</Badge>}
+          {visit.ultrasoundOrders.length > 0 && <Badge variant="outline" className="text-xs bg-pink-50">Ultrasound ({visit.ultrasoundOrders.length})</Badge>}
+          {visit.surgeryOrder && <Badge variant="outline" className="text-xs bg-red-50">Surgery</Badge>}
         </div>
       </div>
     );
@@ -223,7 +223,7 @@ export default function DoctorPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{waitingVisits.length}</p>
-                <p className="text-xs text-gray-500">انتظار میں</p>
+                <p className="text-xs text-gray-500">Waiting</p>
               </div>
             </CardContent>
           </Card>
@@ -234,7 +234,7 @@ export default function DoctorPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{inProgressVisits.length}</p>
-                <p className="text-xs text-gray-500">جاری</p>
+                <p className="text-xs text-gray-500">In Progress</p>
               </div>
             </CardContent>
           </Card>
@@ -245,7 +245,7 @@ export default function DoctorPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{completedVisits.length}</p>
-                <p className="text-xs text-gray-500">مکمل</p>
+                <p className="text-xs text-gray-500">Completed</p>
               </div>
             </CardContent>
           </Card>
@@ -256,29 +256,29 @@ export default function DoctorPage() {
           <div className="lg:col-span-1">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">آج کے مریض</CardTitle>
+                <CardTitle className="text-lg">Today's Patients</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2 max-h-[70vh] overflow-y-auto">
                   {waitingVisits.length > 0 && (
                     <div className="mb-3">
-                      <p className="text-xs font-bold text-amber-600 mb-2">انتظار میں</p>
+                      <p className="text-xs font-bold text-amber-600 mb-2">Waiting</p>
                       {waitingVisits.map(v => <VisitCard key={v.id} visit={v} />)}
                     </div>
                   )}
                   {inProgressVisits.length > 0 && (
                     <div className="mb-3">
-                      <p className="text-xs font-bold text-blue-600 mb-2">جاری</p>
+                      <p className="text-xs font-bold text-blue-600 mb-2">In Progress</p>
                       {inProgressVisits.map(v => <VisitCard key={v.id} visit={v} />)}
                     </div>
                   )}
                   {completedVisits.length > 0 && (
                     <div>
-                      <p className="text-xs font-bold text-emerald-600 mb-2">مکمل</p>
+                      <p className="text-xs font-bold text-emerald-600 mb-2">Completed</p>
                       {completedVisits.map(v => <VisitCard key={v.id} visit={v} />)}
                     </div>
                   )}
-                  {todayVisits.length === 0 && <p className="text-gray-500 text-center py-8">آج کوئی مریض نہیں</p>}
+                  {todayVisits.length === 0 && <p className="text-gray-500 text-center py-8">No patients today</p>}
                 </div>
               </CardContent>
             </Card>
@@ -297,12 +297,12 @@ export default function DoctorPage() {
                     <div className="flex gap-2">
                       {selectedVisit.status === 'waiting' && (
                         <Button size="sm" onClick={() => markAsInProgress(selectedVisit)} className="bg-blue-600 hover:bg-blue-700">
-                          علاج شروع کریں
+                          Start Treatment
                         </Button>
                       )}
                       {selectedVisit.status === 'in-progress' && (
                         <Button size="sm" onClick={() => markAsSeen(selectedVisit)} className="bg-emerald-600 hover:bg-emerald-700">
-                          <CheckCircle className="w-4 h-4 mr-1" /> مکمل
+                          <CheckCircle className="w-4 h-4 mr-1" /> Complete
                         </Button>
                       )}
                     </div>
@@ -311,31 +311,31 @@ export default function DoctorPage() {
                 <CardContent className="space-y-4">
                   {/* Diagnosis */}
                   <div className="space-y-2">
-                    <Label>تشخیص</Label>
+                    <Label>Diagnosis</Label>
                     <div className="flex gap-2">
-                      <Input value={selectedVisit.diagnosis} onChange={e => updateVisit({ ...selectedVisit, diagnosis: e.target.value })} placeholder="تشخیص درج کریں..." />
-                      <Button size="sm" variant="outline" onClick={() => saveDiagnosis(selectedVisit.diagnosis)}>محفوظ</Button>
+                      <Input value={selectedVisit.diagnosis} onChange={e => updateVisit({ ...selectedVisit, diagnosis: e.target.value })} placeholder="Enter diagnosis..." />
+                      <Button size="sm" variant="outline" onClick={() => saveDiagnosis(selectedVisit.diagnosis)}>Save</Button>
                     </div>
                   </div>
 
                   {/* Notes */}
                   <div className="space-y-2">
-                    <Label>نوٹ</Label>
-                    <Input value={selectedVisit.notes} onChange={e => updateVisit({ ...selectedVisit, notes: e.target.value })} placeholder="نوٹ..." />
+                    <Label>Notes</Label>
+                    <Input value={selectedVisit.notes} onChange={e => updateVisit({ ...selectedVisit, notes: e.target.value })} placeholder="Notes..." />
                   </div>
 
                   {/* Prescription */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-base font-bold flex items-center gap-1">
-                        <Stethoscope className="w-4 h-4" /> نسخہ
+                        <Stethoscope className="w-4 h-4" /> Prescription
                       </Label>
                       <Button size="sm" variant="outline" onClick={() => setShowPrescription(true)}>
-                        <Plus className="w-3 h-3 mr-1" /> دوا شامل
+                        <Plus className="w-3 h-3 mr-1" /> Add Medicine
                       </Button>
                     </div>
                     {selectedVisit.prescription.length === 0 ? (
-                      <p className="text-sm text-gray-400 border rounded-lg p-3 text-center">نسخہ خالی ہے</p>
+                      <p className="text-sm text-gray-400 border rounded-lg p-3 text-center">Prescription is empty</p>
                     ) : (
                       <div className="border rounded-lg divide-y">
                         {selectedVisit.prescription.map((med, idx) => (
@@ -357,24 +357,24 @@ export default function DoctorPage() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-base font-bold flex items-center gap-1">
-                        <Beaker className="w-4 h-4" /> لیب ٹیسٹس
+                        <Beaker className="w-4 h-4" /> Lab Tests
                       </Label>
                       <Button size="sm" variant="outline" onClick={() => setShowLabOrder(true)}>
-                        <Plus className="w-3 h-3 mr-1" /> ٹیسٹ
+                        <Plus className="w-3 h-3 mr-1" /> Test
                       </Button>
                     </div>
                     {selectedVisit.labTests.length === 0 ? (
-                      <p className="text-sm text-gray-400 border rounded-lg p-3 text-center">کوئی لیب ٹیسٹ نہیں</p>
+                      <p className="text-sm text-gray-400 border rounded-lg p-3 text-center">No lab tests</p>
                     ) : (
                       <div className="border rounded-lg divide-y">
                         {selectedVisit.labTests.map(test => (
                           <div key={test.id} className="p-3 flex items-center justify-between">
                             <div>
                               <p className="font-medium">{test.testName}</p>
-                              <p className="text-xs text-gray-500">Rs. {test.price} | {test.status === 'ordered' ? 'آرڈرڈ' : test.status === 'paid' ? 'ادا شدہ' : test.status === 'processing' ? 'پروسسنگ' : 'مکمل'}</p>
+                              <p className="text-xs text-gray-500">Rs. {test.price} | {test.status === 'ordered' ? 'Ordered' : test.status === 'paid' ? 'Paid' : test.status === 'processing' ? 'Processing' : 'Completed'}</p>
                             </div>
                             <Badge variant={test.status === 'completed' ? 'default' : 'outline'} className={test.status === 'completed' ? 'bg-emerald-600' : ''}>
-                              {test.status === 'ordered' ? 'آرڈرڈ' : test.status === 'paid' ? 'ادا شدہ' : test.status === 'processing' ? 'پروسسنگ' : 'مکمل'}
+                              {test.status === 'ordered' ? 'Ordered' : test.status === 'paid' ? 'Paid' : test.status === 'processing' ? 'Processing' : 'Completed'}
                             </Badge>
                           </div>
                         ))}
@@ -386,14 +386,14 @@ export default function DoctorPage() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-base font-bold flex items-center gap-1">
-                        <ScanLine className="w-4 h-4" /> ایکس ری
+                        <ScanLine className="w-4 h-4" /> X-Ray
                       </Label>
                       <Button size="sm" variant="outline" onClick={() => setShowXrayOrder(true)}>
-                        <Plus className="w-3 h-3 mr-1" /> آرڈر
+                        <Plus className="w-3 h-3 mr-1" /> Order
                       </Button>
                     </div>
                     {selectedVisit.xrayOrders.length === 0 ? (
-                      <p className="text-sm text-gray-400 border rounded-lg p-3 text-center">کوئی ایکس ری نہیں</p>
+                      <p className="text-sm text-gray-400 border rounded-lg p-3 text-center">No X-Ray orders</p>
                     ) : (
                       <div className="border rounded-lg divide-y">
                         {selectedVisit.xrayOrders.map(x => (
@@ -403,7 +403,7 @@ export default function DoctorPage() {
                               <p className="text-xs text-gray-500">Rs. {x.price}</p>
                             </div>
                             <Badge variant={x.status === 'completed' ? 'default' : 'outline'} className={x.status === 'completed' ? 'bg-emerald-600' : ''}>
-                              {x.status === 'ordered' ? 'آرڈرڈ' : x.status === 'paid' ? 'ادا شدہ' : x.status === 'processing' ? 'پروسسنگ' : 'مکمل'}
+                              {x.status === 'ordered' ? 'Ordered' : x.status === 'paid' ? 'Paid' : x.status === 'processing' ? 'Processing' : 'Completed'}
                             </Badge>
                           </div>
                         ))}
@@ -415,14 +415,14 @@ export default function DoctorPage() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-base font-bold flex items-center gap-1">
-                        <Activity className="w-4 h-4" /> الٹراساؤنڈ
+                        <Activity className="w-4 h-4" /> Ultrasound
                       </Label>
                       <Button size="sm" variant="outline" onClick={() => setShowUltrasoundOrder(true)}>
-                        <Plus className="w-3 h-3 mr-1" /> آرڈر
+                        <Plus className="w-3 h-3 mr-1" /> Order
                       </Button>
                     </div>
                     {selectedVisit.ultrasoundOrders.length === 0 ? (
-                      <p className="text-sm text-gray-400 border rounded-lg p-3 text-center">کوئی الٹراساؤنڈ نہیں</p>
+                      <p className="text-sm text-gray-400 border rounded-lg p-3 text-center">No Ultrasound orders</p>
                     ) : (
                       <div className="border rounded-lg divide-y">
                         {selectedVisit.ultrasoundOrders.map(u => (
@@ -432,7 +432,7 @@ export default function DoctorPage() {
                               <p className="text-xs text-gray-500">Rs. {u.price}</p>
                             </div>
                             <Badge variant={u.status === 'completed' ? 'default' : 'outline'} className={u.status === 'completed' ? 'bg-emerald-600' : ''}>
-                              {u.status === 'ordered' ? 'آرڈرڈ' : u.status === 'paid' ? 'ادا شدہ' : u.status === 'processing' ? 'پروسسنگ' : 'مکمل'}
+                              {u.status === 'ordered' ? 'Ordered' : u.status === 'paid' ? 'Paid' : u.status === 'processing' ? 'Processing' : 'Completed'}
                             </Badge>
                           </div>
                         ))}
@@ -444,17 +444,17 @@ export default function DoctorPage() {
                   {selectedVisit.surgeryOrder && (
                     <div className="space-y-2">
                       <Label className="text-base font-bold flex items-center gap-1">
-                        <Scissors className="w-4 h-4" /> سرجری
+                        <Scissors className="w-4 h-4" /> Surgery
                       </Label>
                       <div className="border rounded-lg p-4 bg-red-50">
                         <p className="font-bold">{selectedVisit.surgeryOrder.surgeryType}</p>
                         <div className="grid grid-cols-3 gap-2 mt-2 text-sm">
-                          <div><span className="text-gray-500">کل:</span> Rs. {selectedVisit.surgeryOrder.totalCost.toLocaleString()}</div>
-                          <div><span className="text-gray-500">ادا:</span> <span className="text-emerald-600 font-bold">Rs. {selectedVisit.surgeryOrder.amountPaid.toLocaleString()}</span></div>
-                          <div><span className="text-gray-500">بیلنس:</span> <span className="text-red-600 font-bold">Rs. {selectedVisit.surgeryOrder.balance.toLocaleString()}</span></div>
+                          <div><span className="text-gray-500">Total:</span> Rs. {selectedVisit.surgeryOrder.totalCost.toLocaleString()}</div>
+                          <div><span className="text-gray-500">Paid:</span> <span className="text-emerald-600 font-bold">Rs. {selectedVisit.surgeryOrder.amountPaid.toLocaleString()}</span></div>
+                          <div><span className="text-gray-500">Balance:</span> <span className="text-red-600 font-bold">Rs. {selectedVisit.surgeryOrder.balance.toLocaleString()}</span></div>
                         </div>
                         <Badge variant="outline" className="mt-2">
-                          {selectedVisit.surgeryOrder.status === 'scheduled' ? 'شیڈولڈ' : selectedVisit.surgeryOrder.status === 'in-progress' ? 'جاری' : 'مکمل'}
+                          {selectedVisit.surgeryOrder.status === 'scheduled' ? 'Scheduled' : selectedVisit.surgeryOrder.status === 'in-progress' ? 'In Progress' : 'Completed'}
                         </Badge>
                       </div>
                     </div>
@@ -463,7 +463,7 @@ export default function DoctorPage() {
                   {!selectedVisit.surgeryOrder && (
                     <div className="flex justify-end">
                       <Button size="sm" variant="outline" onClick={() => setShowSurgeryOrder(true)} className="text-red-600 border-red-300">
-                        <Scissors className="w-3 h-3 mr-1" /> سرجری آرڈر
+                        <Scissors className="w-3 h-3 mr-1" /> Surgery Order
                       </Button>
                     </div>
                   )}
@@ -473,7 +473,7 @@ export default function DoctorPage() {
               <Card>
                 <CardContent className="p-12 text-center text-gray-400">
                   <Stethoscope className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                  <p>مریض منتخب کریں</p>
+                  <p>Select a patient</p>
                 </CardContent>
               </Card>
             )}
@@ -484,18 +484,18 @@ export default function DoctorPage() {
         {/* Prescription Dialog */}
         <Dialog open={showPrescription} onOpenChange={setShowPrescription}>
           <DialogContent>
-            <DialogHeader><DialogTitle>دوا شامل کریں</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>Add Medicine</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              <div className="space-y-2"><Label>دوا کا نام</Label><Input value={rxForm.medicine} onChange={e => setRxForm({ ...rxForm, medicine: e.target.value })} placeholder="پانیاڈول" /></div>
+              <div className="space-y-2"><Label>Medicine Name</Label><Input value={rxForm.medicine} onChange={e => setRxForm({ ...rxForm, medicine: e.target.value })} placeholder="Panadol" /></div>
               <div className="grid grid-cols-3 gap-2">
-                <div className="space-y-2"><Label>ڈوز</Label><Input value={rxForm.dosage} onChange={e => setRxForm({ ...rxForm, dosage: e.target.value })} placeholder="500mg" /></div>
-                <div className="space-y-2"><Label>فریکوئنسی</Label><Input value={rxForm.frequency} onChange={e => setRxForm({ ...rxForm, frequency: e.target.value })} placeholder="3 بار دن" /></div>
-                <div className="space-y-2"><Label>دورانیہ</Label><Input value={rxForm.duration} onChange={e => setRxForm({ ...rxForm, duration: e.target.value })} placeholder="5 دن" /></div>
+                <div className="space-y-2"><Label>Dosage</Label><Input value={rxForm.dosage} onChange={e => setRxForm({ ...rxForm, dosage: e.target.value })} placeholder="500mg" /></div>
+                <div className="space-y-2"><Label>Frequency</Label><Input value={rxForm.frequency} onChange={e => setRxForm({ ...rxForm, frequency: e.target.value })} placeholder="3 times a day" /></div>
+                <div className="space-y-2"><Label>Duration</Label><Input value={rxForm.duration} onChange={e => setRxForm({ ...rxForm, duration: e.target.value })} placeholder="5 days" /></div>
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowPrescription(false)}>منسوخ</Button>
-              <Button onClick={addPrescription} className="bg-emerald-600 hover:bg-emerald-700">شامل کریں</Button>
+              <Button variant="outline" onClick={() => setShowPrescription(false)}>Cancel</Button>
+              <Button onClick={addPrescription} className="bg-emerald-600 hover:bg-emerald-700">Add</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -503,14 +503,14 @@ export default function DoctorPage() {
         {/* Lab Order Dialog */}
         <Dialog open={showLabOrder} onOpenChange={setShowLabOrder}>
           <DialogContent>
-            <DialogHeader><DialogTitle>لیب ٹیسٹ آرڈر</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>Lab Test Order</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              <div className="space-y-2"><Label>ٹیسٹ کا نام</Label><Input value={labForm.testName} onChange={e => setLabForm({ ...labForm, testName: e.target.value })} placeholder="CBC" /></div>
-              <div className="space-y-2"><Label>قیمت (Rs.)</Label><Input type="number" value={labForm.price} onChange={e => setLabForm({ ...labForm, price: e.target.value })} placeholder="500" dir="ltr" /></div>
+              <div className="space-y-2"><Label>Test Name</Label><Input value={labForm.testName} onChange={e => setLabForm({ ...labForm, testName: e.target.value })} placeholder="CBC" /></div>
+              <div className="space-y-2"><Label>Price (Rs.)</Label><Input type="number" value={labForm.price} onChange={e => setLabForm({ ...labForm, price: e.target.value })} placeholder="500" dir="ltr" /></div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowLabOrder(false)}>منسوخ</Button>
-              <Button onClick={addLabTest} className="bg-orange-600 hover:bg-orange-700">آرڈر</Button>
+              <Button variant="outline" onClick={() => setShowLabOrder(false)}>Cancel</Button>
+              <Button onClick={addLabTest} className="bg-orange-600 hover:bg-orange-700">Order</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -518,14 +518,14 @@ export default function DoctorPage() {
         {/* X-Ray Order Dialog */}
         <Dialog open={showXrayOrder} onOpenChange={setShowXrayOrder}>
           <DialogContent>
-            <DialogHeader><DialogTitle>ایکس ری آرڈر</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>X-Ray Order</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              <div className="space-y-2"><Label>ایکس ری کی قسم</Label><Input value={xrayForm.testName} onChange={e => setXrayForm({ ...xrayForm, testName: e.target.value })} placeholder="Chest X-Ray" /></div>
-              <div className="space-y-2"><Label>قیمت (Rs.)</Label><Input type="number" value={xrayForm.price} onChange={e => setXrayForm({ ...xrayForm, price: e.target.value })} placeholder="800" dir="ltr" /></div>
+              <div className="space-y-2"><Label>X-Ray Type</Label><Input value={xrayForm.testName} onChange={e => setXrayForm({ ...xrayForm, testName: e.target.value })} placeholder="Chest X-Ray" /></div>
+              <div className="space-y-2"><Label>Price (Rs.)</Label><Input type="number" value={xrayForm.price} onChange={e => setXrayForm({ ...xrayForm, price: e.target.value })} placeholder="800" dir="ltr" /></div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowXrayOrder(false)}>منسوخ</Button>
-              <Button onClick={addXray} className="bg-cyan-600 hover:bg-cyan-700">آرڈر</Button>
+              <Button variant="outline" onClick={() => setShowXrayOrder(false)}>Cancel</Button>
+              <Button onClick={addXray} className="bg-cyan-600 hover:bg-cyan-700">Order</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -533,14 +533,14 @@ export default function DoctorPage() {
         {/* Ultrasound Order Dialog */}
         <Dialog open={showUltrasoundOrder} onOpenChange={setShowUltrasoundOrder}>
           <DialogContent>
-            <DialogHeader><DialogTitle>الٹراساؤنڈ آرڈر</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>Ultrasound Order</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              <div className="space-y-2"><Label>الٹراساؤنڈ کی قسم</Label><Input value={usForm.testName} onChange={e => setUsForm({ ...usForm, testName: e.target.value })} placeholder="Abdomen Ultrasound" /></div>
-              <div className="space-y-2"><Label>قیمت (Rs.)</Label><Input type="number" value={usForm.price} onChange={e => setUsForm({ ...usForm, price: e.target.value })} placeholder="2000" dir="ltr" /></div>
+              <div className="space-y-2"><Label>Ultrasound Type</Label><Input value={usForm.testName} onChange={e => setUsForm({ ...usForm, testName: e.target.value })} placeholder="Abdomen Ultrasound" /></div>
+              <div className="space-y-2"><Label>Price (Rs.)</Label><Input type="number" value={usForm.price} onChange={e => setUsForm({ ...usForm, price: e.target.value })} placeholder="2000" dir="ltr" /></div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowUltrasoundOrder(false)}>منسوخ</Button>
-              <Button onClick={addUltrasound} className="bg-pink-600 hover:bg-pink-700">آرڈر</Button>
+              <Button variant="outline" onClick={() => setShowUltrasoundOrder(false)}>Cancel</Button>
+              <Button onClick={addUltrasound} className="bg-pink-600 hover:bg-pink-700">Order</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -548,15 +548,15 @@ export default function DoctorPage() {
         {/* Surgery Order Dialog */}
         <Dialog open={showSurgeryOrder} onOpenChange={setShowSurgeryOrder}>
           <DialogContent>
-            <DialogHeader><DialogTitle>سرجری آرڈر</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>Surgery Order</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              <div className="space-y-2"><Label>سرجری کی قسم</Label><Input value={surgForm.surgeryType} onChange={e => setSurgForm({ ...surgForm, surgeryType: e.target.value })} placeholder="Appendectomy" /></div>
-              <div className="space-y-2"><Label>تخمینی لاگت (Rs.)</Label><Input type="number" value={surgForm.totalCost} onChange={e => setSurgForm({ ...surgForm, totalCost: e.target.value })} placeholder="50000" dir="ltr" /></div>
-              <div className="space-y-2"><Label>نوٹ</Label><Input value={surgForm.notes} onChange={e => setSurgForm({ ...surgForm, notes: e.target.value })} /></div>
+              <div className="space-y-2"><Label>Surgery Type</Label><Input value={surgForm.surgeryType} onChange={e => setSurgForm({ ...surgForm, surgeryType: e.target.value })} placeholder="Appendectomy" /></div>
+              <div className="space-y-2"><Label>Estimated Cost (Rs.)</Label><Input type="number" value={surgForm.totalCost} onChange={e => setSurgForm({ ...surgForm, totalCost: e.target.value })} placeholder="50000" dir="ltr" /></div>
+              <div className="space-y-2"><Label>Notes</Label><Input value={surgForm.notes} onChange={e => setSurgForm({ ...surgForm, notes: e.target.value })} /></div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowSurgeryOrder(false)}>منسوخ</Button>
-              <Button onClick={addSurgery} className="bg-red-600 hover:bg-red-700">سرجری آرڈر</Button>
+              <Button variant="outline" onClick={() => setShowSurgeryOrder(false)}>Cancel</Button>
+              <Button onClick={addSurgery} className="bg-red-600 hover:bg-red-700">Surgery Order</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

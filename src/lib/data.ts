@@ -21,21 +21,21 @@ function getDefaultSettings() {
 
 function getDemoPatients(): Patient[] {
   const patients = [
-    { name: 'محمد احمد', relationType: 'father' as const, relationName: 'عبداللہ', mobile: '03001234567', age: '35', address: 'گلبرگ، لاہور', gender: 'male' as const },
-    { name: 'فاطمہ بی بی', relationType: 'husband' as const, relationName: 'محمد عمر', mobile: '03012345678', age: '28', address: 'جوہر ٹاؤن، لاہور', gender: 'female' as const },
-    { name: 'علی حسن', relationType: 'father' as const, relationName: 'حسن علی', mobile: '03023456789', age: '45', address: 'ڈفیا روڈ، لاہور', gender: 'male' as const },
-    { name: 'آئینہ Bibi', relationType: 'father' as const, relationName: 'غلام محی الدین', mobile: '03034567890', age: '22', address: 'منٹو پارک، لاہور', gender: 'female' as const },
-    { name: 'بلال احمد', relationType: 'father' as const, relationName: 'احمد خان', mobile: '03045678901', age: '50', address: 'انارکلی، لاہور', gender: 'male' as const },
-    { name: 'مریم خاتون', relationType: 'husband' as const, relationName: 'خالد محمود', mobile: '03056789012', age: '32', address: 'گارڈن ٹاؤن، لاہور', gender: 'female' as const },
-    { name: 'اسلمؔ', relationType: 'father' as const, relationName: 'محمد اسلم', mobile: '03067890123', age: '60', address: 'سمن آباد، لاہور', gender: 'male' as const },
-    { name: 'زینب بی بی', relationType: 'husband' as const, relationName: 'رفعت علی', mobile: '03078901234', age: '40', address: 'ڈھرم پورہ، لاہور', gender: 'female' as const },
-    { name: 'حسین علی', relationType: 'father' as const, relationName: 'علی محمد', mobile: '03089012345', age: '18', address: 'شاد باغ، لاہور', gender: 'male' as const },
-    { name: 'نرگس بی بی', relationType: 'husband' as const, relationName: 'صدیق حسین', mobile: '03090123456', age: '55', address: 'بادامی باغ، لاہور', gender: 'female' as const },
-    { name: 'رضا علی', relationType: 'father' as const, relationName: 'عمران علی', mobile: '03101234567', age: '8', address: 'ایچ بلاک، لاہور', gender: 'male' as const },
-    { name: 'صبیحہ بی بی', relationType: 'father' as const, relationName: 'اسحاق', mobile: '03112345678', age: '26', address: 'واپڈا ٹاؤن، لاہور', gender: 'female' as const },
-    { name: 'تانویر احمد', relationType: 'father' as const, relationName: 'احمد دیندار', mobile: '03123456789', age: '70', address: 'کوئٹہ روڈ، لاہور', gender: 'male' as const },
-    { name: 'شازیہ بی بی', relationType: 'husband' as const, relationName: 'نسیم اختر', mobile: '03134567890', age: '33', address: 'فیصل ٹاؤن، لاہور', gender: 'female' as const },
-    { name: ' عمر فاروق', relationType: 'father' as const, relationName: 'فاروق احمد', mobile: '03145678901', age: '42', address: 'ملک پورہ، لاہور', gender: 'male' as const },
+    { name: 'Muhammad Ahmad', relationType: 'father' as const, relationName: 'Abdullah', mobile: '03001234567', age: '35', address: 'Gulberg, Lahore', gender: 'male' as const },
+    { name: 'Fatima Bibi', relationType: 'husband' as const, relationName: 'Muhammad Umar', mobile: '03012345678', age: '28', address: 'Johar Town, Lahore', gender: 'female' as const },
+    { name: 'Ali Hassan', relationType: 'father' as const, relationName: 'Hassan Ali', mobile: '03023456789', age: '45', address: 'Defence Road, Lahore', gender: 'male' as const },
+    { name: 'Aina Bibi', relationType: 'father' as const, relationName: 'Ghulam Mohiuddin', mobile: '03034567890', age: '22', address: 'Minto Park, Lahore', gender: 'female' as const },
+    { name: 'Bilal Ahmad', relationType: 'father' as const, relationName: 'Ahmad Khan', mobile: '03045678901', age: '50', address: 'Anarkali, Lahore', gender: 'male' as const },
+    { name: 'Maryam Khatun', relationType: 'husband' as const, relationName: 'Khalid Mahmood', mobile: '03056789012', age: '32', address: 'Garden Town, Lahore', gender: 'female' as const },
+    { name: 'Aslam', relationType: 'father' as const, relationName: 'Muhammad Aslam', mobile: '03067890123', age: '60', address: 'Samanabad, Lahore', gender: 'male' as const },
+    { name: 'Zainab Bibi', relationType: 'husband' as const, relationName: 'Rafat Ali', mobile: '03078901234', age: '40', address: 'Dharampura, Lahore', gender: 'female' as const },
+    { name: 'Hussain Ali', relationType: 'father' as const, relationName: 'Ali Muhammad', mobile: '03089012345', age: '18', address: 'Shad Bagh, Lahore', gender: 'male' as const },
+    { name: 'Nargis Bibi', relationType: 'husband' as const, relationName: 'Sadiq Hussain', mobile: '03090123456', age: '55', address: 'Badami Bagh, Lahore', gender: 'female' as const },
+    { name: 'Raza Ali', relationType: 'father' as const, relationName: 'Imran Ali', mobile: '03101234567', age: '8', address: 'H-Block, Lahore', gender: 'male' as const },
+    { name: 'Sabiha Bibi', relationType: 'father' as const, relationName: 'Ishaq', mobile: '03112345678', age: '26', address: 'WAPDA Town, Lahore', gender: 'female' as const },
+    { name: 'Tanveer Ahmad', relationType: 'father' as const, relationName: 'Ahmad Dindar', mobile: '03123456789', age: '70', address: 'Quetta Road, Lahore', gender: 'male' as const },
+    { name: 'Shazia Bibi', relationType: 'husband' as const, relationName: 'Nasim Akhtar', mobile: '03134567890', age: '33', address: 'Faisal Town, Lahore', gender: 'female' as const },
+    { name: 'Umar Farooq', relationType: 'father' as const, relationName: 'Farooq Ahmad', mobile: '03145678901', age: '42', address: 'Malikpura, Lahore', gender: 'male' as const },
   ];
 
   return patients.map((p, i) => ({
@@ -49,7 +49,7 @@ function getDemoPatients(): Patient[] {
 }
 
 function getDemoVisits(patients: Patient[]): Visit[] {
-  const doctors = ['ڈاکٹر محمد اشرف', 'ڈاکٹر ساجد رضا', 'ڈاکٹر نبیل احمد'];
+  const doctors = ['Dr. Muhammad Ashraf', 'Dr. Sajid Raza', 'Dr. Nabeel Ahmad'];
   const today = new Date().toISOString().split('T')[0];
   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
@@ -63,11 +63,11 @@ function getDemoVisits(patients: Patient[]): Visit[] {
       time: '09:00',
       doctorName: doctors[0],
       status: 'seen',
-      diagnosis: 'نزلہ زکام اور بخار',
+      diagnosis: 'Flu and Fever',
       prescription: [
-        { medicine: 'پانیاڈول', dosage: '500mg', frequency: 'تین بار دن', duration: '3 دن' },
-        { medicine: 'سپریڈین سی', dosage: '1 ٹیبلٹ', frequency: 'دو بار دن', duration: '5 دن' },
-        { medicine: 'اموکسل', dosage: '250mg', frequency: 'تین بار دن', duration: '5 دن' },
+        { medicine: 'Panadol', dosage: '500mg', frequency: '3 times a day', duration: '3 days' },
+        { medicine: 'Sepredine-C', dosage: '1 tablet', frequency: 'twice a day', duration: '5 days' },
+        { medicine: 'Amoxil', dosage: '250mg', frequency: '3 times a day', duration: '5 days' },
       ],
       labTests: [
         { id: generateId() + 'l1', testName: 'CBC', price: 500, status: 'completed', result: 'WBC: 11000, RBC: 4.5M, Hb: 12.5g/dL, Platelets: 250K', paidAt: new Date().toISOString(), completedAt: new Date().toISOString(), paymentLocation: 'lab' },
@@ -87,20 +87,20 @@ function getDemoVisits(patients: Patient[]): Visit[] {
       time: '09:30',
       doctorName: doctors[1],
       status: 'seen',
-      diagnosis: 'پیٹ میں درد',
+      diagnosis: 'Stomach Pain',
       prescription: [
-        { medicine: 'فلاگیل', dosage: '400mg', frequency: 'تین بار دن', duration: '7 دن' },
-        { medicine: 'ایسومپرازول', dosage: '20mg', frequency: 'صبح خالی', duration: '14 دن' },
+        { medicine: 'Flagyl', dosage: '400mg', frequency: '3 times a day', duration: '7 days' },
+        { medicine: 'Esomeprazole', dosage: '20mg', frequency: 'morning empty stomach', duration: '14 days' },
       ],
       labTests: [
         { id: generateId() + 'l2', testName: 'Liver Function Test', price: 1200, status: 'paid', result: '', paidAt: new Date().toISOString(), completedAt: null, paymentLocation: 'lab' },
       ],
       xrayOrders: [],
       ultrasoundOrders: [
-        { id: generateId() + 'u1', testName: 'ابڈومن الٹراساؤنڈ', price: 2000, status: 'paid', result: '', paidAt: new Date().toISOString(), completedAt: null, paymentLocation: 'ultrasound' },
+        { id: generateId() + 'u1', testName: 'Ultrasound Abdomen', price: 2000, status: 'paid', result: '', paidAt: new Date().toISOString(), completedAt: null, paymentLocation: 'ultrasound' },
       ],
       surgeryOrder: null,
-      notes: 'الٹراساؤنڈ رپورٹ کا انتظار',
+      notes: 'Waiting for ultrasound report',
       createdAt: new Date().toISOString(),
     },
     {
@@ -153,10 +153,10 @@ function getDemoVisits(patients: Patient[]): Visit[] {
       time: '11:00',
       doctorName: doctors[0],
       status: 'completed',
-      diagnosis: 'بلڈ پریشر ہائی',
+      diagnosis: 'High Blood Pressure',
       prescription: [
-        { medicine: 'لوزارٹن', dosage: '50mg', frequency: 'صبح ایک', duration: '30 دن' },
-        { medicine: 'ایسپرن', dosage: '75mg', frequency: 'دوپہر ایک', duration: '30 دن' },
+        { medicine: 'Losartan', dosage: '50mg', frequency: 'once a day morning', duration: '30 days' },
+        { medicine: 'Aspirin', dosage: '75mg', frequency: 'once a day afternoon', duration: '30 days' },
       ],
       labTests: [
         { id: generateId() + 'l5', testName: 'Lipid Profile', price: 1500, status: 'completed', result: 'Total Cholesterol: 240, LDL: 160, HDL: 35, Triglycerides: 180', paidAt: new Date().toISOString(), completedAt: new Date().toISOString(), paymentLocation: 'lab' },
@@ -165,15 +165,15 @@ function getDemoVisits(patients: Patient[]): Visit[] {
       ultrasoundOrders: [],
       surgeryOrder: {
         id: generateId() + 's1',
-        surgeryType: 'پیٹ کی سرجری',
+        surgeryType: 'Abdominal Surgery',
         totalCost: 50000,
         amountPaid: 25000,
         balance: 25000,
         status: 'scheduled',
         paymentLocation: 'reception',
-        notes: 'اگلے ہفتے سرجری شیڈول',
+        notes: 'Surgery scheduled for next week',
       },
-      notes: 'مالی اعانت کی کمی، 25 ہزار ادا',
+      notes: 'Financial assistance needed, 25K paid',
       createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
     },
     {
@@ -185,10 +185,10 @@ function getDemoVisits(patients: Patient[]): Visit[] {
       time: '14:00',
       doctorName: doctors[1],
       status: 'completed',
-      diagnosis: 'گلا میں انفیکشن',
+      diagnosis: 'Throat Infection',
       prescription: [
-        { medicine: 'آگمنتین', dosage: '625mg', frequency: 'تین بار دن', duration: '7 دن' },
-        { medicine: 'لوکیکام', dosage: '500mg', frequency: 'دو بار دن', duration: '3 دن' },
+        { medicine: 'Augmentin', dosage: '625mg', frequency: '3 times a day', duration: '7 days' },
+        { medicine: 'Loxicom', dosage: '500mg', frequency: 'twice a day', duration: '3 days' },
       ],
       labTests: [],
       xrayOrders: [],
@@ -209,12 +209,12 @@ function getDemoVisits(patients: Patient[]): Visit[] {
       diagnosis: '',
       prescription: [],
       labTests: [
-        { id: generateId() + 'l6', testName: 'کریاٹائین', price: 400, status: 'ordered', result: '', paidAt: null, completedAt: null, paymentLocation: 'reception' },
+        { id: generateId() + 'l6', testName: 'Creatinine', price: 400, status: 'ordered', result: '', paidAt: null, completedAt: null, paymentLocation: 'reception' },
       ],
       xrayOrders: [],
       ultrasoundOrders: [],
       surgeryOrder: null,
-      notes: 'بڑی عمر کے مریض',
+      notes: 'Elderly patient',
       createdAt: new Date().toISOString(),
     },
     {
@@ -226,17 +226,17 @@ function getDemoVisits(patients: Patient[]): Visit[] {
       time: '15:00',
       doctorName: doctors[0],
       status: 'completed',
-      diagnosis: 'جوڑوں کا درد',
+      diagnosis: 'Joint Pain',
       prescription: [
-        { medicine: 'ڈائکلوفیناک', dosage: '50mg', frequency: 'دو بار دن', duration: '7 دن' },
-        { medicine: 'کیلسیم + وٹامن ڈی', dosage: '1 ٹیبلٹ', frequency: 'ایک بار دن', duration: '30 دن' },
+        { medicine: 'Diclofenac', dosage: '50mg', frequency: 'twice a day', duration: '7 days' },
+        { medicine: 'Calcium + Vitamin D', dosage: '1 tablet', frequency: 'once a day', duration: '30 days' },
       ],
       labTests: [
         { id: generateId() + 'l7', testName: 'RA Factor', price: 700, status: 'completed', result: 'RA Factor: Positive (1:80)', paidAt: new Date().toISOString(), completedAt: new Date().toISOString(), paymentLocation: 'lab' },
         { id: generateId() + 'l8', testName: 'ESR', price: 200, status: 'completed', result: 'ESR: 45 mm/hr', paidAt: new Date().toISOString(), completedAt: new Date().toISOString(), paymentLocation: 'lab' },
       ],
       xrayOrders: [
-        { id: generateId() + 'x2', testName: 'کھینچے ہوئے جوڑوں کا ایکس ری', price: 600, status: 'completed', result: ' joints: Mild degenerative changes, No fracture', paidAt: new Date().toISOString(), completedAt: new Date().toISOString(), paymentLocation: 'xray' },
+        { id: generateId() + 'x2', testName: 'Joint X-Ray', price: 600, status: 'completed', result: ' joints: Mild degenerative changes, No fracture', paidAt: new Date().toISOString(), completedAt: new Date().toISOString(), paymentLocation: 'xray' },
       ],
       ultrasoundOrders: [],
       surgeryOrder: null,

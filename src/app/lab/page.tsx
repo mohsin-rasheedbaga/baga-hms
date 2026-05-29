@@ -60,7 +60,7 @@ export default function LabPage() {
     setData(updated);
     setSelectedOrder({ visit: updatedVisit, order: { ...selectedOrder.order, status: 'paid', paidAt: new Date().toISOString() } });
     setShowPayment(false);
-    toast.success('ادائیگی ہو گئی - ٹیسٹ شروع کریں');
+    toast.success('Payment received - start test');
   };
 
   const completeTest = () => {
@@ -79,7 +79,7 @@ export default function LabPage() {
     setData(updated);
     setSelectedOrder({ visit: updatedVisit, order: { ...selectedOrder.order, status: 'completed', result: resultText, completedAt: new Date().toISOString() } });
     setShowResult(false);
-    toast.success('ٹیسٹ مکمل');
+    toast.success('Test completed');
   };
 
   const togglePaymentLocation = (val: boolean) => {
@@ -87,7 +87,7 @@ export default function LabPage() {
     const updated = { ...data, settings: { ...data.settings, labPaymentLocation: loc } };
     saveData(updated);
     setData(updated);
-    toast.success(`ادائیگی: ${val ? 'لیب' : 'ریسپشن'}`);
+    toast.success(`Payment: ${val ? 'Lab' : 'Reception'}`);
   };
 
   const isBlocked = (order: LabOrder) => {
@@ -102,19 +102,19 @@ export default function LabPage() {
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
               <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center"><Clock className="w-5 h-5 text-amber-600" /></div>
-              <div><p className="text-2xl font-bold">{orderedTests.length}</p><p className="text-xs text-gray-500">آرڈرڈ</p></div>
+              <div><p className="text-2xl font-bold">{orderedTests.length}</p><p className="text-xs text-gray-500">Ordered</p></div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
               <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center"><CreditCard className="w-5 h-5 text-emerald-600" /></div>
-              <div><p className="text-2xl font-bold">{paidTests.length}</p><p className="text-xs text-gray-500">ادا شدہ</p></div>
+              <div><p className="text-2xl font-bold">{paidTests.length}</p><p className="text-xs text-gray-500">Paid</p></div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center"><CheckCircle className="w-5 h-5 text-blue-600" /></div>
-              <div><p className="text-2xl font-bold">{completedTests.length}</p><p className="text-xs text-gray-500">مکمل</p></div>
+              <div><p className="text-2xl font-bold">{completedTests.length}</p><p className="text-xs text-gray-500">Completed</p></div>
             </CardContent>
           </Card>
         </div>
@@ -123,23 +123,23 @@ export default function LabPage() {
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <CreditCard className="w-5 h-5 text-gray-600" />
-              <p className="font-medium text-sm">ادائیگی کی جگہ</p>
+              <p className="font-medium text-sm">Payment Location</p>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-500">ریسپشن</span>
+              <span className="text-sm text-gray-500">Reception</span>
               <Switch checked={collectHere} onCheckedChange={togglePaymentLocation} />
-              <span className="text-sm font-medium">لیب</span>
+              <span className="text-sm font-medium">Lab</span>
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">لیب ٹیسٹس</CardTitle>
+            <CardTitle className="text-lg">Lab Tests</CardTitle>
           </CardHeader>
           <CardContent>
             {allLabOrders.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">کوئی ٹیسٹ نہیں</p>
+              <p className="text-gray-500 text-center py-8">No tests</p>
             ) : (
               <div className="space-y-2">
                 {allLabOrders.map(({ visit, order }) => {
@@ -154,17 +154,17 @@ export default function LabPage() {
                         <div>
                           <p className="font-bold">{patient?.name}</p>
                           <p className="text-xs text-gray-500">{visit.patientNumber} | {order.testName} | Rs. {order.price}</p>
-                          {blocked && <p className="text-xs text-amber-600 mt-1">ریسپشن سے ادائیگی کا انتظار</p>}
+                          {blocked && <p className="text-xs text-amber-600 mt-1">Waiting for reception payment</p>}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant={order.status === 'completed' ? 'default' : 'outline'}
                           className={order.status === 'completed' ? 'bg-emerald-600' : ''}>
-                          {order.status === 'ordered' ? 'آرڈرڈ' : order.status === 'paid' ? 'ادا شدہ' : order.status === 'processing' ? 'پروسسنگ' : 'مکمل'}
+                          {order.status === 'ordered' ? 'Ordered' : order.status === 'paid' ? 'Paid' : order.status === 'processing' ? 'Processing' : 'Completed'}
                         </Badge>
                         {!blocked && (
                           <Button size="sm" variant="outline" onClick={() => setSelectedOrder({ visit, order })}>
-                            دیکھیں
+                            View
                           </Button>
                         )}
                       </div>
@@ -184,15 +184,15 @@ export default function LabPage() {
                 <DialogHeader><DialogTitle>{selectedOrder.order.testName}</DialogTitle></DialogHeader>
                 <div className="space-y-4">
                   <div className="bg-gray-50 rounded-lg p-4 text-sm space-y-1">
-                    <p>مریض: {getPatient(selectedOrder.visit.patientId)?.name}</p>
-                    <p>پٹینٹ نمبر: {selectedOrder.visit.patientNumber}</p>
-                    <p>وزیٹ: {selectedOrder.visit.visitNumber}</p>
-                    <p>قیمت: Rs. {selectedOrder.order.price}</p>
-                    <p>حالت: {selectedOrder.order.status}</p>
+                    <p>Patient: {getPatient(selectedOrder.visit.patientId)?.name}</p>
+                    <p>Patient No: {selectedOrder.visit.patientNumber}</p>
+                    <p>Visit: {selectedOrder.visit.visitNumber}</p>
+                    <p>Price: Rs. {selectedOrder.order.price}</p>
+                    <p>Status: {selectedOrder.order.status}</p>
                   </div>
                   {selectedOrder.order.result && (
                     <div className="bg-emerald-50 rounded-lg p-4">
-                      <p className="text-sm font-bold mb-1">نتائج:</p>
+                      <p className="text-sm font-bold mb-1">Results:</p>
                       <p className="text-sm">{selectedOrder.order.result}</p>
                     </div>
                   )}
@@ -200,12 +200,12 @@ export default function LabPage() {
                 <DialogFooter>
                   {selectedOrder.order.status === 'ordered' && collectHere && (
                     <Button onClick={() => setShowPayment(true)} className="bg-emerald-600 hover:bg-emerald-700">
-                      <CreditCard className="w-4 h-4 mr-1" /> ادائیگی کریں
+                      <CreditCard className="w-4 h-4 mr-1" /> Pay
                     </Button>
                   )}
                   {selectedOrder.order.status === 'paid' && (
                     <Button onClick={() => { setResultText(selectedOrder.order.result); setShowResult(true); }} className="bg-orange-600 hover:bg-orange-700">
-                      <Beaker className="w-4 h-4 mr-1" /> نتائج درج کریں
+                      <Beaker className="w-4 h-4 mr-1" /> Enter Results
                     </Button>
                   )}
                 </DialogFooter>
@@ -216,22 +216,22 @@ export default function LabPage() {
 
         <Dialog open={showPayment} onOpenChange={setShowPayment}>
           <DialogContent>
-            <DialogHeader><DialogTitle>ادائیگی</DialogTitle></DialogHeader>
-            <p className="text-sm">Rs. {selectedOrder?.order.price} - ادائیگی کی تصدیق کریں</p>
+            <DialogHeader><DialogTitle>Payment</DialogTitle></DialogHeader>
+            <p className="text-sm">Rs. {selectedOrder?.order.price} - Confirm Payment</p>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowPayment(false)}>منسوخ</Button>
-              <Button onClick={collectPayment} className="bg-emerald-600 hover:bg-emerald-700">ادائیگی کریں</Button>
+              <Button variant="outline" onClick={() => setShowPayment(false)}>Cancel</Button>
+              <Button onClick={collectPayment} className="bg-emerald-600 hover:bg-emerald-700">Pay</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
         <Dialog open={showResult} onOpenChange={setShowResult}>
           <DialogContent>
-            <DialogHeader><DialogTitle>ٹیسٹ کے نتائج</DialogTitle></DialogHeader>
-            <Textarea value={resultText} onChange={e => setResultText(e.target.value)} rows={6} placeholder="نتائج درج کریں..." />
+            <DialogHeader><DialogTitle>Test Results</DialogTitle></DialogHeader>
+            <Textarea value={resultText} onChange={e => setResultText(e.target.value)} rows={6} placeholder="Enter results..." />
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowResult(false)}>منسوخ</Button>
-              <Button onClick={completeTest} className="bg-emerald-600 hover:bg-emerald-700">مکمل</Button>
+              <Button variant="outline" onClick={() => setShowResult(false)}>Cancel</Button>
+              <Button onClick={completeTest} className="bg-emerald-600 hover:bg-emerald-700">Complete</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

@@ -84,7 +84,7 @@ export default function AdminPage() {
     saveData(updated);
     setData(updated);
     setShowSurgeryPayment(false);
-    toast.success(`Rs. ${amount} ادا ہوئے - بیلنس: Rs. ${Math.max(0, newBalance)}`);
+    toast.success(`Rs. ${amount} paid - Balance: Rs. ${Math.max(0, newBalance)}`);
   };
 
   const markSurgeryStatus = (visitId: string, status: 'scheduled' | 'in-progress' | 'completed') => {
@@ -94,16 +94,16 @@ export default function AdminPage() {
     const updated = { ...data, visits: data.visits.map(v => v.id === visitId ? updatedVisit : v) };
     saveData(updated);
     setData(updated);
-    toast.success('سرجری کی حالت تبدیل');
+    toast.success('Surgery status changed');
   };
 
   const getPatient = (pid: string) => data.patients.find(p => p.id === pid);
 
   const resetDemoData = () => {
-    if (confirm('تمام ڈیمو ڈیٹا ری سیٹ کریں؟')) {
+    if (confirm('Reset all demo data?')) {
       localStorage.removeItem('baga_hms_data');
       refreshData();
-      toast.success('ڈیٹا ری سیٹ ہو گیا');
+      toast.success('Data has been reset');
     }
   };
 
@@ -114,14 +114,14 @@ export default function AdminPage() {
         <Tabs defaultValue="dashboard">
           <div className="flex items-center justify-between mb-4">
             <TabsList>
-              <TabsTrigger value="dashboard"><TrendingUp className="w-4 h-4 mr-1" /> ڈیش بورڈ</TabsTrigger>
-              <TabsTrigger value="surgeries"><Scissors className="w-4 h-4 mr-1" /> سرجری</TabsTrigger>
-              <TabsTrigger value="pending"><AlertTriangle className="w-4 h-4 mr-1" /> زیر التوا</TabsTrigger>
-              <TabsTrigger value="settings"><Settings className="w-4 h-4 mr-1" /> سیٹنگز</TabsTrigger>
+              <TabsTrigger value="dashboard"><TrendingUp className="w-4 h-4 mr-1" /> Dashboard</TabsTrigger>
+              <TabsTrigger value="surgeries"><Scissors className="w-4 h-4 mr-1" /> Surgery</TabsTrigger>
+              <TabsTrigger value="pending"><AlertTriangle className="w-4 h-4 mr-1" /> Pending</TabsTrigger>
+              <TabsTrigger value="settings"><Settings className="w-4 h-4 mr-1" /> Settings</TabsTrigger>
             </TabsList>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={refreshData}><RefreshCw className="w-4 h-4 mr-1" /> ریفریش</Button>
-              <Button variant="destructive" size="sm" onClick={resetDemoData}>ری سیٹ</Button>
+              <Button variant="outline" size="sm" onClick={refreshData}><RefreshCw className="w-4 h-4 mr-1" /> Refresh</Button>
+              <Button variant="destructive" size="sm" onClick={resetDemoData}>Reset</Button>
             </div>
           </div>
 
@@ -130,36 +130,36 @@ export default function AdminPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <Card><CardContent className="p-4 flex items-center gap-3">
                 <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center"><Users className="w-5 h-5 text-blue-600" /></div>
-                <div><p className="text-2xl font-bold">{data.patients.length}</p><p className="text-xs text-gray-500">کل مریض</p></div>
+                <div><p className="text-2xl font-bold">{data.patients.length}</p><p className="text-xs text-gray-500">Total Patients</p></div>
               </CardContent></Card>
               <Card><CardContent className="p-4 flex items-center gap-3">
                 <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center"><CalendarDays className="w-5 h-5 text-emerald-600" /></div>
-                <div><p className="text-2xl font-bold">{todayVisits.length}</p><p className="text-xs text-gray-500">آج کے وزیٹ</p></div>
+                <div><p className="text-2xl font-bold">{todayVisits.length}</p><p className="text-xs text-gray-500">Today's Visits</p></div>
               </CardContent></Card>
               <Card><CardContent className="p-4 flex items-center gap-3">
                 <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center"><CreditCard className="w-5 h-5 text-amber-600" /></div>
-                <div><p className="text-2xl font-bold">Rs. {(totalRevenue + labRevenue + xrayRevenue + usRevenue + surgeryRevenue).toLocaleString()}</p><p className="text-xs text-gray-500">کل آمدنی</p></div>
+                <div><p className="text-2xl font-bold">Rs. {(totalRevenue + labRevenue + xrayRevenue + usRevenue + surgeryRevenue).toLocaleString()}</p><p className="text-xs text-gray-500">Total Revenue</p></div>
               </CardContent></Card>
               <Card><CardContent className="p-4 flex items-center gap-3">
                 <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center"><AlertTriangle className="w-5 h-5 text-red-600" /></div>
-                <div><p className="text-2xl font-bold">{pendingLabPayments.length + pendingXrayPayments.length + pendingUsPayments.length}</p><p className="text-xs text-gray-500">زیر التوا ادائیگیاں</p></div>
+                <div><p className="text-2xl font-bold">{pendingLabPayments.length + pendingXrayPayments.length + pendingUsPayments.length}</p><p className="text-xs text-gray-500">Pending Payments</p></div>
               </CardContent></Card>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <Card><CardHeader className="pb-2"><CardTitle className="text-sm">آمدنی تفصیل</CardTitle></CardHeader>
+              <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Revenue Breakdown</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
-                  <div className="flex justify-between text-sm"><span className="flex items-center gap-1"><Pill className="w-4 h-4 text-purple-500" /> فارمیسی</span><span className="font-bold">Rs. {totalRevenue.toLocaleString()}</span></div>
-                  <div className="flex justify-between text-sm"><span className="flex items-center gap-1"><Beaker className="w-4 h-4 text-orange-500" /> لیب</span><span className="font-bold">Rs. {labRevenue.toLocaleString()}</span></div>
-                  <div className="flex justify-between text-sm"><span className="flex items-center gap-1"><Activity className="w-4 h-4 text-cyan-500" /> ایکس ری</span><span className="font-bold">Rs. {xrayRevenue.toLocaleString()}</span></div>
-                  <div className="flex justify-between text-sm"><span className="flex items-center gap-1"><Activity className="w-4 h-4 text-pink-500" /> الٹراساؤنڈ</span><span className="font-bold">Rs. {usRevenue.toLocaleString()}</span></div>
-                  <div className="flex justify-between text-sm"><span className="flex items-center gap-1"><Scissors className="w-4 h-4 text-red-500" /> سرجری</span><span className="font-bold">Rs. {surgeryRevenue.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-sm"><span className="flex items-center gap-1"><Pill className="w-4 h-4 text-purple-500" /> Pharmacy</span><span className="font-bold">Rs. {totalRevenue.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-sm"><span className="flex items-center gap-1"><Beaker className="w-4 h-4 text-orange-500" /> Lab</span><span className="font-bold">Rs. {labRevenue.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-sm"><span className="flex items-center gap-1"><Activity className="w-4 h-4 text-cyan-500" /> X-Ray</span><span className="font-bold">Rs. {xrayRevenue.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-sm"><span className="flex items-center gap-1"><Activity className="w-4 h-4 text-pink-500" /> Ultrasound</span><span className="font-bold">Rs. {usRevenue.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-sm"><span className="flex items-center gap-1"><Scissors className="w-4 h-4 text-red-500" /> Surgery</span><span className="font-bold">Rs. {surgeryRevenue.toLocaleString()}</span></div>
                 </CardContent>
               </Card>
-              <Card><CardHeader className="pb-2"><CardTitle className="text-sm">آج کے مریض</CardTitle></CardHeader>
+              <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Today's Patients</CardTitle></CardHeader>
                 <CardContent>
                   <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {todayVisits.length === 0 ? <p className="text-sm text-gray-500">آج کوئی وزیٹ نہیں</p> :
+                    {todayVisits.length === 0 ? <p className="text-sm text-gray-500">No visits today</p> :
                       todayVisits.map(v => (
                         <div key={v.id} className="flex items-center justify-between text-sm border-b pb-2">
                           <div>
@@ -167,7 +167,7 @@ export default function AdminPage() {
                             <p className="text-xs text-gray-500">{v.patientNumber} | {v.doctorName}</p>
                           </div>
                           <Badge variant={v.status === 'waiting' ? 'outline' : 'default'} className={v.status === 'waiting' ? 'border-amber-400 text-amber-700' : v.status === 'completed' || v.status === 'seen' ? 'bg-emerald-600' : 'bg-blue-600'}>
-                            {v.status === 'waiting' ? 'انتظار' : v.status === 'in-progress' ? 'جاری' : v.status === 'seen' ? 'دیکھا' : 'مکمل'}
+                            {v.status === 'waiting' ? 'Waiting' : v.status === 'in-progress' ? 'In Progress' : v.status === 'seen' ? 'Seen' : 'Completed'}
                           </Badge>
                         </div>
                       ))
@@ -181,10 +181,10 @@ export default function AdminPage() {
           {/* SURGERIES */}
           <TabsContent value="surgeries">
             <Card>
-              <CardHeader><CardTitle className="text-lg">سرجریز</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-lg">Surgeries</CardTitle></CardHeader>
               <CardContent>
                 {surgeries.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">کوئی سرجری نہیں</p>
+                  <p className="text-gray-500 text-center py-8">No surgeries</p>
                 ) : (
                   <div className="space-y-3">
                     {surgeries.map(s => (
@@ -197,21 +197,21 @@ export default function AdminPage() {
                           <div className="flex items-center gap-2">
                             <Badge variant={s.status === 'scheduled' ? 'outline' : s.status === 'in-progress' ? 'default' : 'secondary'}
                               className={s.status === 'in-progress' ? 'bg-blue-600' : s.status === 'completed' ? 'bg-emerald-600' : ''}>
-                              {s.status === 'scheduled' ? 'شیڈولڈ' : s.status === 'in-progress' ? 'جاری' : 'مکمل'}
+                              {s.status === 'scheduled' ? 'Scheduled' : s.status === 'in-progress' ? 'In Progress' : 'Completed'}
                             </Badge>
                           </div>
                         </div>
                         <div className="grid grid-cols-3 gap-3 bg-gray-50 rounded-lg p-3 text-sm mb-3">
-                          <div><span className="text-gray-500">کل:</span> <span className="font-bold">Rs. {s.totalCost.toLocaleString()}</span></div>
-                          <div><span className="text-gray-500">ادا:</span> <span className="font-bold text-emerald-600">Rs. {s.amountPaid.toLocaleString()}</span></div>
-                          <div><span className="text-gray-500">بیلنس:</span> <span className="font-bold text-red-600">Rs. {s.balance.toLocaleString()}</span></div>
+                          <div><span className="text-gray-500">Total:</span> <span className="font-bold">Rs. {s.totalCost.toLocaleString()}</span></div>
+                          <div><span className="text-gray-500">Paid:</span> <span className="font-bold text-emerald-600">Rs. {s.amountPaid.toLocaleString()}</span></div>
+                          <div><span className="text-gray-500">Balance:</span> <span className="font-bold text-red-600">Rs. {s.balance.toLocaleString()}</span></div>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          {s.status === 'scheduled' && <Button size="sm" onClick={() => markSurgeryStatus(s.visitId, 'in-progress')} className="bg-blue-600 hover:bg-blue-700">شروع کریں</Button>}
-                          {s.status === 'in-progress' && <Button size="sm" onClick={() => markSurgeryStatus(s.visitId, 'completed')} className="bg-emerald-600 hover:bg-emerald-700">مکمل</Button>}
+                          {s.status === 'scheduled' && <Button size="sm" onClick={() => markSurgeryStatus(s.visitId, 'in-progress')} className="bg-blue-600 hover:bg-blue-700">Start</Button>}
+                          {s.status === 'in-progress' && <Button size="sm" onClick={() => markSurgeryStatus(s.visitId, 'completed')} className="bg-emerald-600 hover:bg-emerald-700">Complete</Button>}
                           {s.balance > 0 && (
                             <Button size="sm" variant="outline" onClick={() => { setSelectedSurgery({ visitId: s.visitId, patientName: s.patientName, patientNumber: s.patientNumber }); setSurgeryPayAmount(''); setShowSurgeryPayment(true); }}>
-                              <CreditCard className="w-3 h-3 mr-1" /> ادائیگی
+                              <CreditCard className="w-3 h-3 mr-1" /> Payment
                             </Button>
                           )}
                         </div>
@@ -226,10 +226,10 @@ export default function AdminPage() {
           {/* PENDING PAYMENTS */}
           <TabsContent value="pending">
             <Card>
-              <CardHeader><CardTitle className="text-lg">ریسپشن میں زیر التوا ادائیگیاں</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-lg">Pending Payments at Reception</CardTitle></CardHeader>
               <CardContent>
                 {pendingLabPayments.length + pendingXrayPayments.length + pendingUsPayments.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">تمام ادائیگیاں ہو چکی ہیں</p>
+                  <p className="text-gray-500 text-center py-8">All payments completed</p>
                 ) : (
                   <div className="space-y-2">
                     {pendingLabPayments.map(o => {
@@ -237,8 +237,8 @@ export default function AdminPage() {
                       const patient = visit ? getPatient(visit.patientId) : null;
                       return (
                         <div key={o.id} className="border border-amber-200 bg-amber-50 rounded-lg p-3 flex items-center justify-between">
-                          <div><p className="font-medium">{patient?.name}</p><p className="text-xs">لیب: {o.testName} | Rs. {o.price}</p></div>
-                          <Badge variant="outline" className="border-amber-400 text-amber-700">ادائیگی زائد</Badge>
+                          <div><p className="font-medium">{patient?.name}</p><p className="text-xs">Lab: {o.testName} | Rs. {o.price}</p></div>
+                          <Badge variant="outline" className="border-amber-400 text-amber-700">Payment Overdue</Badge>
                         </div>
                       );
                     })}
@@ -247,8 +247,8 @@ export default function AdminPage() {
                       const patient = visit ? getPatient(visit.patientId) : null;
                       return (
                         <div key={o.id} className="border border-amber-200 bg-amber-50 rounded-lg p-3 flex items-center justify-between">
-                          <div><p className="font-medium">{patient?.name}</p><p className="text-xs">ایکس ری: {o.testName} | Rs. {o.price}</p></div>
-                          <Badge variant="outline" className="border-amber-400 text-amber-700">ادائیگی زائد</Badge>
+                          <div><p className="font-medium">{patient?.name}</p><p className="text-xs">X-Ray: {o.testName} | Rs. {o.price}</p></div>
+                          <Badge variant="outline" className="border-amber-400 text-amber-700">Payment Overdue</Badge>
                         </div>
                       );
                     })}
@@ -257,8 +257,8 @@ export default function AdminPage() {
                       const patient = visit ? getPatient(visit.patientId) : null;
                       return (
                         <div key={o.id} className="border border-amber-200 bg-amber-50 rounded-lg p-3 flex items-center justify-between">
-                          <div><p className="font-medium">{patient?.name}</p><p className="text-xs">الٹراساؤنڈ: {o.testName} | Rs. {o.price}</p></div>
-                          <Badge variant="outline" className="border-amber-400 text-amber-700">ادائیگی زائد</Badge>
+                          <div><p className="font-medium">{patient?.name}</p><p className="text-xs">Ultrasound: {o.testName} | Rs. {o.price}</p></div>
+                          <Badge variant="outline" className="border-amber-400 text-amber-700">Payment Overdue</Badge>
                         </div>
                       );
                     })}
@@ -271,62 +271,62 @@ export default function AdminPage() {
           {/* SETTINGS */}
           <TabsContent value="settings">
             <Card>
-              <CardHeader><CardTitle className="text-lg">سیٹنگز</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-lg">Settings</CardTitle></CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label>ہسپتال کا نام</Label>
+                  <Label>Hospital Name</Label>
                   <Input value={data.settings.hospitalName} onChange={e => updateSetting('hospitalName', e.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label>پتہ</Label>
+                  <Label>Address</Label>
                   <Input value={data.settings.hospitalAddress} onChange={e => updateSetting('hospitalAddress', e.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label>فون</Label>
+                  <Label>Phone</Label>
                   <Input value={data.settings.hospitalPhone} onChange={e => updateSetting('hospitalPhone', e.target.value)} dir="ltr" />
                 </div>
 
                 <div className="border-t pt-4 space-y-4">
-                  <h3 className="font-bold">ادائیگی کی جگہ</h3>
+                  <h3 className="font-bold">Payment Location</h3>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm">فارمیسی ادائیگی</span>
+                      <span className="text-sm">Pharmacy Payment</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">ریسپشن</span>
+                        <span className="text-xs text-gray-500">Reception</span>
                         <Switch checked={data.settings.pharmacyPaymentLocation === 'pharmacy'} onCheckedChange={v => updateSetting('pharmacyPaymentLocation', v ? 'pharmacy' : 'reception')} />
-                        <span className="text-xs font-medium">فارمیسی</span>
+                        <span className="text-xs font-medium">Pharmacy</span>
                       </div>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm">لیب ادائیگی</span>
+                      <span className="text-sm">Lab Payment</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">ریسپشن</span>
+                        <span className="text-xs text-gray-500">Reception</span>
                         <Switch checked={data.settings.labPaymentLocation === 'lab'} onCheckedChange={v => updateSetting('labPaymentLocation', v ? 'lab' : 'reception')} />
-                        <span className="text-xs font-medium">لیب</span>
+                        <span className="text-xs font-medium">Lab</span>
                       </div>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm">ایکس ری ادائیگی</span>
+                      <span className="text-sm">X-Ray Payment</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">ریسپشن</span>
+                        <span className="text-xs text-gray-500">Reception</span>
                         <Switch checked={data.settings.xrayPaymentLocation === 'xray'} onCheckedChange={v => updateSetting('xrayPaymentLocation', v ? 'xray' : 'reception')} />
-                        <span className="text-xs font-medium">ایکس ری</span>
+                        <span className="text-xs font-medium">X-Ray</span>
                       </div>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm">الٹراساؤنڈ ادائیگی</span>
+                      <span className="text-sm">Ultrasound Payment</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">ریسپشن</span>
+                        <span className="text-xs text-gray-500">Reception</span>
                         <Switch checked={data.settings.ultrasoundPaymentLocation === 'ultrasound'} onCheckedChange={v => updateSetting('ultrasoundPaymentLocation', v ? 'ultrasound' : 'reception')} />
-                        <span className="text-xs font-medium">الٹراساؤنڈ</span>
+                        <span className="text-xs font-medium">Ultrasound</span>
                       </div>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm">سرجری ادائیگی</span>
+                      <span className="text-sm">Surgery Payment</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium">ریسپشن</span>
+                        <span className="text-xs font-medium">Reception</span>
                         <Switch checked={data.settings.surgeryPaymentLocation === 'surgery'} onCheckedChange={v => updateSetting('surgeryPaymentLocation', v ? 'surgery' : 'reception')} />
-                        <span className="text-xs text-gray-500">سرجری</span>
+                        <span className="text-xs text-gray-500">Surgery</span>
                       </div>
                     </div>
                   </div>
@@ -339,15 +339,15 @@ export default function AdminPage() {
         {/* Surgery Payment Dialog */}
         <Dialog open={showSurgeryPayment} onOpenChange={setShowSurgeryPayment}>
           <DialogContent>
-            <DialogHeader><DialogTitle>سرجری ادائیگی - {selectedSurgery?.patientName}</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>Surgery Payment - {selectedSurgery?.patientName}</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              <Label>رقم (Rs.)</Label>
-              <Input type="number" value={surgeryPayAmount} onChange={e => setSurgeryPayAmount(e.target.value)} placeholder="ادائیگی کی رقم" dir="ltr" />
-              <p className="text-xs text-gray-500">جزوی ادائیگی بھی کرسکتے ہیں</p>
+              <Label>Amount (Rs.)</Label>
+              <Input type="number" value={surgeryPayAmount} onChange={e => setSurgeryPayAmount(e.target.value)} placeholder="Payment Amount" dir="ltr" />
+              <p className="text-xs text-gray-500">Partial payments are also accepted</p>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowSurgeryPayment(false)}>منسوخ</Button>
-              <Button onClick={collectSurgeryPayment} className="bg-emerald-600 hover:bg-emerald-700">ادائیگی کریں</Button>
+              <Button variant="outline" onClick={() => setShowSurgeryPayment(false)}>Cancel</Button>
+              <Button onClick={collectSurgeryPayment} className="bg-emerald-600 hover:bg-emerald-700">Pay</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
