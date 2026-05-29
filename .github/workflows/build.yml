@@ -1,0 +1,77 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g. 2.6.0)'
+        required: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js (static export)
+        run: npm run build
+
+      - name: Build Electron app
+        run: npx electron-builder --win --x64 --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get version from package.json
+        id: pkg-version
+        shell: bash
+        run: echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Upload Setup Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: BAGA-HMS-Setup-${{ steps.pkg-version.outputs.VERSION }}
+          path: dist-electron/BAGA-HMS-Setup-*.exe
+
+      - name: Upload Portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: BAGA-HMS-Portable-${{ steps.pkg-version.outputs.VERSION }}
+          path: dist-electron/BAGA-HMS-Portable-*.exe
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: BAGA HMS v${{ steps.pkg-version.outputs.VERSION }}
+          body: |
+            ## BAGA Hospital Management System v${{ steps.pkg-version.outputs.VERSION }}
+
+            ### Downloads:
+            - **Setup Installer (.exe)** — Standard installer with desktop shortcut
+            - **Portable (.exe)** — No installation required, run from anywhere
+
+            ### Changes:
+            - Dashboard display fix after license activation
+            - Navigation fix for Next.js static export
+            - Hospital name display fix
+          files: |
+            dist-electron/BAGA-HMS-Setup-*.exe
+            dist-electron/BAGA-HMS-Portable-*.exe
+          draft: false
+          prerelease: false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
