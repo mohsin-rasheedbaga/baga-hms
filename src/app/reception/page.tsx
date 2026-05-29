@@ -195,7 +195,7 @@ export default function ReceptionPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{todayVisits.length}</p>
-                <p className="text-xs text-gray-500">Today's Visits</p>
+                <p className="text-xs text-gray-500">Today Visits</p>
               </div>
             </CardContent>
           </Card>
@@ -233,7 +233,7 @@ export default function ReceptionPage() {
                 <Search className="w-4 h-4 mr-1" /> Search
               </TabsTrigger>
               <TabsTrigger value="today">
-                <Clock className="w-4 h-4 mr-1" /> Today's Visits
+                <Clock className="w-4 h-4 mr-1" /> Today Visits
               </TabsTrigger>
             </TabsList>
             <Button variant="outline" size="sm" onClick={refreshData}>

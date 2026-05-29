@@ -134,7 +134,7 @@ export default function AdminPage() {
               </CardContent></Card>
               <Card><CardContent className="p-4 flex items-center gap-3">
                 <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center"><CalendarDays className="w-5 h-5 text-emerald-600" /></div>
-                <div><p className="text-2xl font-bold">{todayVisits.length}</p><p className="text-xs text-gray-500">Today's Visits</p></div>
+                <div><p className="text-2xl font-bold">{todayVisits.length}</p><p className="text-xs text-gray-500">Today Visits</p></div>
               </CardContent></Card>
               <Card><CardContent className="p-4 flex items-center gap-3">
                 <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center"><CreditCard className="w-5 h-5 text-amber-600" /></div>
@@ -156,7 +156,7 @@ export default function AdminPage() {
                   <div className="flex justify-between text-sm"><span className="flex items-center gap-1"><Scissors className="w-4 h-4 text-red-500" /> Surgery</span><span className="font-bold">Rs. {surgeryRevenue.toLocaleString()}</span></div>
                 </CardContent>
               </Card>
-              <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Today's Patients</CardTitle></CardHeader>
+              <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Today Patients</CardTitle></CardHeader>
                 <CardContent>
                   <div className="space-y-2 max-h-60 overflow-y-auto">
                     {todayVisits.length === 0 ? <p className="text-sm text-gray-500">No visits today</p> :

@@ -256,7 +256,7 @@ export default function DoctorPage() {
           <div className="lg:col-span-1">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Today's Patients</CardTitle>
+                <CardTitle className="text-lg">Today Patients</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2 max-h-[70vh] overflow-y-auto">
