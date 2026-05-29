@@ -13,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ur">
+    <html lang="en">
       <body className="antialiased font-sans">
         {children}
         <Toaster position="top-center" richColors />
