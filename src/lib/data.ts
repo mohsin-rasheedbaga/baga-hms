@@ -1,6 +1,8 @@
 import { HMSData, Patient, Visit, PharmacyBill } from './types';
 
 const STORAGE_KEY = 'baga_hms_data';
+const DATA_VERSION_KEY = 'baga_hms_data_version';
+const DATA_VERSION = '2.6.2'; // Bump this when demo data structure changes
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
@@ -291,6 +293,17 @@ export function seedDemoData(): HMSData {
 export function loadData(): HMSData {
   if (typeof window === 'undefined') {
     return seedDemoData();
+  }
+  // Check if stored data version matches current version
+  const storedVersion = localStorage.getItem(DATA_VERSION_KEY);
+  if (storedVersion !== DATA_VERSION) {
+    // Version mismatch — clear old data and re-seed with fresh English demo data
+    console.log('[HMS] Data version mismatch. Clearing old data. Was:', storedVersion, 'Now:', DATA_VERSION);
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.setItem(DATA_VERSION_KEY, DATA_VERSION);
+    const data = seedDemoData();
+    saveData(data);
+    return data;
   }
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) {
