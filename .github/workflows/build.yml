@@ -9,7 +9,8 @@ on:
       version:
         description: 'Version to build (e.g. 2.6.0)'
         required: false
-        permissions:
+
+permissions:
   contents: write
 
 jobs:
@@ -57,20 +58,19 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
-                continue-on-error: true
+        continue-on-error: true
         with:
           name: BAGA HMS v${{ steps.pkg-version.outputs.VERSION }}
           body: |
             ## BAGA Hospital Management System v${{ steps.pkg-version.outputs.VERSION }}
-
             ### Downloads:
-            - **Setup Installer (.exe)** — Standard installer with desktop shortcut
-            - **Portable (.exe)** — No installation required, run from anywhere
-
+            - **Setup Installer (.exe)** — Standard installer
+            - **Portable (.exe)** — No installation required
             ### Changes:
-            - Dashboard display fix after license activation
-            - Navigation fix for Next.js static export
-            - Hospital name display fix
+            - Fixed CSS display — all Tailwind classes now working
+            - Navigation fix
+            - Hospital name fix
+            - Language set to English
           files: |
             dist-electron/BAGA-HMS-Setup-*.exe
             dist-electron/BAGA-HMS-Portable-*.exe
