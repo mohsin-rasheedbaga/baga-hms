@@ -11,6 +11,16 @@ contextBridge.exposeInMainWorld('bagaAPI', {
   activateLicense: (key) => ipcRenderer.invoke('license-activate', key),
   resetLicense: () => ipcRenderer.invoke('license-reset'),
   
+  // Demo Management
+  activateDemo: () => ipcRenderer.invoke('demo-activate'),
+  getDemoStatus: () => ipcRenderer.invoke('demo-get-status'),
+  
+  // Full License Info (for main app)
+  getFullLicenseInfo: () => ipcRenderer.invoke('license-get-full-info'),
+  
+  // Hospital Logo
+  getLogoBase64: () => ipcRenderer.invoke('get-logo-base64'),
+  
   // Login
   apiLogin: (credentials) => ipcRenderer.invoke('api-login', credentials),
   
@@ -47,6 +57,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   getMachineId: () => ipcRenderer.invoke('get-machine-id'),
   openMainWindow: () => ipcRenderer.send('open-main-window'),
+  
+  // Demo
+  activateDemo: () => ipcRenderer.invoke('demo-activate'),
+  getDemoStatus: () => ipcRenderer.invoke('demo-get-status'),
   onUpdateStatus: (callback) => {
     const listener = (event, data) => callback(data);
     ipcRenderer.on('update-status', listener);

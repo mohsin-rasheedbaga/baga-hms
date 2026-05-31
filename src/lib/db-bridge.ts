@@ -106,3 +106,28 @@ export function getHospitalSettingsData(): any {
   }
   try { return JSON.parse(localStorage.getItem('baga_hospital_settings') || '{}'); } catch { return {}; }
 }
+
+// License info - get from Electron API
+export function getFullLicenseInfo(): any {
+  if (typeof window === 'undefined') return { mode: 'none', licenseType: 'hospital', features: [] };
+  if (isElectron()) {
+    try {
+      const info = (window as any).bagaAPI.getFullLicenseInfo();
+      // This is async, so we store it after retrieval
+      return info;
+    } catch (e) {}
+  }
+  return { mode: 'none', licenseType: 'hospital', features: [] };
+}
+
+// Async version for use in useEffect
+export async function fetchLicenseInfo(): Promise<any> {
+  if (typeof window === 'undefined') return { mode: 'none', licenseType: 'hospital', features: [] };
+  if (isElectron()) {
+    try {
+      const info = await (window as any).bagaAPI.getFullLicenseInfo();
+      return info;
+    } catch (e) {}
+  }
+  return { mode: 'none', licenseType: 'hospital', features: [] };
+}

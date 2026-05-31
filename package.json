@@ -4,6 +4,7 @@
   "private": true,
   "description": "BAGA Hospital Management System - Desktop Edition",
   "main": "electron/main.js",
+  "author": "BAGA Hospital",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -12,8 +13,10 @@
     "electron:dev": "concurrently \"next build && next start\" \"wait-on http://localhost:3000 && electron .\"",
     "electron:build": "next build && electron-builder --win --x64",
     "electron:build:portable": "next build && electron-builder --win portable --x64",
+    "electron:build:setup": "next build && electron-builder --win nsis --x64",
     "electron:start": "electron .",
-    "dist": "electron-builder --win --x64 --publish never"
+    "dist": "electron-builder --win --x64 --publish never",
+    "dist:zip": "electron-builder --win zip --x64 --publish never"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
@@ -56,24 +59,15 @@
       "node_modules/**/*",
       "package.json"
     ],
-    "extraResources": [
-      {
-        "from": "electron/database",
-        "to": "database"
-      }
-    ],
     "win": {
       "target": [
         {
-          "target": "nsis",
-          "arch": ["x64"]
-        },
-        {
-          "target": "portable",
+          "target": "zip",
           "arch": ["x64"]
         }
       ],
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,

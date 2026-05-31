@@ -116,6 +116,37 @@
       border-color: #059669;
       color: #059669;
     }
+    .btn-demo {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: white;
+      box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+      margin-top: 10px;
+      font-size: 14px;
+    }
+    .btn-demo:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
+    }
+    .btn-demo:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .demo-info {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-top: 10px;
+      font-size: 12px;
+      color: #92400e;
+      display: none;
+    }
+    .demo-info.visible { display: block; }
+    .demo-blocked {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #dc2626;
+    }
     .status {
       margin-top: 15px;
       padding: 10px 14px;
@@ -231,6 +262,12 @@
         Activate
       </button>
       
+      <button class="btn btn-demo" id="demoBtn" onclick="activateDemo()">
+        Try Demo Account (3 Days Free)
+      </button>
+      
+      <div class="demo-info" id="demoInfo"></div>
+      
       <div class="status" id="status"></div>
       
       <div class="info-box" id="licenseInfo">
@@ -306,7 +343,69 @@
       }
     });
     
+    async function activateDemo() {
+      const demoBtn = document.getElementById('demoBtn');
+      demoBtn.disabled = true;
+      demoBtn.textContent = 'Activating...';
+      showStatus('Activating demo account...', 'loading');
+      
+      try {
+        const result = await window.electronAPI.activateDemo();
+        
+        if (result.success) {
+          const remaining = result.data.remaining;
+          showStatus(`Demo activated! ${remaining} day(s) remaining. Starting...`, 'success');
+          const demoInfo = document.getElementById('demoInfo');
+          demoInfo.textContent = `Demo Mode: Full access for ${remaining} day(s). Expires: ${new Date(result.data.expiresAt).toLocaleDateString()}`;
+          demoInfo.classList.add('visible');
+          
+          setTimeout(() => openMainWindow(), 1500);
+        } else {
+          showStatus(result.error || 'Demo activation failed', 'error');
+          const demoInfo = document.getElementById('demoInfo');
+          demoInfo.textContent = result.error || 'Demo not available';
+          demoInfo.classList.add('visible');
+          demoInfo.classList.add('demo-blocked');
+          demoBtn.style.display = 'none'; // Hide demo button if blocked
+          demoBtn.disabled = false;
+          demoBtn.textContent = 'Try Demo Account (3 Days Free)';
+        }
+      } catch (error) {
+        showStatus('Failed to activate demo', 'error');
+        demoBtn.disabled = false;
+        demoBtn.textContent = 'Try Demo Account (3 Days Free)';
+      }
+    }
+    
+    async function checkDemoStatus() {
+      try {
+        const status = await window.electronAPI.getDemoStatus();
+        if (status.blocked) {
+          document.getElementById('demoBtn').style.display = 'none';
+          const demoInfo = document.getElementById('demoInfo');
+          demoInfo.textContent = status.message;
+          demoInfo.classList.add('visible');
+          demoInfo.classList.add('demo-blocked');
+        }
+      } catch (e) {}
+    }
+    
     async function checkExistingLicense() {
+      // Check demo mode
+      try {
+        const demoStatus = await window.electronAPI.getDemoStatus();
+        if (demoStatus.active) {
+          const demoInfo = document.getElementById('demoInfo');
+          demoInfo.textContent = `Demo Mode Active - ${demoStatus.remaining} day(s) remaining`;
+          demoInfo.classList.add('visible');
+          document.getElementById('demoBtn').style.display = 'none';
+          document.getElementById('inputSection').style.display = 'none';
+          changeBtn.style.display = 'none';
+          setTimeout(() => openMainWindow(), 1000);
+          return;
+        }
+      } catch (e) {}
+      
       try {
         const info = await window.electronAPI.getLicenseInfo();
         if (info.license) {
@@ -398,6 +497,7 @@
     });
     
     checkExistingLicense();
+    checkDemoStatus();
     licenseInput.focus();
   </script>
 </body>

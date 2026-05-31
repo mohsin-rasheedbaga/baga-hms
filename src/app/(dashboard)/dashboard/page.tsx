@@ -9,7 +9,8 @@ import {
   getExpiredMedicines, getLowStockMedicines
 } from '@/lib/store';
 import { initLabData, getLabOrders as getLisLabOrders } from '@/lib/lab-store';
-import { getSession } from '@/lib/db-bridge';
+import { getSession, fetchLicenseInfo } from '@/lib/db-bridge';
+import { getHospital } from '@/lib/store';
 
 interface Session {
   userId: string;
@@ -22,15 +23,24 @@ export default function DashboardPage() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [licenseInfo, setLicenseInfo] = useState<any>(null);
 
   useEffect(() => {
-    try {
-      initLabData();
-      const s = getSession();
-      if (s) setSession(s);
-    } catch (e) {
-      console.error('Dashboard init error:', e);
+    async function init() {
+      try {
+        initLabData();
+        const s = getSession();
+        if (s) setSession(s);
+        // Load license info
+        try {
+          const info = await fetchLicenseInfo();
+          setLicenseInfo(info);
+        } catch (e) {}
+      } catch (e) {
+        console.error('Dashboard init error:', e);
+      }
     }
+    init();
 
     setMounted(true);
 
@@ -99,6 +109,30 @@ export default function DashboardPage() {
 
     return (
       <div className="space-y-6">
+        {/* License Info Banner */}
+        {licenseInfo && licenseInfo.licenseKey && (
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-4 text-white flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-8.494a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </div>
+              <div>
+                <p className="font-bold text-lg">{licenseInfo.hospitalName}</p>
+                <p className="text-blue-200 text-xs">
+                  {licenseInfo.licenseType === 'hospital' ? 'Hospital Management System' : licenseInfo.licenseType === 'clinic' ? 'Clinic Management System' : licenseInfo.licenseType === 'pharmacy' ? 'Pharmacy Management System' : 'Laboratory Information System'}
+                  {licenseInfo.licenseDuration === 'lifetime' ? ' (Lifetime)' : licenseInfo.expiryDate ? ` | Expires: ${new Date(licenseInfo.expiryDate).toLocaleDateString()}` : ''}
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="font-mono text-sm bg-white/20 px-3 py-1 rounded-lg">{licenseInfo.licenseKey}</p>
+              {licenseInfo.mode === 'demo' && licenseInfo.demo && (
+                <p className="text-amber-200 text-xs mt-1">Demo: {licenseInfo.demo.remaining} day(s) left</p>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard label="Today's Patients" value={todayVisits.length} sub="OPD Patients Today" color="blue" />
           <StatCard label="Monthly Patients" value={monthVisits.length} sub="This Month Total" color="emerald" />

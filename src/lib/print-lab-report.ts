@@ -24,6 +24,9 @@ interface PrintLabReportParams {
   hospitalName: string;
   hospitalAddress?: string;
   hospitalPhone?: string;
+  hospitalEmail?: string;
+  hospitalMobile?: string;
+  hospitalLogo?: string;
 }
 
 export function generateProfessionalLabReportHtml(params: PrintLabReportParams): string {
@@ -31,7 +34,8 @@ export function generateProfessionalLabReportHtml(params: PrintLabReportParams):
     patientName, patientNo, age, gender, sampleType, orderedBy,
     date, time, orderId, collectedAt, completedAt,
     results, techName, reportDocHtml, hospitalName,
-    hospitalAddress = '', hospitalPhone = ''
+    hospitalAddress = '', hospitalPhone = '',
+    hospitalEmail = '', hospitalMobile = '', hospitalLogo = ''
   } = params;
 
   const abnormal = results.filter(r => r.flag !== 'Normal');
@@ -95,6 +99,9 @@ export function generateProfessionalLabReportHtml(params: PrintLabReportParams):
       content:'';position:absolute;bottom:0;left:0;right:0;height:3px;
       background:linear-gradient(90deg,#f59e0b,#ef4444,#3b82f6,#10b981,#f59e0b);
     }
+    .header-left{display:flex;align-items:center;gap:14px;}
+    .hospital-logo{width:48px;height:48px;border-radius:6px;object-fit:contain;background:#fff;padding:2px;}
+    .hospital-info{flex:1;}
     .hospital-name{font-size:18px;font-weight:800;letter-spacing:2px;text-transform:uppercase;text-shadow:0 1px 3px rgba(0,0,0,0.3);}
     .hospital-sub{font-size:9px;letter-spacing:1.5px;opacity:0.85;margin-top:2px;text-transform:uppercase;}
     .report-meta{text-align:right;font-size:8.5px;line-height:1.5;opacity:0.9;}
@@ -213,9 +220,12 @@ export function generateProfessionalLabReportHtml(params: PrintLabReportParams):
     <div class="report">
       <!-- Header Banner -->
       <div class="header-banner">
-        <div>
-          <div class="hospital-name">${hospitalName}</div>
-          <div class="hospital-sub">Pathology & Diagnostic Laboratory</div>
+        <div class="header-left">
+          ${hospitalLogo ? `<img class="hospital-logo" src="${hospitalLogo}" alt="" />` : ''}
+          <div class="hospital-info">
+            <div class="hospital-name">${hospitalName}</div>
+            <div class="hospital-sub">Pathology & Diagnostic Laboratory</div>
+          </div>
         </div>
         <div class="report-meta">
           <div class="rid">Report #${orderId.slice(-6).toUpperCase()}</div>
@@ -227,8 +237,8 @@ export function generateProfessionalLabReportHtml(params: PrintLabReportParams):
       <!-- Contact Strip -->
       <div class="contact-strip">
         <span>${hospitalAddress || 'Comprehensive Healthcare Services'}</span>
-        <span>${hospitalPhone ? 'Tel: ' + hospitalPhone : ''}</span>
-        <span>Computer Generated Report</span>
+        <span>${hospitalPhone ? 'Tel: ' + hospitalPhone : ''}${hospitalMobile ? ' | Mob: ' + hospitalMobile : ''}</span>
+        <span>${hospitalEmail ? 'Email: ' + hospitalEmail : 'Computer Generated Report'}</span>
       </div>
       
       <!-- Patient Info -->

@@ -4,7 +4,10 @@ import {
   getHospital, setHospital, getHospitalSettings, setHospitalSettings,
   getRoomTypes, addRoomType, updateRoomType, deleteRoomType, todayStr, genId,
 } from '@/lib/store';
+import { fetchLicenseInfo } from '@/lib/db-bridge';
 import type { Hospital, HospitalSettings, RoomType } from '@/lib/types';
+
+const isElectron = typeof window !== 'undefined' && !!(window as any).bagaAPI;
 
 /* ========== TOGGLE SWITCH ========== */
 function Toggle({ checked, onChange, color }: { checked: boolean; onChange: (v: boolean) => void; color: string }) {
@@ -37,6 +40,12 @@ export default function SettingsPage() {
   });
   const [roomTypes, setRoomTypesState] = useState<RoomType[]>([]);
   const [saved, setSaved] = useState(false);
+  const [licenseInfo, setLicenseInfo] = useState<any>(null);
+  const [logoSrc, setLogoSrc] = useState<string>('');
+  const [changeLicenseKey, setChangeLicenseKey] = useState('');
+  const [changeLicenseLoading, setChangeLicenseLoading] = useState(false);
+  const [changeLicenseError, setChangeLicenseError] = useState('');
+  const [changeLicenseSuccess, setChangeLicenseSuccess] = useState('');
 
   // Room type modal
   const [roomModal, setRoomModal] = useState(false);
@@ -48,6 +57,19 @@ export default function SettingsPage() {
     setHospitalState(getHospital());
     setSettingsState(getHospitalSettings());
     setRoomTypesState(getRoomTypes());
+    // Load license info
+    if (isElectron) {
+      fetchLicenseInfo().then(info => {
+        setLicenseInfo(info);
+        if (info.logoPath) {
+          try {
+            (window as any).bagaAPI.getLogoBase64().then((r: any) => { if (r.success) setLogoSrc(r.data); });
+          } catch (e) {}
+        } else if (info.logoUrl) {
+          setLogoSrc(info.logoUrl);
+        }
+      }).catch(() => {});
+    }
   }, []);
 
   const showToast = (msg: string) => {
@@ -91,6 +113,26 @@ export default function SettingsPage() {
     setRoomTypesState(getRoomTypes());
   };
 
+  const handleChangeLicense = async () => {
+    if (!changeLicenseKey.trim()) return;
+    setChangeLicenseLoading(true);
+    setChangeLicenseError('');
+    setChangeLicenseSuccess('');
+    try {
+      await (window as any).bagaAPI.resetLicense();
+      const result = await (window as any).bagaAPI.activateLicense(changeLicenseKey.trim());
+      if (result.success) {
+        setChangeLicenseSuccess('License activated successfully! Reloading software...');
+        setTimeout(() => window.location.reload(), 2000);
+      } else {
+        setChangeLicenseError(result.error || 'Failed to activate new license');
+      }
+    } catch (e: any) {
+      setChangeLicenseError('Connection error. Please check your internet and try again.');
+    }
+    setChangeLicenseLoading(false);
+  };
+
   return (
     <div className="space-y-6">
       {/* Toast */}
@@ -100,11 +142,118 @@ export default function SettingsPage() {
         <h2 className="text-xl font-bold text-slate-800">System Settings</h2>
       </div>
 
+      {/* ==================== SECTION 0: License & Hospital Info (from Admin Panel) ==================== */}
+      {licenseInfo && (licenseInfo.mode === 'licensed' || licenseInfo.mode === 'demo') && (
+        <div className="bg-white rounded-xl border-2 border-blue-200 p-6">
+          <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-8.494a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            License & Hospital Information
+            <span className="ml-2 badge badge-blue text-xs">From Admin Panel</span>
+          </h3>
+          <p className="text-sm text-slate-500 mb-4">This information is managed from the BAGA Admin Panel and is automatically synced to your software when the license is activated. To change any of these details, please contact BAGA support or update through the admin panel.</p>
+          
+          <div className="flex items-start gap-6 mb-6">
+            {/* Hospital Logo */}
+            <div className="flex-shrink-0">
+              <div className="w-24 h-24 bg-slate-100 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden">
+                {logoSrc ? (
+                  <img src={logoSrc} alt="Hospital Logo" className="w-full h-full object-contain p-1" />
+                ) : (
+                  <div className="text-center p-2">
+                    <svg className="w-8 h-8 text-slate-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    <p className="text-[10px] text-slate-400 mt-1">No Logo</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Hospital Details */}
+            <div className="flex-1 space-y-3 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wide">Hospital Name</p>
+                  <p className="font-semibold text-slate-800">{licenseInfo.hospitalName || hospital.name}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wide">License Number</p>
+                  <p className="font-mono font-semibold text-blue-600">{licenseInfo.licenseKey || hospital.licenseNo}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wide">License Type</p>
+                  <p className="font-semibold text-slate-800">{licenseInfo.licenseType === 'hospital' ? 'Hospital Management System' : licenseInfo.licenseType === 'clinic' ? 'Clinic Management System' : licenseInfo.licenseType === 'pharmacy' ? 'Pharmacy Management System' : 'Laboratory Information System'}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wide">{licenseInfo.licenseDuration === 'lifetime' ? 'Duration' : 'Expiry Date'}</p>
+                  <p className="font-semibold text-slate-800">{licenseInfo.licenseDuration === 'lifetime' ? 'Lifetime License' : licenseInfo.expiryDate ? new Date(licenseInfo.expiryDate).toLocaleDateString() : 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wide">Phone / Mobile</p>
+                  <p className="font-semibold text-slate-800">{licenseInfo.hospitalPhone || '-'}{licenseInfo.hospitalMobile ? ` / ${licenseInfo.hospitalMobile}` : ''}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wide">Email</p>
+                  <p className="font-semibold text-slate-800">{licenseInfo.hospitalEmail || '-'}</p>
+                </div>
+                <div className="md:col-span-2">
+                  <p className="text-slate-400 text-xs uppercase tracking-wide">Address</p>
+                  <p className="font-semibold text-slate-800">{licenseInfo.hospitalAddress || '-'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {licenseInfo.mode === 'demo' && licenseInfo.demo && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-2">
+              <svg className="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+              <p className="text-amber-800 text-sm font-medium">Demo Mode: {licenseInfo.demo.remaining} day(s) remaining. Purchase a license for full access.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Change License Button */}
+      {isElectron && licenseInfo?.mode === 'licensed' && (
+        <div className="bg-white rounded-xl border-2 border-emerald-200 p-6">
+          <h3 className="text-lg font-semibold text-slate-800 mb-2 flex items-center gap-2">
+            <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            Change License
+          </h3>
+          <p className="text-sm text-slate-500 mb-4">If you want to upgrade or change your license (e.g., from Clinic to Hospital), enter the new license key below. Your current license will be replaced and the software will rebrand with new hospital information.</p>
+          <div className="flex items-center gap-3 mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+            <span className="text-sm text-slate-500">Current License:</span>
+            <span className="font-mono font-bold text-emerald-600 text-sm">{licenseInfo.licenseKey || 'N/A'}</span>
+          </div>
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={changeLicenseKey}
+              onChange={e => setChangeLicenseKey(e.target.value)}
+              placeholder="Enter new license key (BAGA-XXXXX-XXXXX)"
+              className="form-input flex-1 font-mono text-center tracking-wider"
+            />
+            <button
+              onClick={handleChangeLicense}
+              disabled={changeLicenseLoading || !changeLicenseKey.trim()}
+              className="btn btn-primary"
+              style={{ opacity: changeLicenseLoading || !changeLicenseKey.trim() ? 0.5 : 1 }}
+            >
+              {changeLicenseLoading ? 'Activating...' : 'Change License'}
+            </button>
+          </div>
+          {changeLicenseError && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{changeLicenseError}</div>
+          )}
+          {changeLicenseSuccess && (
+            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">{changeLicenseSuccess}</div>
+          )}
+        </div>
+      )}
+
       {/* ==================== SECTION 1: Hospital Information ==================== */}
       <div className="bg-white rounded-xl border border-slate-200 p-6">
         <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
           <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-          Hospital Information
+          Hospital Information (Local)
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -326,7 +475,7 @@ export default function SettingsPage() {
         <div className="space-y-3 text-sm">
           <div className="flex justify-between py-2 border-b border-slate-100">
             <span className="text-slate-500">Version</span>
-            <span className="font-medium">2.0.0</span>
+            <span className="font-medium">3.0.0</span>
           </div>
           <div className="flex justify-between py-2 border-b border-slate-100">
             <span className="text-slate-500">System Name</span>
