@@ -1,297 +1,208 @@
 'use client';
-
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Hospital, Eye, EyeOff, RefreshCw, Download, KeyRound, User
-} from 'lucide-react';
-import { toast } from 'sonner';
+import { getHospital, getUsers, setHospital } from '@/lib/store';
+
+const isElectron = typeof window !== 'undefined' && !!(window as any).bagaAPI;
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [username, setUsername] = useState('');
+  const [hospital, setH] = useState({ name: 'BAGA Hospital', address: '', phone: '', email: '', licenseNo: 'BAGA-LIC-0001' });
+  const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [licenseInfo, setLicenseInfo] = useState<any>(null);
-  const [updateInfo, setUpdateInfo] = useState<any>(null);
-  const [mode, setMode] = useState<'login' | 'license'>('login');
-  const [newLicenseKey, setNewLicenseKey] = useState('');
-  const [version, setVersion] = useState('');
+  const [showSetup, setShowSetup] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const api = (window as any).bagaAPI;
-    
-    if (api) {
-      api.getAppVersion().then((v: string) => setVersion(v));
-      api.getLicenseInfo().then((info: { license: any }) => {
-        setLicenseInfo(info.license);
-      });
-      api.onUpdateStatus((data: any) => {
-        setUpdateInfo(data);
-      });
-    }
-  }, []);
+    const h = getHospital();
+    setH(h);
 
-  const handleLogin = async () => {
-    if (!username || !password) {
-      toast.error('Please enter username and password');
-      return;
-    }
+    // Check for existing session
+    let session = null;
 
-    const isElectron = typeof window !== 'undefined' && !!(window as any).bagaAPI;
-    
-    if (isElectron) {
-      setLoading(true);
-      try {
-        const result = await (window as any).bagaAPI.apiLogin({ username, password });
-        if (result.success) {
-          const role = result.user.role || 'reception';
-          localStorage.setItem('baga_role', role);
-          localStorage.setItem('baga_user', JSON.stringify({
-            role: role,
-            name: result.user.full_name || result.user.username,
-            username: result.user.username,
-            hospitalName: result.hospital?.name || result.user.hospital_name || '',
-          }));
-          toast.success('Login successful!');
-          window.location.href = `/${role}`;
-        } else {
-          toast.error(result.error || 'Login failed - invalid username or password');
-        }
-      } catch (error) {
-        toast.error('Connection error - please check your internet');
+    if (typeof window !== 'undefined') {
+      // Try SQLite session first (Electron)
+      if (isElectron) {
+        try {
+          const kvSession = (window as any).bagaAPI.dbGetKV('baga_session');
+          if (kvSession) session = JSON.parse(kvSession);
+        } catch (e) {}
       }
-      setLoading(false);
-    } else {
-      const demoUsers: Record<string, { password: string; role: string; name: string }> = {
-        reception: { password: '1234', role: 'reception', name: 'Reception' },
-        doctor: { password: '1234', role: 'doctor', name: 'Doctor' },
-        pharmacy: { password: '1234', role: 'pharmacy', name: 'Pharmacy' },
-        lab: { password: '1234', role: 'lab', name: 'Lab' },
-        xray: { password: '1234', role: 'xray', name: 'X-Ray' },
-        ultrasound: { password: '1234', role: 'ultrasound', name: 'Ultrasound' },
-        admin: { password: '1234', role: 'admin', name: 'Admin' },
-      };
-      
-      const user = demoUsers[username];
-      if (user && user.password === password) {
-        localStorage.setItem('baga_role', user.role);
-        localStorage.setItem('baga_user', JSON.stringify({ role: user.role, name: user.name }));
-        toast.success('Login successful (Demo Mode)');
-        router.push(`/${user.role}`);
-      } else {
-        toast.error('Demo: username = reception/doctor/admin, password = 1234');
+
+      // Fall back to localStorage session
+      if (!session) {
+        const stored = localStorage.getItem('baga_session');
+        if (stored) session = JSON.parse(stored);
       }
     }
-  };
 
-  const handleChangeLicense = async () => {
-    if (!newLicenseKey.trim()) {
-      toast.error('Please enter a new license key');
-      return;
+    if (session) {
+      router.push('/dashboard');
     }
-    
+  }, [router]);
+
+  const handleLogin = () => {
+    if (!loginId.trim() || !password.trim()) { setError('Enter Login ID and Password'); return; }
     setLoading(true);
-    try {
-      if (typeof window === 'undefined' || !(window as any).bagaAPI) {
-        toast.error('This feature is only available in the desktop app');
-        setLoading(false);
-        return;
-      }
-      const result = await (window as any).bagaAPI.activateLicense(newLicenseKey.trim());
-      if (result.success) {
-        toast.success('New license activated successfully!');
-        setLicenseInfo(result.data);
-        setNewLicenseKey('');
-        setMode('login');
-      } else {
-        toast.error(result.error || 'Invalid license key');
-      }
-    } catch (e) {
-      toast.error('Connection error');
+    setError('');
+    const users = getUsers();
+    const user = users.find(u => u.email === loginId.trim() && u.password === password.trim() && u.active);
+    if (!user) { setError('Invalid credentials or account deactivated'); setLoading(false); return; }
+
+    // Save to session
+    const sessionData = { userId: user.id, name: user.name, role: user.role, department: user.department };
+    localStorage.setItem('baga_session', JSON.stringify(sessionData));
+
+    // Also store session in SQLite for Electron persistence
+    if (isElectron) {
+      try {
+        (window as any).bagaAPI.dbSetKV('baga_session', JSON.stringify(sessionData));
+      } catch (e) {}
     }
+
+    router.push('/dashboard');
     setLoading(false);
   };
 
-  const handleResetLicense = async () => {
-    if (confirm('Are you sure you want to remove the current license? The app will restart.')) {
-      if (typeof window !== 'undefined' && (window as any).bagaAPI) {
-        await (window as any).bagaAPI.resetLicense();
-        await (window as any).bagaAPI.quitApp();
-      }
+  const handleLogout = () => {
+    localStorage.removeItem('baga_session');
+
+    // Also clear session in SQLite for Electron
+    if (isElectron) {
+      try {
+        (window as any).bagaAPI.dbSetKV('baga_session', '');
+      } catch (e) {}
     }
   };
 
-  const handleCheckUpdate = () => {
-    if (typeof window !== 'undefined' && (window as any).bagaAPI) {
-      (window as any).bagaAPI.checkForUpdate();
-      toast.info('Checking for updates...');
-    }
+  const handleSetup = () => {
+    setHospital({ ...hospital, name: hospital.name || 'BAGA Hospital' });
+    setShowSetup(false);
   };
-
-  const isElectron = typeof window !== 'undefined' && !!(window as any).bagaAPI;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="text-center mb-6">
-          <div className="mx-auto bg-emerald-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg" style={{ width: '72px', height: '72px' }}>
-            <Hospital className="w-9 h-9 text-white" />
+        {/* Hospital Header Card */}
+        <div className="bg-white/10 backdrop-blur-lg rounded-2xl border border-white/20 p-6 mb-4">
+          <div className="text-center mb-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-white/10 rounded-2xl mb-3">
+              <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-white">{hospital.name}</h1>
+            {hospital.address && <p className="text-blue-300 text-sm mt-1">{hospital.address}</p>}
+            {hospital.phone && <p className="text-blue-300/70 text-xs mt-1">{hospital.phone}</p>}
+            {hospital.email && <p className="text-blue-300/70 text-xs">{hospital.email}</p>}
           </div>
-          <h1 className="text-2xl font-bold text-gray-800">BAGA Hospital</h1>
-          <p className="text-gray-500 mt-1">Hospital Management System</p>
-          {version && <p className="text-xs text-gray-400 mt-1">v{version}</p>}
-        </div>
 
-        {isElectron && licenseInfo && (
-          <Card className="mb-4 border-emerald-200 bg-emerald-50">
-            <CardContent className="p-3">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-emerald-700">
-                  <KeyRound className="w-3 h-3 inline mr-1" />
-                  License Active
-                </span>
-                <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => setMode('license')}>
-                    Change
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-6 text-xs px-2 text-red-500" onClick={handleResetLicense}>
-                    Reset
-                  </Button>
+          <div className="bg-white/5 rounded-lg p-3 mb-4">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-blue-300/70">License No:</span>
+              <span className="text-white font-mono font-bold">{hospital.licenseNo}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm mt-1">
+              <span className="text-blue-300/70">System:</span>
+              <span className="text-white text-xs">BAGA Hospital Management System v2.0</span>
+            </div>
+          </div>
+
+          {!showSetup ? (
+            <>
+              {/* Login Form */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-blue-200 text-sm font-medium mb-1">Login ID</label>
+                  <input
+                    className="form-input bg-white/10 border-white/20 text-white placeholder-blue-300/50"
+                    placeholder="Enter your login ID..."
+                    value={loginId}
+                    onChange={e => setLoginId(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                    autoFocus
+                  />
                 </div>
-              </div>
-              <p className="text-sm font-bold text-gray-800">{licenseInfo.hospitalName}</p>
-              <div className="flex gap-3 text-xs text-gray-500 mt-1">
-                <span>{licenseInfo.licenseDuration === 'lifetime' ? 'Lifetime' : licenseInfo.licenseDuration}</span>
-                {licenseInfo.expiryDate && <span>{licenseInfo.expiryDate}</span>}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {updateInfo && updateInfo.status === 'available' && (
-          <Card className="mb-4 border-blue-200 bg-blue-50">
-            <CardContent className="p-3 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-blue-700">New version {updateInfo.version} available</p>
-                <p className="text-xs text-blue-500">Downloading...</p>
-              </div>
-              <Download className="w-4 h-4 text-blue-500 animate-pulse" />
-            </CardContent>
-          </Card>
-        )}
-
-        {mode === 'login' ? (
-          <Card className="shadow-xl border-0">
-            <CardHeader className="text-center pb-2">
-              <CardTitle className="text-lg text-gray-700">
-                <User className="w-5 h-5 inline mr-1" />
-                Login
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-2 space-y-4">
-              <div className="space-y-2">
-                <Label>Username</Label>
-                <Input
-                  value={username}
-                  onChange={e => setUsername(e.target.value)}
-                  placeholder="Enter username"
-                  onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                  disabled={loading}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Password</Label>
-                <div className="relative">
-                  <Input
-                    type={showPassword ? 'text' : 'password'}
+                <div>
+                  <label className="block text-blue-200 text-sm font-medium mb-1">Password</label>
+                  <input
+                    type="password"
+                    className="form-input bg-white/10 border-white/20 text-white placeholder-blue-300/50"
+                    placeholder="Enter password..."
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    placeholder="Enter password"
                     onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                    disabled={loading}
                   />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute left-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </Button>
+                </div>
+
+                {error && <div className="bg-red-500/20 border border-red-400/30 text-red-200 px-3 py-2 rounded-lg text-sm">{error}</div>}
+
+                <button onClick={handleLogin} disabled={loading} className="btn btn-primary w-full justify-center btn-lg">
+                  {loading ? 'Logging in...' : 'Login'}
+                </button>
+              </div>
+
+              {/* Demo Credentials */}
+              <div className="mt-4 border-t border-white/10 pt-4">
+                <p className="text-blue-300/60 text-xs text-center mb-2">Demo Login Credentials</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'admin', pw: 'admin', label: 'Super Admin', color: 'bg-blue-600/30 border-blue-500/30' },
+                    { id: 'reception', pw: 'reception', label: 'Reception', color: 'bg-emerald-600/30 border-emerald-500/30' },
+                    { id: 'doctor', pw: 'doctor', label: 'Doctor', color: 'bg-purple-600/30 border-purple-500/30' },
+                    { id: 'lab', pw: 'lab', label: 'Lab', color: 'bg-teal-600/30 border-teal-500/30' },
+                    { id: 'pharmacy', pw: 'pharmacy', label: 'Pharmacy', color: 'bg-amber-600/30 border-amber-500/30' },
+                    { id: 'xray', pw: 'xray', label: 'X-Ray', color: 'bg-rose-600/30 border-rose-500/30' },
+                    { id: 'ultrasound', pw: 'ultrasound', label: 'Ultrasound', color: 'bg-indigo-600/30 border-indigo-500/30' },
+                    { id: 'accounts', pw: 'accounts', label: 'Accounts', color: 'bg-cyan-600/30 border-cyan-500/30' },
+                  ].map(d => (
+                    <button key={d.id} onClick={() => { setLoginId(d.id); setPassword(d.pw); }}
+                      className={`rounded-lg px-3 py-2 text-center text-white text-xs border ${d.color} hover:opacity-80 transition-opacity`}>
+                      <div className="font-semibold">{d.label}</div>
+                      <div className="opacity-60">{d.id}</div>
+                    </button>
+                  ))}
                 </div>
               </div>
-              
-              <Button
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-                onClick={handleLogin}
-                disabled={loading}
-              >
-                {loading ? 'Verifying...' : 'Login'}
-              </Button>
-
-              {!isElectron && (
-                <p className="text-xs text-center text-amber-600 bg-amber-50 p-2 rounded-lg">
-                  Demo Mode: username = reception, doctor, admin | password = 1234
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        ) : (
-          <Card className="shadow-xl border-0">
-            <CardHeader className="text-center pb-2">
-              <CardTitle className="text-lg text-gray-700">
-                <KeyRound className="w-5 h-5 inline mr-1" />
-                Change License
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-2 space-y-4">
-              <div className="space-y-2">
-                <Label>New License Key</Label>
-                <Input
-                  value={newLicenseKey}
-                  onChange={e => setNewLicenseKey(e.target.value)}
-                  placeholder="BAGA-XXXXX-XXXXX"
-                  disabled={loading}
-                />
+            </>
+          ) : (
+            /* Setup Form */
+            <div className="space-y-3">
+              <div>
+                <label className="block text-blue-200 text-sm font-medium mb-1">Hospital Name</label>
+                <input className="form-input bg-white/10 border-white/20 text-white" value={hospital.name} onChange={e => setH({...hospital, name: e.target.value})} />
               </div>
-              <Button
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-                onClick={handleChangeLicense}
-                disabled={loading}
-              >
-                {loading ? 'Verifying...' : 'Activate'}
-              </Button>
-              <Button
-                className="w-full"
-                variant="outline"
-                onClick={() => { setMode('login'); setNewLicenseKey(''); }}
-                disabled={loading}
-              >
-                Go Back
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        <div className="flex items-center justify-between mt-4">
-          {isElectron && (
-            <Button variant="ghost" size="sm" className="text-xs text-gray-400" onClick={handleCheckUpdate}>
-              <RefreshCw className="w-3 h-3 mr-1" />
-              Check Update
-            </Button>
+              <div>
+                <label className="block text-blue-200 text-sm font-medium mb-1">Address</label>
+                <input className="form-input bg-white/10 border-white/20 text-white" value={hospital.address} onChange={e => setH({...hospital, address: e.target.value})} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-blue-200 text-sm font-medium mb-1">Phone</label>
+                  <input className="form-input bg-white/10 border-white/20 text-white" value={hospital.phone} onChange={e => setH({...hospital, phone: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-blue-200 text-sm font-medium mb-1">License No</label>
+                  <input className="form-input bg-white/10 border-white/20 text-white" value={hospital.licenseNo} onChange={e => setH({...hospital, licenseNo: e.target.value})} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-blue-200 text-sm font-medium mb-1">Email</label>
+                <input className="form-input bg-white/10 border-white/20 text-white" value={hospital.email} onChange={e => setH({...hospital, email: e.target.value})} />
+              </div>
+              <button onClick={handleSetup} className="btn btn-primary w-full justify-center btn-lg">Save Hospital Settings</button>
+              <button onClick={() => setShowSetup(false)} className="btn btn-outline w-full justify-center text-white border-white/20">Cancel</button>
+            </div>
           )}
-          <p className="text-xs text-gray-400">
-            {isElectron ? 'BAGA HMS - Licensed Software' : 'Demo Version'}
-          </p>
         </div>
+
+        {/* Setup Button */}
+        {!showSetup && (
+          <button onClick={() => setShowSetup(true)} className="w-full text-center text-blue-400/50 text-xs hover:text-blue-400 py-2">
+            Hospital Settings (First time setup / Change hospital info)
+          </button>
+        )}
       </div>
     </div>
   );

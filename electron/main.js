@@ -4,11 +4,12 @@ const http = require('http');
 const fs = require('fs');
 const crypto = require('crypto');
 const { autoUpdater } = require('electron-updater');
+const db = require('./database');
 
 // ============================================================
 // CONFIGURATION
 // ============================================================
-const APP_VERSION = '2.7.0';
+const APP_VERSION = '3.0.0';
 const API_BASE = 'https://baga-hospital-api.vercel.app';
 const SERVER_PORT = 18765;
 const STORE_PATH = path.join(app.getPath('userData'), 'baga-store.json');
@@ -384,6 +385,69 @@ ipcMain.handle('quit-app', () => {
   app.quit();
 });
 
+// ============ DATABASE IPC HANDLERS ============
+
+// Generic CRUD - Synchronous (sendSync)
+ipcMain.on('db-get-all', (event, table) => {
+  try { event.returnValue = { success: true, data: db.getAll(table) }; }
+  catch (err) { event.returnValue = { success: false, error: err.message }; }
+});
+
+ipcMain.on('db-get-by-id', (event, table, id) => {
+  try { event.returnValue = { success: true, data: db.getById(table, id) }; }
+  catch (err) { event.returnValue = { success: false, error: err.message }; }
+});
+
+ipcMain.on('db-set-by-id', (event, table, id, data) => {
+  try { db.setById(table, id, data); event.returnValue = { success: true }; }
+  catch (err) { event.returnValue = { success: false, error: err.message }; }
+});
+
+ipcMain.on('db-set-all', (event, table, dataArray) => {
+  try { db.setAll(table, dataArray); event.returnValue = { success: true }; }
+  catch (err) { event.returnValue = { success: false, error: err.message }; }
+});
+
+ipcMain.on('db-delete-by-id', (event, table, id) => {
+  try { db.deleteById(table, id); event.returnValue = { success: true }; }
+  catch (err) { event.returnValue = { success: false, error: err.message }; }
+});
+
+// Counter operations
+ipcMain.on('db-get-counter', (event, key) => {
+  try { event.returnValue = { success: true, data: db.getCounter(key) }; }
+  catch (err) { event.returnValue = { success: false, error: err.message }; }
+});
+
+ipcMain.on('db-set-counter', (event, key, value) => {
+  try { db.setCounter(key, value); event.returnValue = { success: true }; }
+  catch (err) { event.returnValue = { success: false, error: err.message }; }
+});
+
+// KV Store operations
+ipcMain.on('db-get-kv', (event, key) => {
+  try { event.returnValue = { success: true, data: db.getKV(key) }; }
+  catch (err) { event.returnValue = { success: false, error: err.message }; }
+});
+
+ipcMain.on('db-set-kv', (event, key, value) => {
+  try { db.setKV(key, value); event.returnValue = { success: true }; }
+  catch (err) { event.returnValue = { success: false, error: err.message }; }
+});
+
+// DB backup
+ipcMain.on('db-backup', (event, filePath) => {
+  try { db.backup(filePath); event.returnValue = { success: true }; }
+  catch (err) { event.returnValue = { success: false, error: err.message }; }
+});
+
+// DB path
+ipcMain.on('db-get-path', (event) => {
+  event.returnValue = { success: true, data: db.getDbPath() };
+});
+
+// ============ END DATABASE IPC HANDLERS ============
+
 // Open main window from license window
 ipcMain.on('open-main-window', () => {
   if (licenseWindow && !licenseWindow.isDestroyed()) {
@@ -405,6 +469,9 @@ app.whenReady().then(async () => {
   console.log(`[BAGA HMS] Machine ID: ${getMachineId()}`);
   console.log(`[BAGA HMS] API Base: ${API_BASE}`);
   
+  // Initialize SQLite database
+  db.initDatabase(app);
+
   // Start HTTP server
   await startServer();
   
@@ -457,6 +524,10 @@ app.whenReady().then(async () => {
       }
     }
   }
+});
+
+app.on('before-quit', () => {
+  try { db.close(); } catch (e) {}
 });
 
 app.on('window-all-closed', () => {

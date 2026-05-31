@@ -24,6 +24,19 @@ contextBridge.exposeInMainWorld('bagaAPI', {
   
   // App Control
   quitApp: () => ipcRenderer.invoke('quit-app'),
+
+  // Database operations (synchronous via sendSync)
+  dbGetAll: (table) => ipcRenderer.sendSync('db-get-all', table),
+  dbGetById: (table, id) => ipcRenderer.sendSync('db-get-by-id', table, id),
+  dbSetById: (table, id, data) => ipcRenderer.sendSync('db-set-by-id', table, id, data),
+  dbSetAll: (table, dataArray) => ipcRenderer.sendSync('db-set-all', table, dataArray),
+  dbDeleteById: (table, id) => ipcRenderer.sendSync('db-delete-by-id', table, id),
+  dbGetCounter: (key) => ipcRenderer.sendSync('db-get-counter', key),
+  dbSetCounter: (key, value) => ipcRenderer.sendSync('db-set-counter', key, value),
+  dbGetKV: (key) => ipcRenderer.sendSync('db-get-kv', key),
+  dbSetKV: (key, value) => ipcRenderer.sendSync('db-set-kv', key, value),
+  dbBackup: (filePath) => ipcRenderer.sendSync('db-backup', filePath),
+  dbGetPath: () => ipcRenderer.sendSync('db-get-path'),
 });
 
 // Also expose for license.html window

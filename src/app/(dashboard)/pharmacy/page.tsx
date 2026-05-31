@@ -1,0 +1,1355 @@
+'use client';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  searchPatients, searchMedicines, getMedicines, addMedicine, updateMedicine, deleteMedicine,
+  getMedicineCategories, getActivePrescriptions, updatePrescription, addDispense,
+  getPatientCounter, setPatientCounter, addPatient, genId, todayStr, timeStr, getHospitalSettings,
+  getExpiredMedicines, getLowStockMedicines,
+} from '@/lib/store';
+import type { Patient, Prescription, MedicineItem } from '@/lib/types';
+
+/* ==================== LOCAL TYPES ==================== */
+interface CartItem {
+  medicineId: string;
+  name: string;
+  genericName: string;
+  form: string;
+  strength: string;
+  packing: string;
+  price: number;
+  quantity: number;
+  total: number;
+}
+
+interface PharmacySale {
+  id: string;
+  patientNo: string;
+  patientName: string;
+  patientMobile: string;
+  type: 'Indoor' | 'Outdoor';
+  items: CartItem[];
+  totalAmount: number;
+  date: string;
+  time: string;
+  servedBy: string;
+}
+
+/* ==================== LOCAL STORAGE HELPERS ==================== */
+function lsGet<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : fallback; } catch { return fallback; }
+}
+function lsSet<T>(key: string, data: T): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(key, JSON.stringify(data));
+}
+
+const SALES_KEY = 'baga_pharmacy_sales';
+const OUTDOOR_COUNTER_KEY = 'baga_outdoor_counter';
+
+function getPharmacySales(): PharmacySale[] { return lsGet<PharmacySale[]>(SALES_KEY, []); }
+function addPharmacySale(s: PharmacySale): void { const all = getPharmacySales(); all.push(s); lsSet(SALES_KEY, all); }
+function getOutdoorCounter(): number { return lsGet<number>(OUTDOOR_COUNTER_KEY, 1); }
+function setOutdoorCounter(n: number): void { lsSet(OUTDOOR_COUNTER_KEY, n); }
+
+export default function PharmacyPage() {
+  const [initialTab, setInitialTab] = useState<'pos' | 'prescriptions' | 'inventory' | 'reports'>('pos');
+  const [mainTab, setMainTab] = useState<'pos' | 'prescriptions' | 'inventory' | 'reports'>('pos');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab');
+      if (tab === 'inventory') setInitialTab('inventory');
+      else if (tab === 'reports') setInitialTab('reports');
+      else if (tab === 'prescriptions') setInitialTab('prescriptions');
+      else setInitialTab('pos');
+    }
+  }, []);
+  useEffect(() => { setMainTab(initialTab); }, [initialTab]);
+
+  /* ==================== SHARED ==================== */
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [currency, setCurrency] = useState('Rs.');
+  const showToast = (msg: string, type: 'success' | 'error') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+
+  useEffect(() => {
+    const s = getHospitalSettings();
+    setCurrency(s.currency);
+  }, []);
+
+  /* ==================== POINT OF SALE ==================== */
+  const [patientMode, setPatientMode] = useState<'Indoor' | 'Outdoor'>('Indoor');
+
+  // Indoor patient search
+  const [patientQuery, setPatientQuery] = useState('');
+  const [patientResults, setPatientResults] = useState<Patient[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+
+  // Outdoor patient form
+  const [outdoorName, setOutdoorName] = useState('');
+  const [outdoorMobile, setOutdoorMobile] = useState('');
+  const [outdoorAge, setOutdoorAge] = useState('');
+  const [outdoorGender, setOutdoorGender] = useState('Male');
+  const [outdoorNo, setOutdoorNo] = useState('');
+
+  // Medicine search
+  const [medQuery, setMedQuery] = useState('');
+  const [medResults, setMedResults] = useState<MedicineItem[]>([]);
+  const [showMedDropdown, setShowMedDropdown] = useState(false);
+
+  // Cart
+  const [cart, setCart] = useState<CartItem[]>([]);
+
+  // Sale history (for stats)
+  const [sales, setSales] = useState<PharmacySale[]>([]);
+  const loadSales = useCallback(() => setSales(getPharmacySales()), []);
+
+  useEffect(() => { loadSales(); }, [loadSales]);
+  useEffect(() => { setOutdoorNo(`OUT-${String(getOutdoorCounter()).padStart(4, '0')}`); }, []);
+
+  // Stats
+  const todaySales = sales.filter(s => s.date === todayStr());
+  const todayTotal = todaySales.reduce((a, s) => a + s.totalAmount, 0);
+  const todayIndoor = todaySales.filter(s => s.type === 'Indoor').length;
+  const todayOutdoor = todaySales.filter(s => s.type === 'Outdoor').length;
+
+  // Patient search handler
+  const handlePatientSearch = (q: string) => {
+    setPatientQuery(q);
+    if (q.length < 1) { setPatientResults([]); return; }
+    setPatientResults(searchPatients(q));
+  };
+
+  const selectPatient = (p: Patient) => {
+    setSelectedPatient(p);
+    setPatientQuery('');
+    setPatientResults([]);
+  };
+
+  const clearPatient = () => {
+    setSelectedPatient(null);
+    setPatientQuery('');
+    setPatientResults([]);
+  };
+
+  // Medicine search handler
+  const handleMedSearch = (q: string) => {
+    setMedQuery(q);
+    if (q.length < 1) { setMedResults([]); setShowMedDropdown(false); return; }
+    setMedResults(searchMedicines(q));
+    setShowMedDropdown(true);
+  };
+
+  const addMedicineToCart = (med: MedicineItem) => {
+    const existing = cart.find(c => c.medicineId === med.id);
+    if (existing) {
+      setCart(cart.map(c => c.medicineId === med.id ? { ...c, quantity: c.quantity + 1, total: (c.quantity + 1) * c.price } : c));
+    } else {
+      setCart([...cart, {
+        medicineId: med.id, name: med.name, genericName: med.genericName,
+        form: med.form, strength: med.strength, packing: med.packing,
+        price: med.price, quantity: 1, total: med.price,
+      }]);
+    }
+    setMedQuery('');
+    setMedResults([]);
+    setShowMedDropdown(false);
+  };
+
+  const updateCartQty = (medId: string, qty: number) => {
+    if (qty < 1) {
+      setCart(cart.filter(c => c.medicineId !== medId));
+    } else {
+      setCart(cart.map(c => c.medicineId === medId ? { ...c, quantity: qty, total: qty * c.price } : c));
+    }
+  };
+
+  const removeFromCart = (medId: string) => {
+    setCart(cart.filter(c => c.medicineId !== medId));
+  };
+
+  const cartTotal = cart.reduce((a, c) => a + c.total, 0);
+
+  const clearCart = () => {
+    setCart([]);
+  };
+
+  const resetSale = () => {
+    clearCart();
+    setSelectedPatient(null);
+    setPatientQuery('');
+    setPatientResults([]);
+    setOutdoorName('');
+    setOutdoorMobile('');
+    setOutdoorAge('');
+    setOutdoorGender('Male');
+  };
+
+  const completeSale = () => {
+    if (cart.length === 0) { showToast('Add at least one medicine to the cart', 'error'); return; }
+
+    let patientNo = '';
+    let patientName = '';
+    let patientMobile = '';
+
+    if (patientMode === 'Indoor') {
+      if (!selectedPatient) { showToast('Select a patient first', 'error'); return; }
+      patientNo = selectedPatient.patientNo;
+      patientName = selectedPatient.name;
+      patientMobile = selectedPatient.mobile;
+    } else {
+      if (!outdoorName.trim()) { showToast('Enter patient name', 'error'); return; }
+      if (!outdoorMobile.trim()) { showToast('Enter patient mobile number', 'error'); return; }
+      const counter = getOutdoorCounter();
+      patientNo = `OUT-${String(counter).padStart(4, '0')}`;
+      patientName = outdoorName.trim();
+      patientMobile = outdoorMobile.trim();
+
+      // Create a minimal patient record
+      addPatient({
+        id: genId(),
+        patientNo,
+        name: patientName,
+        fatherName: '',
+        mobile: patientMobile,
+        age: outdoorAge || '-',
+        gender: outdoorGender,
+        address: '',
+        cardStatus: 'Expired',
+        cardExpiry: '-',
+        totalVisits: 1,
+        lastVisit: todayStr(),
+        regDate: todayStr(),
+      });
+      setOutdoorCounter(counter + 1);
+      setOutdoorNo(`OUT-${String(counter + 1).padStart(4, '0')}`);
+    }
+
+    const sale: PharmacySale = {
+      id: genId(),
+      patientNo,
+      patientName,
+      patientMobile,
+      type: patientMode,
+      items: [...cart],
+      totalAmount: cartTotal,
+      date: todayStr(),
+      time: timeStr(),
+      servedBy: 'Pharmacist',
+    };
+
+    addPharmacySale(sale);
+    showToast(`Sale completed! ${currency} ${cartTotal.toLocaleString()}`, 'success');
+    resetSale();
+    loadSales();
+  };
+
+  /* ==================== PRESCRIPTIONS ==================== */
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [dispenseRx, setDispenseRx] = useState<Prescription | null>(null);
+
+  const loadRxs = useCallback(() => { setPrescriptions(getActivePrescriptions()); }, []);
+  useEffect(() => { loadRxs(); }, [loadRxs]);
+
+  const confirmDispense = () => {
+    if (!dispenseRx) return;
+    updatePrescription(dispenseRx.id, { status: 'Dispensed' });
+    addDispense({
+      id: genId(), prescriptionId: dispenseRx.id, patientNo: dispenseRx.patientNo,
+      patientName: dispenseRx.patientName,
+      medicines: dispenseRx.medicines.map(m => m.name),
+      dispensedBy: 'Pharmacist', date: todayStr(), time: timeStr(),
+    });
+    setDispenseRx(null);
+    loadRxs();
+    showToast('Medicines dispensed successfully!', 'success');
+  };
+
+  /* ==================== MEDICINE INVENTORY ==================== */
+  const [medicines, setMedicines] = useState<MedicineItem[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [catFilter, setCatFilter] = useState('All');
+  const [invSearch, setInvSearch] = useState('');
+  const [showMedModal, setShowMedModal] = useState(false);
+  const [editingMed, setEditingMed] = useState<MedicineItem | null>(null);
+  const [editPriceMed, setEditPriceMed] = useState<MedicineItem | null>(null);
+  const [editPriceVal, setEditPriceVal] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState<MedicineItem | null>(null);
+  const [expiredMeds, setExpiredMeds] = useState<MedicineItem[]>([]);
+  const [lowStockMeds, setLowStockMeds] = useState<MedicineItem[]>([]);
+
+  useEffect(() => {
+    if (mainTab === 'inventory') {
+      setExpiredMeds(getExpiredMedicines());
+      setLowStockMeds(getLowStockMedicines());
+    }
+  }, [mainTab, medicines]);
+
+  // Medicine form
+  const [fName, setFName] = useState('');
+  const [fGeneric, setFGeneric] = useState('');
+  const [fForm, setFForm] = useState('Tablet');
+  const [fStrength, setFStrength] = useState('');
+  const [fPacking, setFPacking] = useState('');
+  const [fPrice, setFPrice] = useState('');
+  const [fCategory, setFCategory] = useState('');
+  const [fNewCategory, setFNewCategory] = useState('');
+
+  const loadInventory = useCallback(() => {
+    setMedicines(getMedicines());
+    setCategories(getMedicineCategories());
+  }, []);
+  useEffect(() => { loadInventory(); }, [loadInventory]);
+
+  const filteredMedicines = medicines.filter(m => {
+    const matchCat = catFilter === 'All' || m.category === catFilter;
+    const matchSearch = !invSearch ||
+      m.name.toLowerCase().includes(invSearch.toLowerCase()) ||
+      m.genericName.toLowerCase().includes(invSearch.toLowerCase()) ||
+      m.strength.toLowerCase().includes(invSearch.toLowerCase());
+    return matchCat && matchSearch;
+  });
+
+  const openAddMed = () => {
+    setEditingMed(null);
+    setFName(''); setFGeneric(''); setFForm('Tablet'); setFStrength('');
+    setFPacking(''); setFPrice(''); setFCategory(categories[0] || ''); setFNewCategory('');
+    setShowMedModal(true);
+  };
+
+  const openEditMed = (m: MedicineItem) => {
+    setEditingMed(m);
+    setFName(m.name); setFGeneric(m.genericName); setFForm(m.form); setFStrength(m.strength);
+    setFPacking(m.packing); setFPrice(String(m.price)); setFCategory(m.category); setFNewCategory('');
+    setShowMedModal(true);
+  };
+
+  const saveMed = () => {
+    const cat = fCategory === '__new__' ? fNewCategory.trim() : fCategory.trim();
+    if (!fName.trim() || !fForm || !fStrength.trim() || !fPacking.trim() || !fPrice.trim() || !cat) {
+      showToast('All fields are required', 'error'); return;
+    }
+    if (editingMed) {
+      updateMedicine(editingMed.id, {
+        name: fName.trim(), genericName: fGeneric.trim(), form: fForm as MedicineItem['form'],
+        strength: fStrength.trim(), packing: fPacking.trim(), price: Number(fPrice), category: cat,
+      });
+      showToast('Medicine updated successfully', 'success');
+    } else {
+      addMedicine({
+        id: genId(), name: fName.trim(), genericName: fGeneric.trim(), form: fForm as MedicineItem['form'],
+        strength: fStrength.trim(), packing: fPacking.trim(), price: Number(fPrice), category: cat, active: true,
+        stock: 0, expiryDate: '', minStock: 10,
+      });
+      showToast('New medicine added successfully', 'success');
+    }
+    setShowMedModal(false);
+    loadInventory();
+  };
+
+  const savePrice = () => {
+    if (!editPriceMed || !editPriceVal) { showToast('Enter a valid price', 'error'); return; }
+    updateMedicine(editPriceMed.id, { price: Number(editPriceVal) });
+    showToast(`Price updated to ${currency} ${Number(editPriceVal).toLocaleString()}`, 'success');
+    setEditPriceMed(null);
+    setEditPriceVal('');
+    loadInventory();
+  };
+
+  const toggleMedStatus = (m: MedicineItem) => {
+    updateMedicine(m.id, { active: !m.active });
+    showToast(`${m.name} ${m.active ? 'deactivated' : 'activated'}`, 'success');
+    loadInventory();
+  };
+
+  const confirmDelete = (m: MedicineItem) => {
+    deleteMedicine(m.id);
+    showToast(`${m.name} deleted`, 'success');
+    setDeleteConfirm(null);
+    loadInventory();
+  };
+
+  /* ==================== RENDER ==================== */
+  return (
+    <div className="space-y-5">
+      {toast && <div className={`toast ${toast.type === 'success' ? 'toast-success' : 'toast-error'}`}>{toast.msg}</div>}
+
+      {/* Header */}
+      <div>
+        <h2 className="text-xl font-bold text-slate-800">Pharmacy</h2>
+        <p className="text-sm text-slate-500">Medicine sales, prescriptions, and inventory management</p>
+      </div>
+
+      {/* ==================== POINT OF SALE TAB ==================== */}
+      {mainTab === 'pos' && (
+        <>
+          {/* Stats Row */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="stat-card card-hover border border-emerald-200 bg-emerald-50">
+              <p className="text-xs text-emerald-600 font-medium">Today&apos;s Sales</p>
+              <p className="text-2xl font-bold text-emerald-700">{currency} {todayTotal.toLocaleString()}</p>
+            </div>
+            <div className="stat-card card-hover border border-blue-200 bg-blue-50">
+              <p className="text-xs text-blue-600 font-medium">Total Sales Today</p>
+              <p className="text-2xl font-bold text-blue-700">{todaySales.length}</p>
+            </div>
+            <div className="stat-card card-hover border border-purple-200 bg-purple-50">
+              <p className="text-xs text-purple-600 font-medium">Indoor Patients</p>
+              <p className="text-2xl font-bold text-purple-700">{todayIndoor}</p>
+            </div>
+            <div className="stat-card card-hover border border-amber-200 bg-amber-50">
+              <p className="text-xs text-amber-600 font-medium">Outdoor Patients</p>
+              <p className="text-2xl font-bold text-amber-700">{todayOutdoor}</p>
+            </div>
+          </div>
+
+          {/* Patient Mode Toggle + Selection */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
+            {/* Mode Toggle */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                <span className="font-semibold text-slate-700">Patient</span>
+              </div>
+              <div className="flex bg-slate-100 rounded-lg p-1">
+                <button
+                  onClick={() => { setPatientMode('Indoor'); clearPatient(); }}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${patientMode === 'Indoor' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                  Indoor Patient (Card Holder)
+                </button>
+                <button
+                  onClick={() => { setPatientMode('Outdoor'); clearPatient(); }}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${patientMode === 'Outdoor' ? 'bg-white shadow-sm text-amber-700' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  Outdoor Patient (Walk-in)
+                </button>
+              </div>
+            </div>
+
+            {/* Indoor Patient Search */}
+            {patientMode === 'Indoor' && (
+              <>
+                {!selectedPatient ? (
+                  <div className="relative">
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative">
+                        <svg className="w-5 h-5 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        <input
+                          type="text"
+                          className="form-input pl-10"
+                          placeholder="Search by card number (BAGA-0001) or mobile number..."
+                          value={patientQuery}
+                          onChange={e => handlePatientSearch(e.target.value)}
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+                    {patientResults.length > 0 && (
+                      <div className="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg bg-white shadow-lg max-h-64 overflow-y-auto">
+                        {patientResults.map(p => (
+                          <button
+                            key={p.id}
+                            onClick={() => selectPatient(p)}
+                            className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-slate-100 last:border-0 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="font-mono font-bold text-blue-600">{p.patientNo}</span>
+                                <span className="ml-3 font-medium text-slate-700">{p.name}</span>
+                                <span className="ml-2 text-xs text-slate-400">{p.gender} | {p.age} yrs</span>
+                              </div>
+                              <span className="text-sm text-slate-400">{p.mobile}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {patientQuery.length >= 1 && patientResults.length === 0 && (
+                      <div className="mt-2 text-center py-4 text-sm text-slate-400 bg-slate-50 rounded-lg border border-slate-100">
+                        No patients found matching &ldquo;{patientQuery}&rdquo;
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                          {selectedPatient.name.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-800">{selectedPatient.name}</p>
+                          <p className="text-sm text-slate-500">
+                            <span className="font-mono text-blue-600 font-semibold">{selectedPatient.patientNo}</span>
+                            <span className="mx-2 text-slate-300">|</span>
+                            {selectedPatient.gender}
+                            <span className="mx-2 text-slate-300">|</span>
+                            {selectedPatient.age} yrs
+                            <span className="mx-2 text-slate-300">|</span>
+                            {selectedPatient.mobile}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            <span className={`badge ${selectedPatient.cardStatus === 'Active' ? 'badge-green' : 'badge-rose'} text-xs`}>{selectedPatient.cardStatus}</span>
+                            <span className="ml-2">Visits: {selectedPatient.totalVisits}</span>
+                          </p>
+                        </div>
+                      </div>
+                      <button onClick={clearPatient} className="btn btn-outline btn-sm">Change Patient</button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Outdoor Patient Form */}
+            {patientMode === 'Outdoor' && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                    #
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-800 text-sm">Walk-in Patient</p>
+                    <p className="text-xs text-amber-600">Patient No: <span className="font-mono font-bold">{outdoorNo}</span> (auto-generated)</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="form-label">Full Name *</label>
+                    <input type="text" className="form-input" placeholder="Patient name" value={outdoorName} onChange={e => setOutdoorName(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="form-label">Mobile Number *</label>
+                    <input type="text" className="form-input" placeholder="03XX-XXXXXXX" value={outdoorMobile} onChange={e => setOutdoorMobile(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="form-label">Age</label>
+                    <input type="text" className="form-input" placeholder="e.g. 35" value={outdoorAge} onChange={e => setOutdoorAge(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="form-label">Gender</label>
+                    <select className="form-input" value={outdoorGender} onChange={e => setOutdoorGender(e.target.value)}>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Medicine Search */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-2">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                <span className="font-semibold text-slate-700">Add Medicine to Cart</span>
+              </div>
+              <span className="text-sm text-slate-400">Search by medicine name, generic name, or category</span>
+            </div>
+            <div className="relative">
+              <div className="flex gap-2">
+                <div className="flex-1 relative">
+                  <svg className="w-5 h-5 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  <input
+                    type="text"
+                    className="form-input pl-10 text-base"
+                    placeholder="Search medicine... e.g. Paracetamol, Amoxicillin, Vitamin C"
+                    value={medQuery}
+                    onChange={e => handleMedSearch(e.target.value)}
+                    onFocus={() => { if (medResults.length > 0) setShowMedDropdown(true); }}
+                  />
+                </div>
+                {showMedDropdown && (
+                  <button onClick={() => { setShowMedDropdown(false); setMedResults([]); }} className="btn btn-outline btn-sm">
+                    Close
+                  </button>
+                )}
+              </div>
+              {showMedDropdown && medResults.length > 0 && (
+                <div className="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg bg-white shadow-lg max-h-72 overflow-y-auto">
+                  {medResults.map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => addMedicineToCart(m)}
+                      className="w-full text-left px-4 py-3 hover:bg-emerald-50 border-b border-slate-100 last:border-0 transition-colors group"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-semibold text-slate-800 group-hover:text-emerald-700">{m.name}</span>
+                          <span className="text-xs text-slate-400 ml-2">({m.genericName})</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="badge badge-blue text-xs">{m.form}</span>
+                            <span className="text-xs text-slate-500">{m.strength}</span>
+                            <span className="text-xs text-slate-400">{m.packing}</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-emerald-700">{currency} {m.price.toLocaleString()}</p>
+                          <p className="text-xs text-slate-400">{m.category}</p>
+                          <p className="text-xs text-emerald-600 mt-1 font-medium">+ Add</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {medQuery.length >= 1 && showMedDropdown && medResults.length === 0 && (
+                <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg p-4 text-center text-sm text-slate-400">
+                  No medicines found matching &ldquo;{medQuery}&rdquo;
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Cart / Sale Table */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                <h3 className="font-bold text-slate-800">
+                  Medicine Cart
+                  {cart.length > 0 && <span className="ml-2 badge badge-amber">{cart.length} item{cart.length > 1 ? 's' : ''}</span>}
+                </h3>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-500">
+                  Patient: {patientMode === 'Indoor'
+                    ? (selectedPatient ? <span className="font-mono font-bold text-blue-600">{selectedPatient.patientNo} - {selectedPatient.name}</span> : <span className="text-red-400">Not selected</span>)
+                    : (outdoorName ? <span className="font-mono font-bold text-amber-600">{outdoorNo} - {outdoorName}</span> : <span className="text-red-400">Not entered</span>)
+                  }
+                </span>
+              </div>
+            </div>
+
+            {cart.length === 0 ? (
+              <div className="p-12 text-center">
+                <svg className="w-16 h-16 text-slate-200 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" /></svg>
+                <p className="text-slate-400 text-lg font-medium">Cart is empty</p>
+                <p className="text-slate-300 text-sm mt-1">Search medicines above and add them to the cart</p>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th className="w-8">#</th>
+                        <th>Medicine</th>
+                        <th>Form</th>
+                        <th>Strength</th>
+                        <th>Packing</th>
+                        <th className="text-right">Price</th>
+                        <th className="text-center w-32">Quantity</th>
+                        <th className="text-right">Total</th>
+                        <th className="w-20">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cart.map((item, idx) => (
+                        <tr key={item.medicineId} className="hover:bg-slate-50">
+                          <td className="text-slate-400 text-sm font-medium">{idx + 1}</td>
+                          <td>
+                            <p className="font-semibold text-slate-800">{item.name}</p>
+                            <p className="text-xs text-slate-400">{item.genericName}</p>
+                          </td>
+                          <td><span className="badge badge-blue">{item.form}</span></td>
+                          <td className="text-sm text-slate-600">{item.strength}</td>
+                          <td className="text-sm text-slate-500">{item.packing}</td>
+                          <td className="text-right font-medium text-slate-700">{currency} {item.price.toLocaleString()}</td>
+                          <td className="text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => updateCartQty(item.medicineId, item.quantity - 1)}
+                                className="w-8 h-8 rounded-md border border-slate-300 flex items-center justify-center text-slate-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors font-bold"
+                              >-</button>
+                              <input
+                                type="number"
+                                min={1}
+                                value={item.quantity}
+                                onChange={e => {
+                                  const v = parseInt(e.target.value) || 1;
+                                  updateCartQty(item.medicineId, v > 0 ? v : 1);
+                                }}
+                                className="w-14 h-8 text-center border border-slate-300 rounded-md text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                              />
+                              <button
+                                onClick={() => updateCartQty(item.medicineId, item.quantity + 1)}
+                                className="w-8 h-8 rounded-md border border-slate-300 flex items-center justify-center text-slate-500 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 transition-colors font-bold"
+                              >+</button>
+                            </div>
+                          </td>
+                          <td className="text-right font-bold text-emerald-700">{currency} {item.total.toLocaleString()}</td>
+                          <td>
+                            <button
+                              onClick={() => removeFromCart(item.medicineId)}
+                              className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                              title="Remove from cart"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Cart Footer - Total + Actions */}
+                <div className="border-t-2 border-slate-200 bg-slate-50 px-5 py-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="bg-white border border-slate-200 rounded-lg px-4 py-3">
+                        <p className="text-xs text-slate-400">Items</p>
+                        <p className="text-lg font-bold text-slate-700">{cart.length}</p>
+                      </div>
+                      <div className="bg-white border border-2 border-emerald-200 rounded-lg px-6 py-3">
+                        <p className="text-xs text-emerald-500 font-medium">Grand Total</p>
+                        <p className="text-2xl font-bold text-emerald-700">{currency} {cartTotal.toLocaleString()}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 w-full sm:w-auto">
+                      <button onClick={clearCart} className="btn btn-outline flex-1 sm:flex-none">
+                        Clear Cart
+                      </button>
+                      <button onClick={completeSale} className="btn btn-success btn-lg flex-1 sm:flex-none px-8">
+                        <svg className="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        Complete Sale
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Recent Sales */}
+          {todaySales.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <h3 className="font-bold text-slate-800">Today&apos;s Sales ({todaySales.length})</h3>
+                </div>
+              </div>
+              <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                <table className="data-table">
+                  <thead className="sticky top-0 bg-white">
+                    <tr>
+                      <th>Time</th>
+                      <th>Patient No</th>
+                      <th>Patient Name</th>
+                      <th>Type</th>
+                      <th>Medicines</th>
+                      <th className="text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {todaySales.sort((a, b) => b.time.localeCompare(a.time)).map(s => (
+                      <tr key={s.id}>
+                        <td className="text-sm text-slate-500 whitespace-nowrap">{s.time}</td>
+                        <td className="font-mono font-bold text-blue-600 text-sm">{s.patientNo}</td>
+                        <td className="font-medium text-sm">{s.patientName}</td>
+                        <td>
+                          <span className={`badge ${s.type === 'Indoor' ? 'badge-blue' : 'badge-amber'}`}>
+                            {s.type}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="flex flex-wrap gap-1">
+                            {s.items.slice(0, 3).map((it, i) => (
+                              <span key={i} className="badge text-xs">{it.name} x{it.quantity}</span>
+                            ))}
+                            {s.items.length > 3 && (
+                              <span className="badge text-xs badge-amber">+{s.items.length - 3} more</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="text-right font-bold text-emerald-700">{currency} {s.totalAmount.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ==================== PRESCRIPTIONS TAB ==================== */}
+      {mainTab === 'prescriptions' && (
+        <>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <h3 className="font-semibold text-slate-700">
+                Active Prescriptions
+                {prescriptions.length > 0 && <span className="ml-2 badge badge-amber">{prescriptions.length} pending</span>}
+              </h3>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Patient No</th>
+                    <th>Patient Name</th>
+                    <th>Medicines</th>
+                    <th>Prescribed By</th>
+                    <th>Date</th>
+                    <th>Notes</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {prescriptions.map(rx => (
+                    <tr key={rx.id}>
+                      <td className="font-mono font-bold text-blue-600">{rx.patientNo}</td>
+                      <td className="font-medium">{rx.patientName}</td>
+                      <td>
+                        <div className="flex flex-wrap gap-1">
+                          {rx.medicines.map((m, i) => (
+                            <span key={i} className="badge badge-amber">{m.name} - {m.dosage || m.strength} - {m.duration}</span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="text-sm">{rx.prescribedBy}</td>
+                      <td>{rx.date}</td>
+                      <td className="text-sm text-slate-500 max-w-[150px] truncate">{rx.notes || '-'}</td>
+                      <td><span className="badge badge-blue">{rx.status}</span></td>
+                      <td><button onClick={() => setDispenseRx(rx)} className="btn btn-success btn-sm">Dispense</button></td>
+                    </tr>
+                  ))}
+                  {prescriptions.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="text-center py-12 text-slate-400">
+                        <svg className="w-12 h-12 text-slate-200 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        No active prescriptions. Prescriptions will appear when doctors prescribe medicines.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Dispense Confirm Modal */}
+          {dispenseRx && (
+            <div className="modal-overlay" onClick={() => setDispenseRx(null)}>
+              <div className="modal-content" style={{ maxWidth: '600px' }} onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-bold mb-2">Confirm Dispense</h3>
+                <p className="text-sm text-blue-600 mb-4">{dispenseRx.patientNo} - {dispenseRx.patientName}</p>
+                <div className="space-y-2 mb-4">
+                  {dispenseRx.medicines.map((m, i) => (
+                    <div key={i} className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <p className="font-semibold text-sm">{m.name} <span className="text-slate-400 font-normal">({m.form}, {m.strength})</span></p>
+                      <p className="text-xs text-slate-600">{m.dosage} | {m.duration} | {m.frequency}{m.instructions ? ` | ${m.instructions}` : ''}</p>
+                    </div>
+                  ))}
+                </div>
+                {dispenseRx.notes && (
+                  <p className="text-sm text-slate-500 mb-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                    <span className="font-semibold text-slate-600">Notes:</span> {dispenseRx.notes}
+                  </p>
+                )}
+                <div className="flex gap-3">
+                  <button onClick={confirmDispense} className="btn btn-success btn-lg flex-1">Confirm Dispense</button>
+                  <button onClick={() => setDispenseRx(null)} className="btn btn-outline btn-lg">Cancel</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ==================== REPORTS TAB ==================== */}
+      {mainTab === 'reports' && (
+        <>
+          {/* Report Stats */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="stat-card card-hover border border-emerald-200 bg-emerald-50">
+              <p className="text-xs text-emerald-600 font-medium">Today&apos;s Sales</p>
+              <p className="text-2xl font-bold text-emerald-700">{currency} {todayTotal.toLocaleString()}</p>
+            </div>
+            <div className="stat-card card-hover border border-blue-200 bg-blue-50">
+              <p className="text-xs text-blue-600 font-medium">Indoor Sales</p>
+              <p className="text-2xl font-bold text-blue-700">{currency} {todaySales.filter(s => s.type === 'Indoor').reduce((a, s) => a + s.totalAmount, 0).toLocaleString()}</p>
+            </div>
+            <div className="stat-card card-hover border border-amber-200 bg-amber-50">
+              <p className="text-xs text-amber-600 font-medium">Outdoor Sales</p>
+              <p className="text-2xl font-bold text-amber-700">{currency} {todaySales.filter(s => s.type === 'Outdoor').reduce((a, s) => a + s.totalAmount, 0).toLocaleString()}</p>
+            </div>
+            <div className="stat-card card-hover border border-purple-200 bg-purple-50">
+              <p className="text-xs text-purple-600 font-medium">Total Transactions</p>
+              <p className="text-2xl font-bold text-purple-700">{todaySales.length}</p>
+            </div>
+          </div>
+
+          {/* Medicine-wise Sales Summary */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200">
+              <h3 className="font-bold text-slate-800">Medicine-wise Sales Summary (Today)</h3>
+              <p className="text-xs text-slate-400 mt-1">Breakdown of all medicines sold today</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Medicine Name</th>
+                    <th>Form</th>
+                    <th>Strength</th>
+                    <th>Total Qty Sold</th>
+                    <th>Unit Price</th>
+                    <th className="text-right">Total Revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(() => {
+                    const medMap: Record<string, { name: string; form: string; strength: string; price: number; qty: number; total: number }> = {};
+                    todaySales.forEach(sale => {
+                      sale.items.forEach(item => {
+                        const key = item.medicineId;
+                        if (!medMap[key]) {
+                          medMap[key] = { name: item.name, form: item.form, strength: item.strength, price: item.price, qty: 0, total: 0 };
+                        }
+                        medMap[key].qty += item.quantity;
+                        medMap[key].total += item.total;
+                      });
+                    });
+                    const sorted = Object.values(medMap).sort((a, b) => b.total - a.total);
+                    return sorted.length === 0 ? (
+                      <tr><td colSpan={7} className="text-center py-8 text-slate-400">No sales today</td></tr>
+                    ) : sorted.map((m, i) => (
+                      <tr key={i}>
+                        <td className="text-slate-400 font-medium">{i + 1}</td>
+                        <td className="font-semibold">{m.name}</td>
+                        <td><span className="badge badge-blue">{m.form}</span></td>
+                        <td className="text-sm">{m.strength}</td>
+                        <td className="font-bold text-center">{m.qty}</td>
+                        <td className="text-sm">{currency} {m.price.toLocaleString()}</td>
+                        <td className="text-right font-bold text-emerald-700">{currency} {m.total.toLocaleString()}</td>
+                      </tr>
+                    ));
+                  })()}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-emerald-50 border-t-2 border-emerald-200">
+                    <td colSpan={6} className="px-4 py-3 text-right font-bold text-emerald-800">Grand Total:</td>
+                    <td className="px-4 py-3 text-right font-extrabold text-emerald-700 text-lg">{currency} {todayTotal.toLocaleString()}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          {/* Sales by Patient Type */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-5">
+              <h3 className="font-bold text-slate-800 mb-3">Indoor Patient Sales ({todayIndoor})</h3>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {todaySales.filter(s => s.type === 'Indoor').length === 0 ? (
+                  <p className="text-slate-400 text-center py-4">No indoor sales today</p>
+                ) : todaySales.filter(s => s.type === 'Indoor').sort((a, b) => b.time.localeCompare(a.time)).map(s => (
+                  <div key={s.id} className="border border-slate-100 rounded-lg p-3 flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold text-sm text-slate-800">{s.patientName}</p>
+                      <p className="text-xs text-slate-400">{s.patientNo} | {s.time}</p>
+                    </div>
+                    <p className="font-bold text-blue-700">{currency} {s.totalAmount.toLocaleString()}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-5">
+              <h3 className="font-bold text-slate-800 mb-3">Outdoor Patient Sales ({todayOutdoor})</h3>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {todaySales.filter(s => s.type === 'Outdoor').length === 0 ? (
+                  <p className="text-slate-400 text-center py-4">No outdoor sales today</p>
+                ) : todaySales.filter(s => s.type === 'Outdoor').sort((a, b) => b.time.localeCompare(a.time)).map(s => (
+                  <div key={s.id} className="border border-slate-100 rounded-lg p-3 flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold text-sm text-slate-800">{s.patientName}</p>
+                      <p className="text-xs text-slate-400">{s.patientNo} | {s.time}</p>
+                    </div>
+                    <p className="font-bold text-amber-700">{currency} {s.totalAmount.toLocaleString()}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* All Sales History */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200">
+              <h3 className="font-bold text-slate-800">All Sales Records (Today)</h3>
+            </div>
+            <div className="overflow-x-auto max-h-72 overflow-y-auto">
+              <table className="data-table">
+                <thead className="sticky top-0 bg-white">
+                  <tr>
+                    <th>Time</th>
+                    <th>Patient No</th>
+                    <th>Patient Name</th>
+                    <th>Type</th>
+                    <th>Medicines</th>
+                    <th className="text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {todaySales.length === 0 ? (
+                    <tr><td colSpan={6} className="text-center py-8 text-slate-400">No sales today</td></tr>
+                  ) : todaySales.sort((a, b) => b.time.localeCompare(a.time)).map(s => (
+                    <tr key={s.id}>
+                      <td className="text-sm text-slate-500">{s.time}</td>
+                      <td className="font-mono font-bold text-blue-600 text-sm">{s.patientNo}</td>
+                      <td className="font-medium text-sm">{s.patientName}</td>
+                      <td><span className={`badge ${s.type === 'Indoor' ? 'badge-blue' : 'badge-amber'}`}>{s.type}</span></td>
+                      <td>
+                        <div className="flex flex-wrap gap-1">
+                          {s.items.slice(0, 3).map((it, i) => (
+                            <span key={i} className="badge text-xs">{it.name} x{it.quantity}</span>
+                          ))}
+                          {s.items.length > 3 && <span className="badge badge-amber text-xs">+{s.items.length - 3}</span>}
+                        </div>
+                      </td>
+                      <td className="text-right font-bold text-emerald-700">{currency} {s.totalAmount.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ==================== MEDICINE INVENTORY TAB ==================== */}
+      {mainTab === 'inventory' && (
+        <>
+          {/* Search + Add */}
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+            <div className="flex-1 relative w-full sm:max-w-md">
+              <svg className="w-5 h-5 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              <input
+                type="text"
+                className="form-input pl-10"
+                placeholder="Search medicines by name, generic name, or strength..."
+                value={invSearch}
+                onChange={e => setInvSearch(e.target.value)}
+              />
+            </div>
+            <button onClick={openAddMed} className="btn btn-primary">
+              <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              Add New Medicine
+            </button>
+          </div>
+
+          {/* Category Filter */}
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setCatFilter('All')} className={`btn btn-sm ${catFilter === 'All' ? 'btn-primary' : 'btn-outline'}`}>
+              All ({medicines.length})
+            </button>
+            {categories.map(c => (
+              <button key={c} onClick={() => setCatFilter(c)} className={`btn btn-sm ${catFilter === c ? 'btn-primary' : 'btn-outline'}`}>
+                {c} ({medicines.filter(m => m.category === c).length})
+              </button>
+            ))}
+          </div>
+
+          {/* Inventory Stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="stat-card card-hover border border-blue-200 bg-blue-50">
+              <p className="text-xs text-blue-600 font-medium">Total Medicines</p>
+              <p className="text-2xl font-bold text-blue-700">{medicines.length}</p>
+            </div>
+            <div className="stat-card card-hover border border-emerald-200 bg-emerald-50">
+              <p className="text-xs text-emerald-600 font-medium">Active</p>
+              <p className="text-2xl font-bold text-emerald-700">{medicines.filter(m => m.active).length}</p>
+            </div>
+            <div className="stat-card card-hover border border-red-200 bg-red-50">
+              <p className="text-xs text-red-600 font-medium">Inactive</p>
+              <p className="text-2xl font-bold text-red-700">{medicines.filter(m => !m.active).length}</p>
+            </div>
+            <div className="stat-card card-hover border border-purple-200 bg-purple-50">
+              <p className="text-xs text-purple-600 font-medium">Categories</p>
+              <p className="text-2xl font-bold text-purple-700">{categories.length}</p>
+            </div>
+          </div>
+
+          {/* Medicine Table */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+              <table className="data-table">
+                <thead className="sticky top-0 bg-white z-10">
+                  <tr>
+                    <th>Medicine Name</th>
+                    <th>Generic Name</th>
+                    <th>Form</th>
+                    <th>Strength</th>
+                    <th>Packing</th>
+                    <th>Category</th>
+                    <th className="text-right">Price</th>
+                    <th>Stock</th>
+                    <th>Expiry</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredMedicines.map(m => (
+                    <tr key={m.id} className={!m.active ? 'opacity-50' : ''}>
+                      <td className="font-semibold text-slate-800">{m.name}</td>
+                      <td className="text-sm text-slate-500">{m.genericName}</td>
+                      <td><span className="badge badge-blue">{m.form}</span></td>
+                      <td className="text-sm text-slate-600">{m.strength}</td>
+                      <td className="text-sm text-slate-500">{m.packing}</td>
+                      <td><span className="badge badge-amber">{m.category}</span></td>
+                      <td className="text-right">
+                        <button
+                          onClick={() => { setEditPriceMed(m); setEditPriceVal(String(m.price)); }}
+                          className="font-bold text-emerald-700 hover:text-emerald-600 hover:underline cursor-pointer"
+                          title="Click to edit price"
+                        >
+                          {currency} {m.price.toLocaleString()}
+                          <svg className="w-3 h-3 inline ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                        </button>
+                      </td>
+                      <td>
+                        <span className={`font-semibold ${m.stock <= 0 ? 'text-red-600' : m.stock <= (m.minStock || 10) ? 'text-amber-600' : 'text-emerald-600'}`}>
+                          {m.stock}
+                        </span>
+                        {m.stock <= 0 && <span className="badge badge-rose text-xs ml-1">OUT</span>}
+                        {m.stock > 0 && m.stock <= (m.minStock || 10) && <span className="badge badge-amber text-xs ml-1">LOW</span>}
+                      </td>
+                      <td>
+                        {m.expiryDate ? (
+                          <span className={`text-sm ${m.expiryDate < todayStr() ? 'text-red-600 font-bold' : 'text-slate-600'}`}>
+                            {m.expiryDate}
+                            {m.expiryDate < todayStr() && <span className="badge badge-rose text-xs ml-1">EXPIRED</span>}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-sm">Not set</span>
+                        )}
+                      </td>
+                      <td>
+                        <span className={`badge ${m.active ? 'badge-green' : 'badge-rose'}`}>
+                          {m.active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="flex gap-1 flex-wrap">
+                          <button onClick={() => openEditMed(m)} className="btn btn-outline btn-sm">Edit</button>
+                          <button
+                            onClick={() => toggleMedStatus(m)}
+                            className={`btn btn-sm ${m.active ? 'btn-danger' : 'btn-success'}`}
+                          >
+                            {m.active ? 'Disable' : 'Enable'}
+                          </button>
+                          <button onClick={() => setDeleteConfirm(m)} className="btn btn-sm btn-danger">Delete</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredMedicines.length === 0 && (
+                    <tr>
+                      <td colSpan={11} className="text-center py-12 text-slate-400">
+                        No medicines found matching your search criteria.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Expiry & Stock Alerts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Expired Medicines */}
+            <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+                <h3 className="font-bold text-red-800">Expired Medicines ({expiredMeds.length})</h3>
+              </div>
+              {expiredMeds.length === 0 ? (
+                <p className="text-red-400 text-sm text-center py-3">No expired medicines</p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {expiredMeds.map(m => (
+                    <div key={m.id} className="bg-white border border-red-200 rounded-lg p-3 flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-red-800 text-sm">{m.name} ({m.strength})</p>
+                        <p className="text-xs text-red-500">{m.form} | {m.packing} | Stock: {m.stock}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-bold text-red-600">Expired: {m.expiryDate}</p>
+                        <span className="badge badge-rose text-xs">EXPIRED</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Low Stock Medicines */}
+            <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                <h3 className="font-bold text-amber-800">Low Stock ({lowStockMeds.length})</h3>
+              </div>
+              {lowStockMeds.length === 0 ? (
+                <p className="text-amber-400 text-sm text-center py-3">All medicines are well stocked</p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {lowStockMeds.filter(m => !expiredMeds.find(em => em.id === m.id)).map(m => (
+                    <div key={m.id} className="bg-white border border-amber-200 rounded-lg p-3 flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-amber-800 text-sm">{m.name} ({m.strength})</p>
+                        <p className="text-xs text-amber-500">{m.form} | {m.packing}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-amber-700">Stock: {m.stock}</p>
+                        <p className="text-xs text-amber-500">Min: {m.minStock}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Add/Edit Medicine Modal */}
+          {showMedModal && (
+            <div className="modal-overlay" onClick={() => setShowMedModal(false)}>
+              <div className="modal-content" style={{ maxWidth: '550px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold">{editingMed ? 'Edit Medicine' : 'Add New Medicine'}</h3>
+                  <button onClick={() => setShowMedModal(false)} className="btn btn-outline btn-sm">Close</button>
+                </div>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="form-label">Medicine Name *</label>
+                      <input type="text" className="form-input" placeholder="e.g. Paracetamol" value={fName} onChange={e => setFName(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="form-label">Generic Name</label>
+                      <input type="text" className="form-input" placeholder="e.g. Acetaminophen" value={fGeneric} onChange={e => setFGeneric(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="form-label">Form *</label>
+                      <select className="form-input" value={fForm} onChange={e => setFForm(e.target.value)}>
+                        <option value="Tablet">Tablet</option>
+                        <option value="Capsule">Capsule</option>
+                        <option value="Syrup">Syrup</option>
+                        <option value="Injection">Injection</option>
+                        <option value="Cream">Cream</option>
+                        <option value="Drops">Drops</option>
+                        <option value="Inhaler">Inhaler</option>
+                        <option value="Powder">Powder</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="form-label">Strength *</label>
+                      <input type="text" className="form-input" placeholder="e.g. 500mg" value={fStrength} onChange={e => setFStrength(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="form-label">Packing *</label>
+                      <input type="text" className="form-input" placeholder="e.g. 10 tablets" value={fPacking} onChange={e => setFPacking(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="form-label">Price ({currency}) *</label>
+                      <input type="number" className="form-input" placeholder="e.g. 50" value={fPrice} onChange={e => setFPrice(e.target.value)} min={0} />
+                    </div>
+                    <div>
+                      <label className="form-label">Category *</label>
+                      <select
+                        className="form-input"
+                        value={fCategory === '__new__' ? '__new__' : fCategory}
+                        onChange={e => setFCategory(e.target.value)}
+                      >
+                        <option value="">Select category...</option>
+                        {categories.map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                        <option value="__new__">+ New Category</option>
+                      </select>
+                    </div>
+                  </div>
+                  {fCategory === '__new__' && (
+                    <div>
+                      <label className="form-label">New Category Name *</label>
+                      <input type="text" className="form-input" placeholder="Enter new category name" value={fNewCategory} onChange={e => setFNewCategory(e.target.value)} />
+                    </div>
+                  )}
+                  <button onClick={saveMed} className="btn btn-success btn-lg w-full">
+                    {editingMed ? 'Update Medicine' : 'Add Medicine'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Quick Price Edit Modal */}
+          {editPriceMed && (
+            <div className="modal-overlay" onClick={() => setEditPriceMed(null)}>
+              <div className="modal-content" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-bold mb-1">Edit Price</h3>
+                <p className="text-sm text-slate-500 mb-4">
+                  {editPriceMed.name} <span className="text-slate-400">({editPriceMed.form}, {editPriceMed.strength})</span>
+                </p>
+                <div className="mb-4">
+                  <label className="form-label">New Price ({currency})</label>
+                  <input
+                    type="number"
+                    className="form-input text-lg font-bold"
+                    value={editPriceVal}
+                    onChange={e => setEditPriceVal(e.target.value)}
+                    min={0}
+                    autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter') savePrice(); }}
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setEditPriceMed(null)} className="btn btn-outline flex-1">Cancel</button>
+                  <button onClick={savePrice} className="btn btn-success flex-1">Save Price</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Delete Confirm Modal */}
+          {deleteConfirm && (
+            <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
+              <div className="modal-content" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+                <div className="text-center">
+                  <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-7 h-7 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+                  </div>
+                  <h3 className="text-lg font-bold text-red-700 mb-2">Delete Medicine</h3>
+                  <p className="text-sm text-slate-500 mb-4">
+                    Are you sure you want to delete <span className="font-bold text-slate-700">{deleteConfirm.name}</span> ({deleteConfirm.strength})? This action cannot be undone.
+                  </p>
+                  <div className="flex gap-3">
+                    <button onClick={() => setDeleteConfirm(null)} className="btn btn-outline flex-1">Cancel</button>
+                    <button onClick={() => confirmDelete(deleteConfirm)} className="btn btn-danger flex-1">Delete</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
