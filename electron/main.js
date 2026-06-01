@@ -128,10 +128,12 @@ let updateDownloaded = false;
 
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
+const GH_TOKEN = process.env.GH_TOKEN || '';
 autoUpdater.setFeedURL({
   provider: 'github',
   owner: 'mohsin-rasheedbaga',
-  repo: 'baga-hms'
+  repo: 'baga-hms',
+  token: GH_TOKEN
 });
 
 autoUpdater.on('checking-for-update', () => {
