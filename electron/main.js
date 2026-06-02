@@ -809,6 +809,30 @@ ipcMain.handle('print-html', async (event, htmlContent) => {
 // IPC HANDLERS - CUSTOM LOGO UPLOAD
 // ============================================================
 
+// Native file picker dialog for logo selection
+ipcMain.handle('select-logo-file', async () => {
+  try {
+    const result = await dialog.showOpenDialog({
+      title: 'Select Hospital Logo',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'svg'] },
+      ],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+    const filePath = result.filePaths[0];
+    const buffer = fs.readFileSync(filePath);
+    const ext = path.extname(filePath).toLowerCase();
+    const mime = ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : ext === '.svg' ? 'image/svg+xml' : 'image/png';
+    const base64 = `data:${mime};base64,${buffer.toString('base64')}`;
+    return { success: true, data: base64, mimeType: mime, fileName: path.basename(filePath) };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.handle('save-logo', async (event, base64Data, mimeType) => {
   try {
     const store = getStore();
@@ -1039,10 +1063,13 @@ app.whenReady().then(async () => {
         console.log('[BAGA HMS] License valid. Opening main window.');
         createMainWindow();
       } else {
-        console.log('[BAGA HMS] License invalid:', data.error);
-        store.license = null;
+        console.log('[BAGA HMS] License invalid/expired:', data.error);
+        // Keep license data for master login access - mark as expired
+        store.license._offlineExpired = true;
+        store.license._apiInvalid = true;
         saveStore(store);
-        createLicenseWindow();
+        console.log('[BAGA HMS] License invalid but keeping data for master login. Opening main window.');
+        createMainWindow();
       }
     } catch (error) {
       console.error('[BAGA HMS] License validation failed (offline?):', error.message);
@@ -1052,10 +1079,11 @@ app.whenReady().then(async () => {
           const now = new Date();
           const expiry = new Date(store.license.expiryDate);
           if (now > expiry) {
-            console.log('[BAGA HMS] Cached license expired. Showing activation window.');
-            store.license = null;
+            // DON'T delete license - allow master login access for emergency
+            console.log('[BAGA HMS] Cached license expired but offline. Opening main window for master login access.');
+            store.license._offlineExpired = true;
             saveStore(store);
-            createLicenseWindow();
+            createMainWindow();
           } else {
             console.log('[BAGA HMS] Allowing offline use with cached license.');
             createMainWindow();

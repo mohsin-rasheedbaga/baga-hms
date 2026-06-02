@@ -297,6 +297,59 @@ export function generateProfessionalLabReportHtml(params: PrintLabReportParams):
   return html;
 }
 
+/** Helper: read hospital settings, logo, and lab doctors (sync version) */
+export function getLabPrintData(): {
+  hospitalName: string;
+  hospitalAddress: string;
+  hospitalPhone: string;
+  hospitalMobile: string;
+  hospitalEmail: string;
+  techName: string;
+  reportDocHtml: string;
+  hospitalLogo: string;
+} {
+  let hospitalName = 'BAGA HOSPITAL';
+  let hospitalAddress = '';
+  let hospitalPhone = '';
+  let hospitalMobile = '';
+  let hospitalEmail = '';
+  let techName = 'Lab Technician';
+  let reportDocHtml = '';
+  let hospitalLogo = '';
+
+  try {
+    const hs = getHospitalSettingsData();
+    if (hs && hs.name) hospitalName = hs.name;
+    if (hs && hs.address) hospitalAddress = hs.address;
+    if (hs && hs.phone) hospitalPhone = hs.phone;
+  } catch {}
+
+  try {
+    const s = getSession() || {};
+    if (s.name) techName = s.name;
+  } catch {}
+
+  try {
+    let docs: any[] = [];
+    const dbDocs = dbGetAll('lab_doctors');
+    if (dbDocs && dbDocs.length > 0) { docs = dbDocs; }
+    else {
+      const raw = localStorage.getItem('baga_lab_doctors');
+      if (raw) docs = JSON.parse(raw);
+    }
+    if (docs.length > 0) {
+      const active = docs.filter((d: any) => d.active && d.showOnReport);
+      if (active.length > 0) {
+        reportDocHtml = active.map((d: any) =>
+          '<div class="sig-box"><div class="sig-space"></div><div class="sig-line"><div class="sig-name">' + d.name + '</div><div class="sig-title">' + d.designation + '</div><div class="sig-qual">' + (d.qualification || '') + '</div></div></div>'
+        ).join('');
+      }
+    }
+  } catch {}
+
+  return { hospitalName, hospitalAddress, hospitalPhone, hospitalMobile, hospitalEmail, techName, reportDocHtml, hospitalLogo };
+}
+
 /** Helper: read hospital settings, logo, and lab doctors */
 export async function getLabPrintDataAsync(): Promise<{
   hospitalName: string;

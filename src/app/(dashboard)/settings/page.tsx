@@ -260,22 +260,43 @@ export default function SettingsPage() {
   };
 
   // ---- Logo Upload ----
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async () => {
+    setLogoUploading(true);
+    try {
+      if (isElectron) {
+        const fileResult = await (window as any).bagaAPI.selectLogoFile();
+        if (!fileResult.success || fileResult.canceled) {
+          setLogoUploading(false);
+          return;
+        }
+        const saveResult = await (window as any).bagaAPI.saveLogo(fileResult.data, fileResult.mimeType);
+        if (saveResult.success) {
+          const r = await (window as any).bagaAPI.getLogoBase64();
+          if (r.success) {
+            setLogoSrc(r.data);
+            setLogoIsCustom(true);
+          }
+          showToast('Logo updated successfully!');
+        } else {
+          alert('Failed to save logo. Please try again.');
+        }
+      } else {
+        if (logoInputRef.current) {
+          logoInputRef.current.click();
+        }
+      }
+      setLogoUploading(false);
+    } catch (err) {
+      alert('Failed to process logo.');
+      setLogoUploading(false);
+    }
+  };
+
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    // Validate file type
-    if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
-      alert('Please select a PNG or JPEG image.');
-      return;
-    }
-
-    // Validate file size (max 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      alert('Logo file must be less than 2MB.');
-      return;
-    }
-
+    if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) { alert('Please select a PNG or JPEG image.'); return; }
+    if (file.size > 2 * 1024 * 1024) { alert('Logo file must be less than 2MB.'); return; }
     setLogoUploading(true);
     try {
       const reader = new FileReader();
@@ -283,32 +304,16 @@ export default function SettingsPage() {
         const base64Data = reader.result as string;
         try {
           await (window as any).bagaAPI.saveLogo(base64Data, file.type);
-          // Reload logo
           const r = await (window as any).bagaAPI.getLogoBase64();
-          if (r.success) {
-            setLogoSrc(r.data);
-            setLogoIsCustom(true);
-          }
+          if (r.success) { setLogoSrc(r.data); setLogoIsCustom(true); }
           showToast('Logo updated successfully!');
-        } catch (err) {
-          alert('Failed to save logo. Please try again.');
-        }
+        } catch (err) { alert('Failed to save logo. Please try again.'); }
         setLogoUploading(false);
       };
-      reader.onerror = () => {
-        alert('Failed to read file.');
-        setLogoUploading(false);
-      };
+      reader.onerror = () => { alert('Failed to read file.'); setLogoUploading(false); };
       reader.readAsDataURL(file);
-    } catch (err) {
-      alert('Failed to process logo.');
-      setLogoUploading(false);
-    }
-
-    // Reset file input
-    if (logoInputRef.current) {
-      logoInputRef.current.value = '';
-    }
+    } catch (err) { alert('Failed to process logo.'); setLogoUploading(false); }
+    if (logoInputRef.current) { logoInputRef.current.value = ''; }
   };
 
   const handleRemoveLogo = async () => {
@@ -356,7 +361,7 @@ export default function SettingsPage() {
         ref={logoInputRef}
         accept="image/png,image/jpeg,image/jpg"
         className="hidden"
-        onChange={handleLogoUpload}
+        onChange={handleLogoFileChange}
       />
 
       {/* Toast */}
@@ -392,7 +397,7 @@ export default function SettingsPage() {
               {/* Logo Upload / Remove Buttons */}
               <div className="mt-2 space-y-1">
                 <button
-                  onClick={() => logoInputRef.current?.click()}
+                  onClick={handleLogoUpload}
                   disabled={logoUploading}
                   className="btn btn-outline btn-sm w-full text-xs"
                   style={{ opacity: logoUploading ? 0.5 : 1 }}

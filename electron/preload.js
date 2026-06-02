@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld('bagaAPI', {
   printHtml: (html) => ipcRenderer.invoke('print-html', html),
 
   // Save custom hospital logo (base64 PNG/JPG)
+  selectLogoFile: () => ipcRenderer.invoke('select-logo-file'),
   saveLogo: (base64Data, mimeType) => ipcRenderer.invoke('save-logo', base64Data, mimeType),
   removeLogo: () => ipcRenderer.invoke('remove-logo'),
 
