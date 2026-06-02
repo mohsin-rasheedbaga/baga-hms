@@ -89,8 +89,28 @@ export default function LoginPage() {
         }
       }
       
-      // Check for existing session - do NOT auto-redirect, always require login
-      // Session is cleared every time app closes
+      // Check for existing session
+      let session = null;
+      if (typeof window !== 'undefined') {
+        if (isElectron) {
+          try {
+            const kvSession = (window as any).bagaAPI.dbGetKV('baga_session');
+            if (kvSession) session = JSON.parse(kvSession);
+          } catch (e) {}
+        }
+        if (!session) {
+          const stored = localStorage.getItem('baga_session');
+          if (stored) session = JSON.parse(stored);
+        }
+      }
+      if (session) {
+        router.push('/dashboard');
+        return;
+      }
+      
+      // Load hospital info as fallback
+      const h = getHospital();
+      setH(h);
       setInitLoading(false);
     }
     init();
@@ -118,25 +138,6 @@ export default function LoginPage() {
             active: true,
             permissions: ['all'],
           };
-          // Save API user locally for offline login
-          try {
-            const existingUsers = getUsers();
-            const existingIdx = existingUsers.findIndex(u => u.email === loginId.trim() || u.id === user.id);
-            if (existingIdx >= 0) {
-              // Update existing local user with latest password
-              const { getUsers, setUsers } = require('@/lib/store');
-              const updated = [...existingUsers];
-              updated[existingIdx] = { ...updated[existingIdx], password: password.trim(), name: user.name, role: user.role };
-              setUsers(updated);
-            } else {
-              // Add new local user
-              const { addUser } = require('@/lib/store');
-              if (addUser) addUser({ ...user });
-            }
-            console.log('[Login] User saved locally for offline access');
-          } catch (e) {
-            console.error('[Login] Failed to save user locally:', e);
-          }
         } else {
           setError(result.error || 'Invalid credentials');
           setLoading(false);

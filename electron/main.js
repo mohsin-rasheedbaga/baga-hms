@@ -128,8 +128,21 @@ let updateDownloaded = false;
 
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
-// GitHub PAT hardcoded for private repo access (required for electron-updater)
-const GH_TOKEN = 'GITHUB_TOKEN_REMOVED';
+// GitHub PAT for private repo - read from config file (not in git for security)
+let GH_TOKEN = '';
+try {
+  const cfgPaths = [
+    path.join(app.getPath('userData'), 'baga-config.json'),
+    path.join(__dirname, 'config.json'),
+  ];
+  for (const cp of cfgPaths) {
+    if (fs.existsSync(cp)) {
+      GH_TOKEN = JSON.parse(fs.readFileSync(cp, 'utf8')).gh_token || '';
+      console.log('[Config] GH_TOKEN loaded from:', cp);
+      break;
+    }
+n  }
+} catch (e) { console.log('[Config] No config file found'); }
 autoUpdater.setFeedURL({
   provider: 'github',
   owner: 'mohsin-rasheedbaga',
@@ -176,14 +189,12 @@ function sendToAllWindows(channel, data) {
 }
 
 function checkForUpdates() {
-  console.log('[AutoUpdate] Starting update check...');
-  console.log('[AutoUpdate] GH_TOKEN set:', GH_TOKEN ? 'YES (' + GH_TOKEN.substring(0, 10) + '...)' : 'NO');
-  console.log('[AutoUpdate] Current version:', APP_VERSION);
-  autoUpdater.checkForUpdates().then((result) => {
-    console.log('[AutoUpdate] Check result:', result ? 'Got response' : 'No response');
+  console.log('[AutoUpdate] Checking... Token:', GH_TOKEN ? 'SET' : 'EMPTY', '| Version:', APP_VERSION);
+  autoUpdater.checkForUpdates().then((r) => {
+    console.log('[AutoUpdate] Result:', r ? 'OK' : 'None');
   }).catch((err) => {
-    console.error('[AutoUpdate] Check failed:', err.message);
-    sendToAllWindows('update-status', { status: 'error', message: 'Update check failed: ' + err.message });
+    console.error('[AutoUpdate] Failed:', err.message);
+    sendToAllWindows('update-status', { status: 'error', message: err.message });
   });
 }
 
@@ -364,11 +375,6 @@ function createLicenseWindow() {
   licenseWindow.on('closed', () => {
     licenseWindow = null;
   });
-
-  // Check for updates from license window too
-  licenseWindow.webContents.on('did-finish-load', () => {
-    setTimeout(checkForUpdates, 3000);
-  });
 }
 
 // ============================================================
@@ -416,15 +422,6 @@ function createMainWindow() {
   mainWindow.webContents.on('did-finish-load', () => {
     setTimeout(checkForUpdates, 3000);
   });
-
-  // Also check for updates periodically (every 30 minutes)
-  const updateInterval = setInterval(() => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      checkForUpdates();
-    } else {
-      clearInterval(updateInterval);
-    }
-  }, 30 * 60 * 1000);
 
   mainWindow.webContents.on('render-process-gone', (event, details) => {
     console.error('[Renderer] Process crashed:', details);
@@ -692,6 +689,40 @@ ipcMain.handle('license-get-full-info', async () => {
 });
 
 // ============================================================
+// IPC HANDLERS - APP CONFIG
+// ============================================================
+
+ipcMain.handle('save-app-config', async (event, config) => {
+  try {
+    const configPath = path.join(app.getPath('userData'), 'baga-config.json');
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+    // Also save to electron dir for dev mode
+    try {
+      const devPath = path.join(__dirname, 'config.json');
+      if (__dirname.includes('baga-hms')) {
+        fs.writeFileSync(devPath, JSON.stringify(config, null, 2), 'utf8');
+      }
+    } catch (e) {}
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('get-app-config', () => {
+  try {
+    const cfgPaths = [
+      path.join(app.getPath('userData'), 'baga-config.json'),
+      path.join(__dirname, 'config.json'),
+    ];
+    for (const cp of cfgPaths) {
+      if (fs.existsSync(cp)) return JSON.parse(fs.readFileSync(cp, 'utf8'));
+    }
+  } catch (e) {}
+  return {};
+});
+
+// ============================================================
 // IPC HANDLERS - LOGIN
 // ============================================================
 
@@ -738,11 +769,6 @@ ipcMain.handle('quit-app', () => app.quit());
 ipcMain.handle('print-html', async (event, htmlContent) => {
   return new Promise((resolve) => {
     try {
-      // Write HTML to a temp file (data: URLs don't print reliably in Electron)
-      const tmpHtml = path.join(app.getPath('temp'), 'baga-print-' + Date.now() + '.html');
-      fs.writeFileSync(tmpHtml, htmlContent, 'utf8');
-      console.log('[Print] Temp file:', tmpHtml);
-
       const printWin = new BrowserWindow({
         width: 1024,
         height: 768,
@@ -753,96 +779,30 @@ ipcMain.handle('print-html', async (event, htmlContent) => {
         },
       });
 
-      printWin.loadFile(tmpHtml).then(() => {
-        console.log('[Print] HTML loaded, showing print dialog...');
+      printWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent)).then(() => {
         printWin.webContents.print({
           silent: false,
           printBackground: true,
         }, (success, reason) => {
-          console.log('[Print] Result:', success, reason);
           printWin.close();
-          // Cleanup temp file
-          try { fs.unlinkSync(tmpHtml); } catch (e) {}
           resolve({ success, reason });
         });
       }).catch((err) => {
-        console.error('[Print] Load failed:', err.message);
         printWin.close();
-        try { fs.unlinkSync(tmpHtml); } catch (e) {}
         resolve({ success: false, reason: err.message });
       });
 
-      // Timeout fallback
+      // Timeout fallback - close window after 30s if print dialog hangs
       setTimeout(() => {
         if (!printWin.isDestroyed()) {
           printWin.close();
-          try { fs.unlinkSync(tmpHtml); } catch (e) {}
           resolve({ success: false, reason: 'Print dialog timed out' });
         }
       }, 30000);
     } catch (err) {
-      console.error('[Print] Error:', err.message);
       resolve({ success: false, reason: err.message });
     }
   });
-});
-
-// ============================================================
-// IPC HANDLERS - PASSWORD CHANGE
-// ============================================================
-
-ipcMain.handle('api-change-password', async (event, { userId, currentPassword, newPassword }) => {
-  try {
-    const store = getStore();
-    const licenseKey = store.license ? store.license.key : null;
-    console.log('[Password] Change request for:', userId);
-
-    // Try API first (online)
-    const response = await fetch(`${API_BASE}/api/auth/change-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId, current_password: currentPassword, new_password: newPassword, license_key: licenseKey }),
-    });
-    const data = await response.json();
-    console.log('[Password] API response:', response.status, JSON.stringify(data).substring(0, 200));
-
-    if (response.ok && data.success !== false) {
-      // Also update local user if exists
-      if (db) {
-        const usersResult = safeDbGetAll('users');
-        if (usersResult.success) {
-          const users = usersResult.data || [];
-          const user = users.find(u => u.id === userId || u.email === userId);
-          if (user) {
-            safeDbSetById('users', user.id, { ...user, password: newPassword });
-            console.log('[Password] Updated local user too');
-          }
-        }
-      }
-      return { success: true, message: data.message || 'Password changed successfully' };
-    } else {
-      return { success: false, error: data.error || 'Failed to change password' };
-    }
-  } catch (error) {
-    console.error('[Password] API error, trying local:', error);
-    // Fallback: change locally only
-    if (db) {
-      try {
-        const usersResult = safeDbGetAll('users');
-        if (usersResult.success) {
-          const users = usersResult.data || [];
-          const user = users.find(u => u.id === userId || u.email === userId);
-          if (user && user.password === currentPassword) {
-            safeDbSetById('users', user.id, { ...user, password: newPassword });
-            return { success: true, message: 'Password changed locally (offline mode)' };
-          } else if (user) {
-            return { success: false, error: 'Current password is incorrect' };
-          }
-        }
-      } catch (e) {}
-    }
-    return { success: false, error: 'Connection error. Please check your internet.' };
-  }
 });
 
 // ============================================================
@@ -1120,14 +1080,6 @@ app.whenReady().then(async () => {
 });
 
 app.on('before-quit', () => {
-  // ALWAYS clear session on quit — user must login every time
-  try {
-    if (db) {
-      db.setKV('baga_session', '');
-    }
-  } catch (e) {
-    console.error('[Session] Failed to clear session in DB:', e.message);
-  }
   try {
     if (serverInstance) serverInstance.close();
     if (db) db.close();

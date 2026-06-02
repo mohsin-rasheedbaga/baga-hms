@@ -21,6 +21,14 @@ if exist .env.local (
     )
 )
 
+REM Write config.json for auto-update (used by electron-updater at runtime)
+if defined GH_TOKEN (
+    echo {"gh_token": "%GH_TOKEN%"}> electron\config.json
+    echo  GitHub token written to electron\config.json for auto-update
+) else (
+    echo  WARNING: No GH_TOKEN found in .env.local - auto-update will not work
+)
+
 echo  Step 1: Installing all dependencies...
 call npm install
 if %errorlevel% neq 0 (
