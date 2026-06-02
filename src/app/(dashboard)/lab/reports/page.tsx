@@ -1,7 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { initLabData, getLabOrders, type LabOrderItem } from '@/lib/lab-store';
-import { generateProfessionalLabReportHtml, getLabPrintData, openPrintWindow } from '@/lib/print-lab-report';
+import { generateProfessionalLabReportHtml, getLabPrintData } from '@/lib/print-lab-report';
+import { triggerPrint } from '@/lib/print-utils';
 
 export default function CompletedReportsPage() {
   const [mounted, setMounted] = useState(false);
@@ -53,7 +54,7 @@ export default function CompletedReportsPage() {
       hospitalAddress: printData.hospitalAddress,
       hospitalPhone: printData.hospitalPhone,
     });
-    openPrintWindow(html, true);
+    triggerPrint(html);
   };
 
   return (

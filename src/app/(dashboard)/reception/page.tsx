@@ -15,6 +15,7 @@ import {
 import type { Patient, Visit, LabOrder, Prescription, XRayOrder, UltrasoundOrder, Bill, BillItem, HospitalSettings } from '@/lib/types';
 import { initLabData, getLabOrders as getLisLabOrders } from '@/lib/lab-store';
 import type { LabOrderItem } from '@/lib/lab-store';
+import { triggerPrint } from '@/lib/print-utils';
 
 /* ========== DOCTORS DATA ========== */
 interface Doctor {
@@ -545,7 +546,10 @@ export default function ReceptionPage() {
           <div className="modal-content" style={{ maxWidth: '450px' }}>
             <div className="flex justify-between items-center mb-3">
               <h3 className="font-semibold">Patient Card</h3>
-              <button onClick={() => setPrintContent(null)} className="btn btn-outline btn-sm">Close</button>
+              <div className="flex gap-2">
+                <button onClick={() => triggerPrint(printContent || '')} className="btn btn-primary btn-sm">Print</button>
+                <button onClick={() => setPrintContent(null)} className="btn btn-outline btn-sm">Close</button>
+              </div>
             </div>
             <iframe srcDoc={printContent} style={{ width: '100%', height: '600px', border: 'none' }} title="Patient Card" />
           </div>

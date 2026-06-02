@@ -708,19 +708,131 @@ ipcMain.handle('get-api-base', () => API_BASE);
 ipcMain.handle('check-update', () => { checkForUpdates(); return { checking: true }; });
 ipcMain.handle('quit-app', () => app.quit());
 
-// Serve hospital logo as base64 for renderer
+// ============================================================
+// IPC HANDLERS - PRINT (Native Electron Print Dialog)
+// ============================================================
+
+ipcMain.handle('print-html', async (event, htmlContent) => {
+  return new Promise((resolve) => {
+    try {
+      const printWin = new BrowserWindow({
+        width: 1024,
+        height: 768,
+        show: false,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+        },
+      });
+
+      printWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent)).then(() => {
+        printWin.webContents.print({
+          silent: false,
+          printBackground: true,
+        }, (success, reason) => {
+          printWin.close();
+          resolve({ success, reason });
+        });
+      }).catch((err) => {
+        printWin.close();
+        resolve({ success: false, reason: err.message });
+      });
+
+      // Timeout fallback - close window after 30s if print dialog hangs
+      setTimeout(() => {
+        if (!printWin.isDestroyed()) {
+          printWin.close();
+          resolve({ success: false, reason: 'Print dialog timed out' });
+        }
+      }, 30000);
+    } catch (err) {
+      resolve({ success: false, reason: err.message });
+    }
+  });
+});
+
+// ============================================================
+// IPC HANDLERS - CUSTOM LOGO UPLOAD
+// ============================================================
+
+ipcMain.handle('save-logo', async (event, base64Data, mimeType) => {
+  try {
+    const store = getStore();
+    const ext = mimeType === 'image/png' ? '.png' : mimeType === 'image/jpeg' ? '.jpg' : '.png';
+    const logoPath = path.join(app.getPath('userData'), 'hospital-logo-custom' + ext);
+    
+    // Remove base64 prefix if present
+    const rawBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(rawBase64, 'base64');
+    fs.writeFileSync(logoPath, buffer);
+    
+    // Update store to use custom logo
+    if (store.license) {
+      store.license.logoPath = logoPath;
+      saveStore(store);
+    } else {
+      // Save a reference even without license for demo mode
+      if (!store.customLogo) store.customLogo = {};
+      store.customLogo.path = logoPath;
+      saveStore(store);
+    }
+    
+    return { success: true, path: logoPath };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('remove-logo', async () => {
+  try {
+    const store = getStore();
+    // Remove custom logo file
+    const customLogoPath = path.join(app.getPath('userData'), 'hospital-logo-custom.png');
+    const customLogoJpg = path.join(app.getPath('userData'), 'hospital-logo-custom.jpg');
+    if (fs.existsSync(customLogoPath)) fs.unlinkSync(customLogoPath);
+    if (fs.existsSync(customLogoJpg)) fs.unlinkSync(customLogoJpg);
+    
+    // Clear reference but keep original license logo if any
+    if (store.license) {
+      // If there was an original license logo, restore it
+      const origLogoPath = path.join(app.getPath('userData'), 'hospital-logo.png');
+      if (fs.existsSync(origLogoPath)) {
+        store.license.logoPath = origLogoPath;
+      } else {
+        store.license.logoPath = '';
+      }
+      saveStore(store);
+    }
+    if (store.customLogo) {
+      delete store.customLogo.path;
+      saveStore(store);
+    }
+    
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// Serve hospital logo as base64 for renderer (supports both license logo and custom logo)
 ipcMain.handle('get-logo-base64', () => {
   try {
     const store = getStore();
-    const license = store.license;
-    if (!license || !license.logoPath) return { success: false };
-    const logoPath = license.logoPath;
-    if (!fs.existsSync(logoPath)) return { success: false };
+    let logoPath = '';
+    
+    // Check custom logo first
+    const customPng = path.join(app.getPath('userData'), 'hospital-logo-custom.png');
+    const customJpg = path.join(app.getPath('userData'), 'hospital-logo-custom.jpg');
+    if (fs.existsSync(customPng)) logoPath = customPng;
+    else if (fs.existsSync(customJpg)) logoPath = customJpg;
+    else if (store.license && store.license.logoPath) logoPath = store.license.logoPath;
+    
+    if (!logoPath || !fs.existsSync(logoPath)) return { success: false };
     const buffer = fs.readFileSync(logoPath);
     const base64 = buffer.toString('base64');
     const ext = path.extname(logoPath).toLowerCase();
     const mime = ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : ext === '.svg' ? 'image/svg+xml' : 'image/png';
-    return { success: true, data: `data:${mime};base64,${base64}` };
+    return { success: true, data: `data:${mime};base64,${base64}`, isCustom: logoPath.includes('custom') };
   } catch (e) {
     return { success: false, error: e.message };
   }

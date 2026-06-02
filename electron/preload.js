@@ -35,6 +35,13 @@ contextBridge.exposeInMainWorld('bagaAPI', {
   // App Control
   quitApp: () => ipcRenderer.invoke('quit-app'),
 
+  // Print HTML content via Electron's native print dialog
+  printHtml: (html) => ipcRenderer.invoke('print-html', html),
+
+  // Save custom hospital logo (base64 PNG/JPG)
+  saveLogo: (base64Data, mimeType) => ipcRenderer.invoke('save-logo', base64Data, mimeType),
+  removeLogo: () => ipcRenderer.invoke('remove-logo'),
+
   // Database operations (synchronous via sendSync)
   dbGetAll: (table) => ipcRenderer.sendSync('db-get-all', table),
   dbGetById: (table, id) => ipcRenderer.sendSync('db-get-by-id', table, id),

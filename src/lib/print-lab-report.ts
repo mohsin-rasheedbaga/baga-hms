@@ -297,25 +297,49 @@ export function generateProfessionalLabReportHtml(params: PrintLabReportParams):
   return html;
 }
 
-/** Helper: read hospital settings and lab doctors from localStorage */
-export function getLabPrintData(): {
+/** Helper: read hospital settings, logo, and lab doctors */
+export async function getLabPrintDataAsync(): Promise<{
   hospitalName: string;
   hospitalAddress: string;
   hospitalPhone: string;
+  hospitalMobile: string;
+  hospitalEmail: string;
   techName: string;
   reportDocHtml: string;
-} {
+  hospitalLogo: string;
+}> {
   let hospitalName = 'BAGA HOSPITAL';
   let hospitalAddress = '';
   let hospitalPhone = '';
+  let hospitalMobile = '';
+  let hospitalEmail = '';
   let techName = 'Lab Technician';
   let reportDocHtml = '';
+  let hospitalLogo = '';
 
   try {
+    // Try to get logo from Electron first
+    const isEl = typeof window !== 'undefined' && !!(window as any).bagaAPI;
+    if (isEl) {
+      try {
+        const logoResult = await (window as any).bagaAPI.getLogoBase64();
+        if (logoResult.success) hospitalLogo = logoResult.data;
+      } catch (e) {}
+      try {
+        const licenseInfo = await (window as any).bagaAPI.getFullLicenseInfo();
+        if (licenseInfo && licenseInfo.hospitalName) hospitalName = licenseInfo.hospitalName;
+        if (licenseInfo && licenseInfo.hospitalAddress) hospitalAddress = licenseInfo.hospitalAddress;
+        if (licenseInfo && licenseInfo.hospitalPhone) hospitalPhone = licenseInfo.hospitalPhone;
+        if (licenseInfo && licenseInfo.hospitalMobile) hospitalMobile = licenseInfo.hospitalMobile;
+        if (licenseInfo && licenseInfo.hospitalEmail) hospitalEmail = licenseInfo.hospitalEmail;
+      } catch (e) {}
+    }
+    
+    // Fallback to localStorage settings
     const hs = getHospitalSettingsData();
-    if (hs.name) hospitalName = hs.name;
-    if (hs.address) hospitalAddress = hs.address;
-    if (hs.phone) hospitalPhone = hs.phone;
+    if (hs && hs.name) hospitalName = hs.name;
+    if (hs && hs.address) hospitalAddress = hs.address;
+    if (hs && hs.phone) hospitalPhone = hs.phone;
   } catch {}
 
   try {
@@ -349,15 +373,28 @@ export function getLabPrintData(): {
     }
   } catch {}
 
-  return { hospitalName, hospitalAddress, hospitalPhone, techName, reportDocHtml };
+  return { hospitalName, hospitalAddress, hospitalPhone, hospitalMobile, hospitalEmail, techName, reportDocHtml, hospitalLogo };
 }
 
-/** Helper: open print window */
-export function openPrintWindow(html: string, autoPrint = false): void {
-  const w = window.open('', '_blank');
-  if (w) {
-    w.document.write(html);
-    w.document.close();
-    if (autoPrint) w.print();
+/** Helper: open print window - uses Electron native print if available */
+export function openPrintWindow(html: string, autoPrint = true): void {
+  const isEl = typeof window !== 'undefined' && !!(window as any).bagaAPI?.printHtml;
+  if (isEl) {
+    // Electron: use native print dialog via IPC
+    (window as any).bagaAPI.printHtml(html).then((result: any) => {
+      if (!result.success) {
+        console.error('Print failed:', result.reason);
+      }
+    }).catch((err: any) => {
+      console.error('Print IPC error:', err);
+ });
+  } else {
+    // Browser fallback: open new window
+    const w = window.open('', '_blank');
+    if (w) {
+      w.document.write(html);
+      w.document.close();
+      if (autoPrint) setTimeout(() => w.print(), 500);
+    }
   }
 }

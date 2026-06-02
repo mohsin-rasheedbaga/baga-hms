@@ -6,6 +6,7 @@ import {
   genId, todayStr, timeStr,
 } from '@/lib/store';
 import type { Patient, Appointment } from '@/lib/types';
+import { triggerPrint } from '@/lib/print-utils';
 
 /* ========== DOCTORS DATA ========== */
 interface Doctor {
@@ -302,7 +303,6 @@ export default function AppointmentPage() {
             <p class="thank">Thank you for choosing ${hospital.name || 'BAGA Hospital'}!</p>
           </div>
         </div>
-        <script>window.onload=function(){window.print();}</script>
       </body></html>
     `;
     setPrintContent(slipHtml);
@@ -328,7 +328,7 @@ export default function AppointmentPage() {
           <div className="modal-content" style={{ maxWidth: '460px' }}>
             <div className="flex justify-between items-center mb-3">
               <h3 className="font-semibold text-slate-800">Appointment Slip</h3>
-              <button onClick={() => setPrintContent(null)} className="btn btn-outline btn-sm">Close</button>
+              <div className="flex gap-2"><button onClick={() => triggerPrint(printContent || '')} className="btn btn-primary btn-sm">Print</button><button onClick={() => setPrintContent(null)} className="btn btn-outline btn-sm">Close</button></div>
             </div>
             <iframe srcDoc={printContent} style={{ width: '100%', height: '650px', border: 'none' }} title="Appointment Slip" />
           </div>

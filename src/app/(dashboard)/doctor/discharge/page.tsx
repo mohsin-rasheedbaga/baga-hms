@@ -8,6 +8,7 @@ import {
   genId, todayStr, timeStr,
 } from '@/lib/store';
 import type { Patient, Visit, Admission, MedicineItem } from '@/lib/types';
+import { triggerPrint } from '@/lib/print-utils';
 
 const LAB_TESTS = [
   'CBC', 'Blood Sugar (Fasting)', 'Blood Sugar (Random)',
@@ -302,11 +303,10 @@ export default function DoctorDischargePage() {
     .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #aaa; border-top: 1px solid #e9ecef; padding-top: 10px; }
     .print-btn { position: fixed; top: 15px; right: 15px; padding: 10px 24px; background: #7c3aed; color: #fff; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(124,58,237,0.4); z-index: 999; }
     .print-btn:hover { background: #6d28d9; }
-    @media print { .print-btn { display: none !important; } body { padding: 0; } @page { margin: 10mm; } }
+    @media print { body { padding: 0; } @page { margin: 10mm; } }
   </style>
 </head>
 <body>
-  <button class="print-btn" onclick="window.print()">Print Discharge Slip</button>
   <div class="header">
     <h1>BAGA Hospital</h1>
     <p class="subtitle">Discharge Summary</p>
@@ -398,13 +398,7 @@ export default function DoctorDischargePage() {
 
   const printDischargeSlip = () => {
     if (!dischargeSlipHtml) return;
-    const w = window.open('', '_blank');
-    if (w) {
-      w.document.write(dischargeSlipHtml);
-      w.document.close();
-      w.focus();
-      setTimeout(() => w.print(), 500);
-    }
+    triggerPrint(dischargeSlipHtml);
   };
 
   // Patient can only be discharged if: has active visit, not already discharged, AND has confirmed admission (status=Admitted)

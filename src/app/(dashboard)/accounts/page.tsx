@@ -6,6 +6,7 @@ import {
   searchPatients, getSalaryRecords, updateSalaryRecord,
 } from '@/lib/store';
 import type { Bill, Visit, LabOrder, XRayOrder, UltrasoundOrder, Prescription, DispenseRecord, Admission, SalaryRecord } from '@/lib/types';
+import { triggerPrint } from '@/lib/print-utils';
 
 /* ──────────────────────────── local helpers ──────────────────────────── */
 function lsGet<T>(key: string, fallback: T): T {
@@ -397,8 +398,18 @@ export default function AccountsPage() {
     showToast('Expense deleted', 'success');
   };
 
+  const handlePrintReceipt = () => {
+    if (!receiptModal) return;
+    const itemsHtml = receiptModal.items.map(item =>
+      `<tr><td>${item.type}</td><td>${item.description}${item.quantity > 1 ? ' x' + item.quantity : ''}</td><td style="text-align:right">${cur} ${item.amount.toLocaleString()}</td></tr>`
+    ).join('');
+    const balance = receiptModal.totalAmount - receiptModal.paidAmount;
+    const html = `<!DOCTYPE html><html><head><title>Receipt - ${receiptModal.id}</title><style>body{font-family:Arial,sans-serif;padding:30px;max-width:500px;margin:0 auto;color:#333}table{width:100%;border-collapse:collapse;margin:10px 0}th,td{padding:6px 8px;text-align:left;font-size:13px;border-bottom:1px solid #e2e8f0}th{background:#f8fafc;font-size:11px;text-transform:uppercase;color:#64748b}.total{font-weight:bold;font-size:15px;border-top:2px solid #1e293b;padding-top:8px}.paid{color:#059669}.balance{color:#dc2626}.header{text-align:center;border-bottom:2px solid #1e293b;padding-bottom:12px;margin-bottom:16px}.header h1{font-size:20px;color:#1e293b}.header p{font-size:11px;color:#64748b}</style></head><body><div class="header"><h1>Bill Receipt</h1><p>${receiptModal.date} ${receiptModal.time}</p></div><table><tr><th colspan="2">Bill ID</th><td style="text-align:right">${receiptModal.id}</td></tr><tr><th colspan="2">Patient</th><td style="text-align:right">${receiptModal.patientName} (${receiptModal.patientNo})</td></tr></table><table><thead><tr><th>Type</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead><tbody>${itemsHtml}</tbody></table><table><tr class="total"><td colspan="2">Total</td><td style="text-align:right">${cur} ${receiptModal.totalAmount.toLocaleString()}</td></tr><tr class="paid"><td colspan="2">Paid</td><td style="text-align:right">${cur} ${receiptModal.paidAmount.toLocaleString()}</td></tr>${balance > 0 ? `<tr class="balance"><td colspan="2">Balance</td><td style="text-align:right">${cur} ${balance.toLocaleString()}</td></tr>` : ''}<tr><td>Status</td><td>${receiptModal.status}</td><td style="text-align:right">${receiptModal.paymentMethod}</td></tr></table><p style="text-align:center;font-size:11px;color:#94a3b8;margin-top:20px">Received By: ${receiptModal.receivedBy}</p></body></html>`;
+    triggerPrint(html);
+  };
+
   const handlePrintReport = () => {
-    window.print();
+    triggerPrint(document.documentElement.outerHTML);
   };
 
   // Salary handlers for Accountant
@@ -1457,7 +1468,7 @@ export default function AccountsPage() {
               <div className="flex justify-between text-sm"><span>Received By:</span><span>{receiptModal.receivedBy}</span></div>
             </div>
             <div className="flex gap-3 mt-4">
-              <button onClick={() => window.print()} className="btn btn-primary flex-1">
+              <button onClick={handlePrintReceipt} className="btn btn-primary flex-1">
                 <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                 Print Receipt
               </button>
