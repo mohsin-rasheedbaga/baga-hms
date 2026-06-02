@@ -16,6 +16,7 @@ import type { Patient, Visit, LabOrder, Prescription, XRayOrder, UltrasoundOrder
 import { initLabData, getLabOrders as getLisLabOrders } from '@/lib/lab-store';
 import type { LabOrderItem } from '@/lib/lab-store';
 import { triggerPrint } from '@/lib/print-utils';
+import { getHospitalPrintInfoAsync } from '@/lib/hospital-print-info';
 
 /* ========== DOCTORS DATA ========== */
 interface Doctor {
@@ -250,12 +251,22 @@ export default function ReceptionPage() {
     setBillModal(null);
     refreshData();
     showToast(`Payment received: ${settings?.currency || 'Rs.'} ${grandTotal.toLocaleString()}`, 'success');
+
+    // Auto-print receipt after payment (async to get logo)
+    (async () => {
+      const info = await getHospitalPrintInfoAsync();
+      const receiptHtml = getReceiptHtml(bill, info);
+      setTimeout(() => triggerPrint(receiptHtml), 500);
+    })();
   };
 
   // ========= GENERATE RECEIPT HTML =========
-  const getReceiptHtml = (bill: Bill): string => {
+  const getReceiptHtml = (bill: Bill, hospInfo?: any): string => {
     const curr = settings?.currency || 'Rs.';
-    const hospital = JSON.parse(localStorage.getItem('baga_hospital') || '{}');
+    const hName = hospInfo?.hospitalName || JSON.parse(localStorage.getItem('baga_hospital') || '{}').name || 'BAGA Hospital';
+    const hAddr = hospInfo?.hospitalAddress || JSON.parse(localStorage.getItem('baga_hospital') || '{}').address || '';
+    const hPhone = hospInfo?.hospitalPhone || JSON.parse(localStorage.getItem('baga_hospital') || '{}').phone || '';
+    const hLogo = hospInfo?.hospitalLogo || '';
     const footer = settings?.receiptFooter || 'Thank you for choosing BAGA Hospital. Get well soon!';
     return `
       <html><head><title>Receipt - ${bill.patientNo}</title>
@@ -290,9 +301,9 @@ export default function ReceptionPage() {
       <body>
         <div class="receipt">
           <div class="header">
-            <h1>${hospital.name || 'BAGA Hospital'}</h1>
-            <p>${hospital.address || 'Main Road, City'} | ${hospital.phone || ''}</p>
-            <p>License: ${hospital.licenseNo || 'BAGA-LIC-0001'}</p>
+            ${hLogo ? `<img src="${hLogo}" style="max-width:80px;max-height:60px;margin-bottom:6px;" />` : ''}
+            <h1>${hName}</h1>
+            <p>${hAddr}${hAddr && hPhone ? ' | ' : ''}${hPhone}</p>
           </div>
           <div class="receipt-title">PAYMENT RECEIPT</div>
           <div class="info-grid">

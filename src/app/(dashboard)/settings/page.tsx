@@ -188,6 +188,17 @@ export default function SettingsPage() {
   const [roomName, setRoomName] = useState('');
   const [roomCharges, setRoomCharges] = useState(0);
 
+  // Password change
+  const [pwCurrent, setPwCurrent] = useState('');
+  const [pwNew, setPwNew] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const [pwSuccess, setPwSuccess] = useState('');
+
+  // Current user session
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
   // Refs
   const logoInputRef = useRef<HTMLInputElement>(null);
 
@@ -198,6 +209,11 @@ export default function SettingsPage() {
   useEffect(() => {
     setSettingsState(getHospitalSettings());
     setRoomTypesState(getRoomTypes());
+    // Load current user session
+    try {
+      const s = typeof window !== 'undefined' ? localStorage.getItem('baga_session') : null;
+      if (s) setCurrentUser(JSON.parse(s));
+    } catch (e) {}
     // Load license info
     if (isElectron) {
       fetchLicenseInfo().then(info => {
@@ -325,6 +341,51 @@ export default function SettingsPage() {
     } catch (err) {
       alert('Failed to remove logo.');
     }
+  };
+
+  // ---- Password Change ----
+  const handleChangePassword = async () => {
+    if (!pwCurrent.trim() || !pwNew.trim() || !pwConfirm.trim()) {
+      setPwError('All fields are required'); return;
+    }
+    if (pwNew.trim().length < 4) {
+      setPwError('New password must be at least 4 characters'); return;
+    }
+    if (pwNew.trim() !== pwConfirm.trim()) {
+      setPwError('New password and confirm password do not match'); return;
+    }
+    if (!isElectron) {
+      setPwError('Password change is only available in desktop mode'); return;
+    }
+    setPwLoading(true);
+    setPwError('');
+    setPwSuccess('');
+    try {
+      const result = await (window as any).bagaAPI.changePassword({
+        userId: currentUser?.userId || 'unknown',
+        currentPassword: pwCurrent.trim(),
+        newPassword: pwNew.trim(),
+      });
+      if (result.success) {
+        setPwSuccess('Password changed successfully!');
+        setPwCurrent(''); setPwNew(''); setPwConfirm('');
+      } else {
+        setPwError(result.error || 'Failed to change password');
+      }
+    } catch (e) {
+      setPwError('Connection error. Please check internet and try again.');
+    }
+    setPwLoading(false);
+  };
+
+  // ---- Logout ----
+  const handleLogout = () => {
+    if (!confirm('Are you sure you want to logout? You will need to login again.')) return;
+    localStorage.removeItem('baga_session');
+    if (isElectron) {
+      try { (window as any).bagaAPI.dbSetKV('baga_session', ''); } catch (e) {}
+    }
+    window.location.href = '/login';
   };
 
   // ---- Change License ----
@@ -856,6 +917,63 @@ export default function SettingsPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ==================== SECTION: Account & Security ==================== */}
+      {currentUser && (
+        <div className="bg-white rounded-xl border-2 border-indigo-200 p-6">
+          <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+            Account & Security
+          </h3>
+
+          {/* Current User Info */}
+          <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3 mb-4 flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-200 rounded-full flex items-center justify-center">
+              <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+            </div>
+            <div>
+              <p className="font-semibold text-slate-800">{currentUser.name || 'User'}</p>
+              <p className="text-xs text-slate-500">Role: {currentUser.role || 'N/A'} | ID: {currentUser.userId || 'N/A'}</p>
+            </div>
+          </div>
+
+          {/* Password Change Form */}
+          <div className="space-y-4">
+            <div>
+              <label className="form-label">Current Password</label>
+              <input type="password" className="form-input" value={pwCurrent} onChange={e => setPwCurrent(e.target.value)} placeholder="Enter current password" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="form-label">New Password</label>
+                <input type="password" className="form-input" value={pwNew} onChange={e => setPwNew(e.target.value)} placeholder="Enter new password" />
+              </div>
+              <div>
+                <label className="form-label">Confirm New Password</label>
+                <input type="password" className="form-input" value={pwConfirm} onChange={e => setPwConfirm(e.target.value)} placeholder="Confirm new password" onKeyDown={e => e.key === 'Enter' && handleChangePassword()} />
+              </div>
+            </div>
+            {pwError && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{pwError}</div>}
+            {pwSuccess && <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">{pwSuccess}</div>}
+            <div className="flex gap-3">
+              <button onClick={handleChangePassword} disabled={pwLoading} className="btn btn-primary" style={{ opacity: pwLoading ? 0.5 : 1 }}>
+                {pwLoading ? 'Changing...' : 'Change Password'}
+              </button>
+            </div>
+          </div>
+
+          {/* Logout */}
+          <div className="mt-6 pt-4 border-t border-slate-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-slate-800 text-sm">Logout</p>
+                <p className="text-xs text-slate-500">Clear session and return to login screen</p>
+              </div>
+              <button onClick={handleLogout} className="btn btn-danger btn-sm">Logout</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

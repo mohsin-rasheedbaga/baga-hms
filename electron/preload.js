@@ -38,6 +38,9 @@ contextBridge.exposeInMainWorld('bagaAPI', {
   // Print HTML content via Electron's native print dialog
   printHtml: (html) => ipcRenderer.invoke('print-html', html),
 
+  // Password Change
+  changePassword: (data) => ipcRenderer.invoke('api-change-password', data),
+
   // Save custom hospital logo (base64 PNG/JPG)
   saveLogo: (base64Data, mimeType) => ipcRenderer.invoke('save-logo', base64Data, mimeType),
   removeLogo: () => ipcRenderer.invoke('remove-logo'),
