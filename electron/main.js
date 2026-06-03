@@ -3,8 +3,6 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 const crypto = require('crypto');
-const { autoUpdater } = require('electron-updater');
-
 // ============================================================
 // CONFIGURATION
 // ============================================================
@@ -120,14 +118,12 @@ function safeDbGetPath() {
 }
 
 // ============================================================
-// AUTO-UPDATER
+// AUTO-UPDATER (GitHub Releases API - no latest.yml needed)
 // ============================================================
 let mainWindow = null;
 let licenseWindow = null;
 let updateDownloaded = false;
 
-autoUpdater.autoDownload = true;
-autoUpdater.autoInstallOnAppQuit = true;
 // GitHub PAT for private repo - read from config file (not in git for security)
 let GH_TOKEN = '';
 try {
@@ -141,61 +137,135 @@ try {
       console.log('[Config] GH_TOKEN loaded from:', cp);
       break;
     }
-n  }
+  }
 } catch (e) { console.log('[Config] No config file found'); }
-autoUpdater.setFeedURL({
-  provider: 'github',
-  owner: 'mohsin-rasheedbaga',
-  repo: 'baga-hms',
-  token: GH_TOKEN
-});
-
-autoUpdater.on('checking-for-update', () => {
-  console.log('[AutoUpdate] Checking for updates...');
-  sendToAllWindows('update-status', { status: 'checking' });
-});
-autoUpdater.on('update-available', (info) => {
-  console.log('[AutoUpdate] Update available:', info.version);
-  sendToAllWindows('update-status', { status: 'available', version: info.version, releaseNotes: info.releaseNotes });
-});
-autoUpdater.on('update-not-available', (info) => {
-  console.log('[AutoUpdate] No update available. Current:', APP_VERSION);
-  sendToAllWindows('update-status', { status: 'not-available' });
-});
-autoUpdater.on('download-progress', (progress) => {
-  const percent = Math.round(progress.percent);
-  sendToAllWindows('update-status', { status: 'downloading', percent });
-});
-autoUpdater.on('update-downloaded', (info) => {
-  updateDownloaded = true;
-  sendToAllWindows('update-status', { status: 'downloaded', version: info.version });
-  dialog.showMessageBox({
-    type: 'info', title: 'Update Downloaded',
-    message: `Version ${info.version} has been downloaded.`,
-    detail: 'Restart now to install?',
-    buttons: ['Restart Now', 'Later']
-  }).then((result) => {
-    if (result.response === 0) autoUpdater.quitAndInstall();
-  });
-});
-autoUpdater.on('error', (err) => {
-  console.error('[AutoUpdate] Error:', err.message);
-  sendToAllWindows('update-status', { status: 'error', message: err.message });
-});
 
 function sendToAllWindows(channel, data) {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, data);
   if (licenseWindow && !licenseWindow.isDestroyed()) licenseWindow.webContents.send(channel, data);
 }
 
-function checkForUpdates() {
+// Compare semver versions: returns 1 if b > a, -1 if b < a, 0 if equal
+function compareVersions(a, b) {
+  const pa = a.replace(/^v/, '').split('.').map(Number);
+  const pb = b.replace(/^v/, '').split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const na = pa[i] || 0;
+    const nb = pb[i] || 0;
+    if (nb > na) return 1;
+    if (nb < na) return -1;
+  }
+  return 0;
+}
+
+async function checkForUpdates() {
   console.log('[AutoUpdate] Checking... Token:', GH_TOKEN ? 'SET' : 'EMPTY', '| Version:', APP_VERSION);
-  autoUpdater.checkForUpdates().then((r) => {
-    console.log('[AutoUpdate] Result:', r ? 'OK' : 'None');
-  }).catch((err) => {
+  sendToAllWindows('update-status', { status: 'checking' });
+
+  try {
+    const headers = { 'Accept': 'application/vnd.github.v3+json' };
+    if (GH_TOKEN) headers['Authorization'] = `token ${GH_TOKEN}`;
+
+    const res = await fetch('https://api.github.com/repos/mohsin-rasheedbaga/baga-hms/releases/latest', { headers });
+    if (!res.ok) {
+      console.error('[AutoUpdate] GitHub API error:', res.status);
+      sendToAllWindows('update-status', { status: 'error', message: `GitHub API error: ${res.status}` });
+      return;
+    }
+
+    const release = await res.json();
+    const latestVersion = release.tag_name.replace(/^v/, '');
+    console.log('[AutoUpdate] Latest release:', latestVersion, '| Current:', APP_VERSION);
+
+    if (compareVersions(APP_VERSION, latestVersion) >= 0) {
+      console.log('[AutoUpdate] Already up to date.');
+      sendToAllWindows('update-status', { status: 'not-available' });
+      return;
+    }
+
+    // Find the Setup exe (NSIS installer) for auto-update
+    const setupAsset = release.assets.find(a => a.name.includes('Setup') && a.name.endsWith('.exe'));
+    const portableAsset = release.assets.find(a => a.name.includes('Portable') && a.name.endsWith('.exe'));
+    const downloadAsset = setupAsset || portableAsset;
+
+    if (!downloadAsset) {
+      console.error('[AutoUpdate] No exe asset found in release.');
+      sendToAllWindows('update-status', { status: 'error', message: 'No downloadable update found.' });
+      return;
+    }
+
+    console.log('[AutoUpdate] Update available:', latestVersion);
+    sendToAllWindows('update-status', {
+      status: 'available',
+      version: latestVersion,
+      releaseNotes: release.body || '',
+      downloadUrl: downloadAsset.browser_download_url
+    });
+
+    // Auto-download the update
+    sendToAllWindows('update-status', { status: 'downloading', percent: 0 });
+    const downloadUrl = GH_TOKEN
+      ? `${downloadAsset.url}?token=${GH_TOKEN}`
+      : downloadAsset.browser_download_url;
+    const dlHeaders = { 'Accept': 'application/octet-stream' };
+    if (GH_TOKEN) dlHeaders['Authorization'] = `token ${GH_TOKEN}`;
+
+    const dlRes = await fetch(downloadUrl, { headers: dlHeaders });
+    if (!dlRes.ok) {
+      console.error('[AutoUpdate] Download failed:', dlRes.status);
+      sendToAllWindows('update-status', { status: 'error', message: `Download failed: ${dlRes.status}` });
+      return;
+    }
+
+    // Track download progress
+    const totalBytes = parseInt(dlRes.headers.get('content-length') || '0');
+    let receivedBytes = 0;
+    const chunks = [];
+
+    const reader = dlRes.body.getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      receivedBytes += value.length;
+      if (totalBytes > 0) {
+        const percent = Math.round((receivedBytes / totalBytes) * 100);
+        sendToAllWindows('update-status', { status: 'downloading', percent });
+      }
+    }
+
+    const buffer = Buffer.concat(chunks);
+    const updatePath = path.join(app.getPath('userData'), `BAGA-HMS-Update-${latestVersion}.exe`);
+    fs.writeFileSync(updatePath, buffer);
+    console.log('[AutoUpdate] Downloaded:', updatePath, '(' + Math.round(buffer.length / 1024 / 1024) + 'MB)');
+
+    updateDownloaded = true;
+    sendToAllWindows('update-status', {
+      status: 'downloaded',
+      version: latestVersion,
+      filePath: updatePath
+    });
+
+    // Prompt user to install
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Update Available',
+      message: `BAGA HMS version ${latestVersion} is ready to install.`,
+      detail: 'Click "Install Now" to close the app and install the update.',
+      buttons: ['Install Now', 'Later'],
+      noLink: true
+    }).then((result) => {
+      if (result.response === 0) {
+        // Launch installer and quit
+        shell.openPath(updatePath);
+        app.quit();
+      }
+    });
+
+  } catch (err) {
     console.error('[AutoUpdate] Failed:', err.message);
     sendToAllWindows('update-status', { status: 'error', message: err.message });
-  });
+  }
 }
 
 // ============================================================
