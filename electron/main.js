@@ -839,6 +839,12 @@ ipcMain.handle('quit-app', () => app.quit());
 ipcMain.handle('print-html', async (event, htmlContent) => {
   return new Promise((resolve) => {
     try {
+      // Write HTML to temp file — data:text/html URLs have a ~2MB limit
+      // that causes silent failures on large print content (receipts with logos, etc.)
+      const tmpPath = path.join(app.getPath('temp'), `baga-print-${Date.now()}.html`);
+      fs.writeFileSync(tmpPath, htmlContent, 'utf8');
+      console.log('[Print] Temp file:', tmpPath, 'Size:', (htmlContent.length / 1024).toFixed(1) + 'KB');
+
       const printWin = new BrowserWindow({
         width: 1024,
         height: 768,
@@ -849,26 +855,36 @@ ipcMain.handle('print-html', async (event, htmlContent) => {
         },
       });
 
-      printWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent)).then(() => {
-        printWin.webContents.print({
-          silent: false,
-          printBackground: true,
-        }, (success, reason) => {
-          printWin.close();
-          resolve({ success, reason });
+      printWin.loadFile(tmpPath).then(() => {
+        // Wait for page to fully render before printing
+        printWin.webContents.once('did-finish-load', () => {
+          setTimeout(() => {
+            if (printWin.isDestroyed()) return;
+            printWin.webContents.print({
+              silent: false,
+              printBackground: true,
+              margins: { marginType: 0 },
+            }, (success, reason) => {
+              printWin.close();
+              try { fs.unlinkSync(tmpPath); } catch (e) {}
+              resolve({ success, reason });
+            });
+          }, 300); // Small delay for CSS rendering
         });
       }).catch((err) => {
         printWin.close();
+        try { fs.unlinkSync(tmpPath); } catch (e) {}
         resolve({ success: false, reason: err.message });
       });
 
-      // Timeout fallback - close window after 30s if print dialog hangs
+      // Timeout fallback — 60s since temp files load much faster
       setTimeout(() => {
         if (!printWin.isDestroyed()) {
           printWin.close();
+          try { fs.unlinkSync(tmpPath); } catch (e) {}
           resolve({ success: false, reason: 'Print dialog timed out' });
         }
-      }, 30000);
+      }, 60000);
     } catch (err) {
       resolve({ success: false, reason: err.message });
     }
@@ -1181,6 +1197,17 @@ app.on('before-quit', () => {
   try {
     if (serverInstance) serverInstance.close();
     if (db) db.close();
+  } catch (e) {}
+  // Clear session data on quit — forces re-login on next launch
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.session.clearStorageData({
+        storages: ['localstorage', 'sessionstorage'],
+      });
+    }
+    if (db) {
+      safeDbSetKV('baga_session', '');
+    }
   } catch (e) {}
 });
 

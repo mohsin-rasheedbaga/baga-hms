@@ -409,7 +409,28 @@ export default function AccountsPage() {
   };
 
   const handlePrintReport = () => {
-    triggerPrint(document.documentElement.outerHTML);
+    // Generate a clean print-specific HTML instead of sending the entire DOM
+    // (sending full DOM via data: URL causes print timeout)
+    const html = `<!DOCTYPE html><html><head><title>Accounts Report</title><style>
+      body{font-family:Arial,sans-serif;padding:20px;color:#333;font-size:12px}
+      h2{font-size:16px;margin-bottom:12px;color:#1e293b}
+      table{width:100%;border-collapse:collapse;margin-top:8px}
+      th,td{padding:5px 8px;text-align:left;border-bottom:1px solid #e2e8f0;font-size:11px}
+      th{background:#f1f5f9;color:#475569;font-weight:600}
+      .num{text-align:right}
+      .total-row{font-weight:bold;border-top:2px solid #1e293b}
+      .hdr{text-align:center;border-bottom:2px solid #1e293b;padding-bottom:8px;margin-bottom:16px}
+      @media print{body{padding:10px}}
+    </style></head><body>
+      <div class="hdr"><h1>BAGA Hospital Management System</h1><p>Accounts Report</p></div>
+      <h2>${receipts.length} Transaction(s)</h2>
+      <table><thead><tr><th>ID</th><th>Date</th><th>Patient</th><th>Type</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Balance</th><th>Status</th></tr></thead>
+      <tbody>${receipts.map(r => {
+        const bal = r.totalAmount - r.paidAmount;
+        return `<tr><td>${r.id}</td><td>${r.date}</td><td>${r.patientName || '-'}</td><td>${r.type || '-'}</td><td class="num">${cur} ${r.totalAmount.toLocaleString()}</td><td class="num">${cur} ${r.paidAmount.toLocaleString()}</td><td class="num">${cur} ${bal.toLocaleString()}</td><td>${r.status}</td></tr>`;
+      }).join('')}</tbody></table>
+    </body></html>`;
+    triggerPrint(html);
   };
 
   // Salary handlers for Accountant

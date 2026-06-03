@@ -89,23 +89,13 @@ export default function LoginPage() {
         }
       }
       
-      // Check for existing session
-      let session = null;
+      // ALWAYS clear any previous session on app restart
+      // User must re-enter credentials every time the app starts
       if (typeof window !== 'undefined') {
+        localStorage.removeItem('baga_session');
         if (isElectron) {
-          try {
-            const kvSession = (window as any).bagaAPI.dbGetKV('baga_session');
-            if (kvSession) session = JSON.parse(kvSession);
-          } catch (e) {}
+          try { (window as any).bagaAPI.dbSetKV('baga_session', ''); } catch (e) {}
         }
-        if (!session) {
-          const stored = localStorage.getItem('baga_session');
-          if (stored) session = JSON.parse(stored);
-        }
-      }
-      if (session) {
-        router.push('/dashboard');
-        return;
       }
       
       // Load hospital info as fallback
