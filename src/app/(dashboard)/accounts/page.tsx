@@ -423,9 +423,9 @@ export default function AccountsPage() {
       @media print{body{padding:10px}}
     </style></head><body>
       <div class="hdr"><h1>BAGA Hospital Management System</h1><p>Accounts Report</p></div>
-      <h2>${receipts.length} Transaction(s)</h2>
+      <h2>${bills.length} Transaction(s)</h2>
       <table><thead><tr><th>ID</th><th>Date</th><th>Patient</th><th>Type</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Balance</th><th>Status</th></tr></thead>
-      <tbody>${receipts.map(r => {
+      <tbody>${bills.map(r => {
         const bal = r.totalAmount - r.paidAmount;
         return `<tr><td>${r.id}</td><td>${r.date}</td><td>${r.patientName || '-'}</td><td>${r.type || '-'}</td><td class="num">${cur} ${r.totalAmount.toLocaleString()}</td><td class="num">${cur} ${r.paidAmount.toLocaleString()}</td><td class="num">${cur} ${bal.toLocaleString()}</td><td>${r.status}</td></tr>`;
       }).join('')}</tbody></table>
