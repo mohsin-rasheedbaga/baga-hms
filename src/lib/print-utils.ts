@@ -16,8 +16,13 @@ export function triggerPrint(html: string): void {
     // Electron: use native print dialog via IPC
     (window as any).bagaAPI.printHtml(html).then((result: any) => {
       if (!result.success) {
+        // Only show error for real failures (timeout, load error)
+        // "Print dialog shown" is a success — user handled the dialog
+        const isRealError = result.reason && !result.reason.includes('shown');
         console.error('Print failed:', result.reason);
-        alert('Print failed: ' + (result.reason || 'Unknown error'));
+        if (isRealError) {
+          alert('Print failed: ' + (result.reason || 'Unknown error'));
+        }
       }
     }).catch((err: any) => {
       console.error('Print IPC error:', err);

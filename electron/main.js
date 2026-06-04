@@ -6,7 +6,7 @@ const crypto = require('crypto');
 // ============================================================
 // CONFIGURATION
 // ============================================================
-const APP_VERSION = '3.0.2';
+const APP_VERSION = '3.0.3';
 const API_BASE = 'https://baga-hospital-api.vercel.app';
 const SERVER_PORT = 18765;
 const STORE_PATH = path.join(app.getPath('userData'), 'baga-store.json');
@@ -861,36 +861,50 @@ ipcMain.handle('print-html', async (event, htmlContent) => {
         },
       });
 
+      let handled = false;
+      const cleanup = (success, reason) => {
+        if (handled) return;
+        handled = true;
+        try { if (!printWin.isDestroyed()) printWin.destroy(); } catch (e) {}
+        try { fs.unlinkSync(tmpPath); } catch (e) {}
+        console.log('[Print]', success ? 'OK' : 'FAIL', '-', reason || 'none');
+        resolve({ success, reason });
+      };
+
       printWin.loadFile(tmpPath).then(() => {
-        // Wait for page to fully render before printing
-        printWin.webContents.once('did-finish-load', () => {
-          setTimeout(() => {
-            if (printWin.isDestroyed()) return;
+        // Give time for CSS/fonts to render before printing
+        setTimeout(() => {
+          if (printWin.isDestroyed()) { cleanup(false, 'Window destroyed before print'); return; }
+
+          // Use window.print() via executeJavaScript — most reliable on all platforms.
+          // webContents.print() callback has known bugs on Windows where it never fires.
+          printWin.webContents.executeJavaScript('window.print()').then(() => {
+            // window.print() was called — print dialog is now shown (or system handled it).
+            // Wait a reasonable time for user to interact with dialog, then clean up.
+            console.log('[Print] window.print() executed, waiting for dialog...');
+            setTimeout(() => cleanup(true, 'Print dialog shown'), 5000);
+          }).catch((execErr) => {
+            console.error('[Print] executeJavaScript failed:', execErr.message);
+            // Fallback: try webContents.print()
             printWin.webContents.print({
               silent: false,
               printBackground: true,
               margins: { marginType: 0 },
             }, (success, reason) => {
-              printWin.close();
-              try { fs.unlinkSync(tmpPath); } catch (e) {}
-              resolve({ success, reason });
+              cleanup(success || false, reason);
             });
-          }, 300); // Small delay for CSS rendering
-        });
+            // Fallback timeout for webContents.print callback not firing (Windows bug)
+            setTimeout(() => cleanup(true, 'Print dialog shown (fallback)'), 15000);
+          });
+        }, 800); // 800ms for CSS/layout rendering
       }).catch((err) => {
-        printWin.close();
-        try { fs.unlinkSync(tmpPath); } catch (e) {}
-        resolve({ success: false, reason: err.message });
+        console.error('[Print] loadFile failed:', err.message);
+        cleanup(false, err.message);
       });
 
-      // Timeout fallback — 60s since temp files load much faster
-      setTimeout(() => {
-        if (!printWin.isDestroyed()) {
-          printWin.close();
-          try { fs.unlinkSync(tmpPath); } catch (e) {}
-          resolve({ success: false, reason: 'Print dialog timed out' });
-        }
-      }, 60000);
+      // Absolute safety timeout — 30 seconds
+      setTimeout(() => cleanup(false, 'Print timed out'), 30000);
+
     } catch (err) {
       resolve({ success: false, reason: err.message });
     }

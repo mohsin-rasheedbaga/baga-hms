@@ -436,7 +436,11 @@ export function openPrintWindow(html: string, autoPrint = true): void {
     // Electron: use native print dialog via IPC
     (window as any).bagaAPI.printHtml(html).then((result: any) => {
       if (!result.success) {
+        const isRealError = result.reason && !result.reason.includes('shown');
         console.error('Print failed:', result.reason);
+        if (isRealError) {
+          alert('Print failed: ' + (result.reason || 'Unknown error'));
+        }
       }
     }).catch((err: any) => {
       console.error('Print IPC error:', err);
