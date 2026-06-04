@@ -1,12 +1,13 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Notification } = require('electron');
 const path = require('path');
+const https = require('https');
 const http = require('http');
 const fs = require('fs');
 const crypto = require('crypto');
 // ============================================================
 // CONFIGURATION
 // ============================================================
-const APP_VERSION = '3.0.4';
+const APP_VERSION = '3.0.5';
 const API_BASE = 'https://baga-hospital-api.vercel.app';
 const SERVER_PORT = 18765;
 const STORE_PATH = path.join(app.getPath('userData'), 'baga-store.json');
@@ -118,11 +119,20 @@ function safeDbGetPath() {
 }
 
 // ============================================================
-// AUTO-UPDATER (GitHub Releases API - no latest.yml needed)
+// AUTO-UPDATER (GitHub Releases API — uses Node.js https module, NOT fetch)
 // ============================================================
 let mainWindow = null;
 let licenseWindow = null;
 let updateDownloaded = false;
+
+// Log file for auto-update debugging
+const UPDATE_LOG = path.join(app.getPath('userData'), 'auto-update.log');
+function updateLog(msg) {
+  const ts = new Date().toISOString();
+  const line = `[${ts}] ${msg}\n`;
+  try { fs.appendFileSync(UPDATE_LOG, line, 'utf8'); } catch (e) {}
+  console.log('[AutoUpdate]', msg);
+}
 
 // GitHub PAT for private repo - read from config file (not in git for security)
 let GH_TOKEN = '';
@@ -134,11 +144,11 @@ try {
   for (const cp of cfgPaths) {
     if (fs.existsSync(cp)) {
       GH_TOKEN = JSON.parse(fs.readFileSync(cp, 'utf8')).gh_token || '';
-      console.log('[Config] GH_TOKEN loaded from:', cp);
+      updateLog('GH_TOKEN loaded from: ' + cp);
       break;
     }
   }
-} catch (e) { console.log('[Config] No config file found'); }
+} catch (e) { updateLog('No config file found'); }
 
 function sendToAllWindows(channel, data) {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, data);
@@ -158,113 +168,218 @@ function compareVersions(a, b) {
   return 0;
 }
 
+// Helper: make HTTPS GET request using Node.js https module (reliable, no fetch needed)
+function httpsGet(url, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const options = {
+      hostname: urlObj.hostname,
+      port: 443,
+      path: urlObj.pathname + urlObj.search,
+      method: 'GET',
+      headers: { 'User-Agent': 'BAGA-HMS-Updater', ...headers },
+    };
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        resolve({ statusCode: res.statusCode, headers: res.headers, body: data });
+      });
+    });
+    req.on('error', (err) => reject(err));
+    req.setTimeout(30000, () => { req.destroy(); reject(new Error('Request timeout')); });
+    req.end();
+  });
+}
+
+// Helper: download file using Node.js https module (streams to disk — reliable)
+function httpsDownload(url, destPath, onProgress) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const options = {
+      hostname: urlObj.hostname,
+      port: 443,
+      path: urlObj.pathname + urlObj.search,
+      method: 'GET',
+      headers: { 'User-Agent': 'BAGA-HMS-Updater' },
+    };
+
+    const fileStream = fs.createWriteStream(destPath);
+    let receivedBytes = 0;
+
+    const req = https.request(options, (res) => {
+      // Handle redirects (GitHub releases use 302)
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        fileStream.close();
+        fs.unlinkSync(destPath);
+        updateLog('Following redirect to: ' + res.headers.location);
+        httpsDownload(res.headers.location, destPath, onProgress).then(resolve).catch(reject);
+        return;
+      }
+
+      if (res.statusCode !== 200) {
+        fileStream.close();
+        fs.unlinkSync(destPath);
+        reject(new Error('Download failed: HTTP ' + res.statusCode));
+        return;
+      }
+
+      const totalBytes = parseInt(res.headers['content-length'] || '0');
+
+      res.on('data', (chunk) => {
+        receivedBytes += chunk.length;
+        if (totalBytes > 0 && onProgress) {
+          onProgress(Math.round((receivedBytes / totalBytes) * 100));
+        }
+      });
+
+      res.pipe(fileStream);
+      fileStream.on('finish', () => {
+        fileStream.close();
+        updateLog('Downloaded: ' + destPath + ' (' + Math.round(receivedBytes / 1024 / 1024) + 'MB)');
+        resolve(receivedBytes);
+      });
+    });
+
+    req.on('error', (err) => {
+      fileStream.close();
+      try { fs.unlinkSync(destPath); } catch (e) {}
+      reject(err);
+    });
+    req.setTimeout(600000, () => { // 10 min timeout for large files
+      req.destroy();
+      fileStream.close();
+      try { fs.unlinkSync(destPath); } catch (e) {}
+      reject(new Error('Download timeout'));
+    });
+    req.end();
+  });
+}
+
 async function checkForUpdates() {
-  console.log('[AutoUpdate] Checking... Token:', GH_TOKEN ? 'SET' : 'EMPTY', '| Version:', APP_VERSION);
+  updateLog('=== UPDATE CHECK START ===');
+  updateLog('Token: ' + (GH_TOKEN ? 'SET' : 'EMPTY') + ' | Version: ' + APP_VERSION);
   sendToAllWindows('update-status', { status: 'checking' });
 
   try {
-    const headers = { 'Accept': 'application/vnd.github.v3+json' };
-    if (GH_TOKEN) headers['Authorization'] = `token ${GH_TOKEN}`;
+    // Step 1: Fetch latest release info from GitHub API
+    const apiHeaders = { 'Accept': 'application/vnd.github.v3+json' };
+    if (GH_TOKEN) apiHeaders['Authorization'] = 'token ' + GH_TOKEN;
 
-    const res = await fetch('https://api.github.com/repos/mohsin-rasheedbaga/baga-hms/releases/latest', { headers });
-    if (!res.ok) {
-      console.error('[AutoUpdate] GitHub API error:', res.status);
-      sendToAllWindows('update-status', { status: 'error', message: `GitHub API error: ${res.status}` });
+    updateLog('Fetching: https://api.github.com/repos/mohsin-rasheedbaga/baga-hms/releases/latest');
+    const apiResult = await httpsGet('https://api.github.com/repos/mohsin-rasheedbaga/baga-hms/releases/latest', apiHeaders);
+
+    if (apiResult.statusCode !== 200) {
+      updateLog('GitHub API error: HTTP ' + apiResult.statusCode);
+      sendToAllWindows('update-status', { status: 'error', message: 'GitHub API error: ' + apiResult.statusCode });
       return;
     }
 
-    const release = await res.json();
+    let release;
+    try {
+      release = JSON.parse(apiResult.body);
+    } catch (e) {
+      updateLog('Failed to parse GitHub response: ' + e.message);
+      return;
+    }
+
     const latestVersion = release.tag_name.replace(/^v/, '');
-    console.log('[AutoUpdate] Latest release:', latestVersion, '| Current:', APP_VERSION);
+    updateLog('Latest release: ' + latestVersion + ' | Current: ' + APP_VERSION);
 
     if (compareVersions(APP_VERSION, latestVersion) >= 0) {
-      console.log('[AutoUpdate] Already up to date.');
+      updateLog('Already up to date.');
       sendToAllWindows('update-status', { status: 'not-available' });
       return;
     }
 
-    // Find the Setup exe (NSIS installer) for auto-update
+    // Step 2: Find Setup exe for auto-update
     const setupAsset = release.assets.find(a => a.name.includes('Setup') && a.name.endsWith('.exe'));
     const portableAsset = release.assets.find(a => a.name.includes('Portable') && a.name.endsWith('.exe'));
     const downloadAsset = setupAsset || portableAsset;
 
     if (!downloadAsset) {
-      console.error('[AutoUpdate] No exe asset found in release.');
+      updateLog('No exe asset found in release.');
       sendToAllWindows('update-status', { status: 'error', message: 'No downloadable update found.' });
       return;
     }
 
-    console.log('[AutoUpdate] Update available:', latestVersion);
+    updateLog('Update found: ' + latestVersion + ' — Asset: ' + downloadAsset.name + ' (' + Math.round(downloadAsset.size / 1024 / 1024) + 'MB)');
     sendToAllWindows('update-status', {
       status: 'available',
       version: latestVersion,
       releaseNotes: release.body || '',
-      downloadUrl: downloadAsset.browser_download_url
     });
 
-    // Auto-download the update
+    // Step 3: Show notification that download is starting
+    try {
+      new Notification({
+        title: 'BAGA HMS — Update Available',
+        body: 'Version ' + latestVersion + ' is downloading...\nPlease keep the app open.',
+        silent: false,
+      }).show();
+    } catch (e) {}
+
+    // Step 4: Download the update
     sendToAllWindows('update-status', { status: 'downloading', percent: 0 });
-    const downloadUrl = GH_TOKEN
-      ? `${downloadAsset.url}?token=${GH_TOKEN}`
-      : downloadAsset.browser_download_url;
-    const dlHeaders = { 'Accept': 'application/octet-stream' };
-    if (GH_TOKEN) dlHeaders['Authorization'] = `token ${GH_TOKEN}`;
+    const downloadUrl = downloadAsset.browser_download_url;
+    updateLog('Downloading: ' + downloadUrl);
 
-    const dlRes = await fetch(downloadUrl, { headers: dlHeaders });
-    if (!dlRes.ok) {
-      console.error('[AutoUpdate] Download failed:', dlRes.status);
-      sendToAllWindows('update-status', { status: 'error', message: `Download failed: ${dlRes.status}` });
-      return;
-    }
+    const updatePath = path.join(app.getPath('userData'), 'BAGA-HMS-Update-' + latestVersion + '.exe');
 
-    // Track download progress
-    const totalBytes = parseInt(dlRes.headers.get('content-length') || '0');
-    let receivedBytes = 0;
-    const chunks = [];
-
-    const reader = dlRes.body.getReader();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      receivedBytes += value.length;
-      if (totalBytes > 0) {
-        const percent = Math.round((receivedBytes / totalBytes) * 100);
-        sendToAllWindows('update-status', { status: 'downloading', percent });
-      }
-    }
-
-    const buffer = Buffer.concat(chunks);
-    const updatePath = path.join(app.getPath('userData'), `BAGA-HMS-Update-${latestVersion}.exe`);
-    fs.writeFileSync(updatePath, buffer);
-    console.log('[AutoUpdate] Downloaded:', updatePath, '(' + Math.round(buffer.length / 1024 / 1024) + 'MB)');
+    await httpsDownload(downloadUrl, updatePath, (percent) => {
+      sendToAllWindows('update-status', { status: 'downloading', percent });
+      updateLog('Download progress: ' + percent + '%');
+    });
 
     updateDownloaded = true;
+    updateLog('Download complete! File: ' + updatePath);
     sendToAllWindows('update-status', {
       status: 'downloaded',
       version: latestVersion,
-      filePath: updatePath
+      filePath: updatePath,
     });
 
-    // Prompt user to install
-    dialog.showMessageBox({
+    // Step 5: Notify user — show install dialog
+    try {
+      new Notification({
+        title: 'BAGA HMS — Update Ready!',
+        body: 'Version ' + latestVersion + ' has been downloaded. Install now!',
+        silent: false,
+      }).show();
+    } catch (e) {}
+
+    const result = await dialog.showMessageBox({
       type: 'info',
       title: 'Update Available',
-      message: `BAGA HMS version ${latestVersion} is ready to install.`,
-      detail: 'Click "Install Now" to close the app and install the update.',
+      message: 'BAGA HMS version ' + latestVersion + ' is ready to install.',
+      detail: 'Click "Install Now" to close the app and install the update.\nClick "Later" to install on next launch.',
       buttons: ['Install Now', 'Later'],
-      noLink: true
-    }).then((result) => {
-      if (result.response === 0) {
-        // Launch installer and quit
-        shell.openPath(updatePath);
-        app.quit();
-      }
+      noLink: true,
+      defaultId: 0,
+      cancelId: 1,
     });
 
+    if (result.response === 0) {
+      updateLog('User chose Install Now — launching installer...');
+      shell.openPath(updatePath);
+      app.quit();
+    } else {
+      updateLog('User chose Later — will install on next launch.');
+    }
+
   } catch (err) {
-    console.error('[AutoUpdate] Failed:', err.message);
+    updateLog('FAILED: ' + err.message);
+    updateLog('Stack: ' + (err.stack || 'N/A'));
     sendToAllWindows('update-status', { status: 'error', message: err.message });
+
+    // Show error notification to user
+    try {
+      new Notification({
+        title: 'BAGA HMS — Update Check Failed',
+        body: err.message,
+        silent: false,
+      }).show();
+    } catch (e) {}
   }
 }
 
