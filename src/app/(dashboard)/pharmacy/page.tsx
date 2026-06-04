@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   searchPatients, searchMedicines, getMedicines, addMedicine, updateMedicine, deleteMedicine,
   getMedicineCategories, getActivePrescriptions, updatePrescription, addDispense,
@@ -7,6 +7,7 @@ import {
   getExpiredMedicines, getLowStockMedicines,
 } from '@/lib/store';
 import type { Patient, Prescription, MedicineItem } from '@/lib/types';
+import { triggerPrint } from '@/lib/print-utils';
 
 /* ==================== LOCAL TYPES ==================== */
 interface CartItem {
@@ -97,6 +98,14 @@ export default function PharmacyPage() {
   const [medQuery, setMedQuery] = useState('');
   const [medResults, setMedResults] = useState<MedicineItem[]>([]);
   const [showMedDropdown, setShowMedDropdown] = useState(false);
+  const medSearchRef = useRef<HTMLInputElement>(null);
+  const outdoorNameRef = useRef<HTMLInputElement>(null);
+  const outdoorMobileRef = useRef<HTMLInputElement>(null);
+  const outdoorAgeRef = useRef<HTMLInputElement>(null);
+
+  // Bill modal
+  const [saleBill, setSaleBill] = useState<PharmacySale | null>(null);
+  const [billDiscount, setBillDiscount] = useState(0);
 
   // Cart
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -155,6 +164,7 @@ export default function PharmacyPage() {
     setMedQuery('');
     setMedResults([]);
     setShowMedDropdown(false);
+    setTimeout(() => medSearchRef.current?.focus(), 50);
   };
 
   const updateCartQty = (medId: string, qty: number) => {
@@ -241,8 +251,122 @@ export default function PharmacyPage() {
 
     addPharmacySale(sale);
     showToast(`Sale completed! ${currency} ${cartTotal.toLocaleString()}`, 'success');
-    resetSale();
+    setSaleBill(sale);
+    setBillDiscount(0);
     loadSales();
+  };
+
+  const closeBill = () => {
+    setSaleBill(null);
+    setBillDiscount(0);
+    resetSale();
+  };
+
+  const printBillSlip = async () => {
+    if (!saleBill) return;
+    try {
+      const discountAmt = Math.round(saleBill.totalAmount * billDiscount / 100);
+      const grandTotal = saleBill.totalAmount - discountAmt;
+      let hospitalName = 'BAGA HOSPITAL';
+      let hospitalLogo = '';
+      const isEl = typeof window !== 'undefined' && !!(window as any).bagaAPI;
+      if (isEl) {
+        try {
+          const licenseInfo = await (window as any).bagaAPI.getFullLicenseInfo();
+          if (licenseInfo && licenseInfo.hospitalName) hospitalName = licenseInfo.hospitalName;
+        } catch (e) {}
+        try {
+          const logoResult = await (window as any).bagaAPI.getLogoBase64();
+          if (logoResult.success) hospitalLogo = logoResult.data;
+        } catch (e) {}
+      }
+      const cur = currency;
+      const itemRows = saleBill.items.map((it, i) => {
+        const alt = i % 2 === 0 ? '#fff' : '#f8fafc';
+        return `<tr style="background:${alt};">
+          <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;">${i + 1}</td>
+          <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;font-weight:600;">${it.name}</td>
+          <td style="padding:3px 6px;font-size:9px;border-bottom:1px solid #e2e8f0;">${it.form}</td>
+          <td style="padding:3px 6px;font-size:9px;border-bottom:1px solid #e2e8f0;">${it.strength}</td>
+          <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:right;">${cur} ${it.price.toLocaleString()}</td>
+          <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:center;">${it.quantity}</td>
+          <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:700;">${cur} ${it.total.toLocaleString()}</td>
+        </tr>`;
+      }).join('');
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pharmacy Bill</title><style>
+        @page{size:80mm auto;margin:3mm;}
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;background:#fff;font-size:11px;width:80mm;margin:0 auto;}
+        .header{text-align:center;padding:6px 0;border-bottom:2px dashed #cbd5e1;}
+        .logo{width:32px;height:32px;object-fit:contain;}
+        .hname{font-size:14px;font-weight:800;color:#0c2340;letter-spacing:1px;}
+        .hsub{font-size:8px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;}
+        .info{padding:4px 0;border-bottom:1px dashed #e2e8f0;}
+        .info-row{display:flex;justify-content:space-between;font-size:10px;padding:1px 0;}
+        .info-row .label{color:#64748b;font-weight:600;}
+        .info-row .value{color:#1e293b;font-weight:500;}
+        .title-bar{text-align:center;padding:4px 0;border-bottom:1px dashed #e2e8f0;border-top:1px dashed #e2e8f0;}
+        .title-bar h3{font-size:12px;font-weight:800;color:#0c2340;letter-spacing:1px;}
+        table{width:100%;border-collapse:collapse;}
+        th{padding:3px 6px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#0c2340;background:#f1f5f9;border-bottom:2px solid #0c2340;text-align:left;}
+        td{padding:3px 6px;font-size:10px;border-bottom:1px solid #f1f5f9;}
+        .totals{padding:4px 0;}
+        .total-row{display:flex;justify-content:space-between;font-size:11px;padding:2px 0;}
+        .total-row.discount{color:#dc2626;}
+        .grand-total{display:flex;justify-content:space-between;font-size:14px;font-weight:900;color:#0c2340;padding:4px 0;border-top:2px solid #0c2340;border-bottom:2px solid #0c2340;margin-top:4px;}
+        .footer{text-align:center;padding:6px 0;margin-top:4px;border-top:2px dashed #cbd5e1;}
+        .footer .ty{font-size:9px;color:#64748b;font-style:italic;}
+        .footer .info{font-size:7px;color:#94a3b8;}
+        @media print{body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+      </style></head><body>
+        <div class="header">
+          ${hospitalLogo ? `<img class="logo" src="${hospitalLogo}" alt="" />` : ''}
+          <div class="hname">${hospitalName}</div>
+          <div class="hsub">Pharmacy Department</div>
+        </div>
+        <div class="info">
+          <div class="info-row"><span class="label">Bill No:</span><span class="value">${saleBill.id.slice(-6).toUpperCase()}</span></div>
+          <div class="info-row"><span class="label">Patient:</span><span class="value">${saleBill.patientName}</span></div>
+          <div class="info-row"><span class="label">ID:</span><span class="value">${saleBill.patientNo}</span></div>
+          <div class="info-row"><span class="label">Mobile:</span><span class="value">${saleBill.patientMobile}</span></div>
+          <div class="info-row"><span class="label">Type:</span><span class="value">${saleBill.type}</span></div>
+          <div class="info-row"><span class="label">Date:</span><span class="value">${saleBill.date} ${saleBill.time}</span></div>
+          <div class="info-row"><span class="label">Served By:</span><span class="value">${saleBill.servedBy}</span></div>
+        </div>
+        <div class="title-bar"><h3>Medicine Bill / Slip</h3></div>
+        <table>
+          <thead><tr><th>#</th><th>Medicine</th><th>Form</th><th>Str</th><th>Price</th><th>Qty</th><th>Total</th></tr></thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+        <div class="totals">
+          <div class="total-row"><span>Subtotal (${saleBill.items.length} items)</span><span>${cur} ${saleBill.totalAmount.toLocaleString()}</span></div>
+          ${billDiscount > 0 ? `<div class="total-row discount"><span>Discount (${billDiscount}%)</span><span>-${cur} ${discountAmt.toLocaleString()}</span></div>` : ''}
+          <div class="grand-total"><span>GRAND TOTAL</span><span>${cur} ${grandTotal.toLocaleString()}</span></div>
+        </div>
+        <div class="footer">
+          <div class="ty">Thank you for visiting ${hospitalName}!</div>
+          <div class="info">Computer Generated Bill | ${saleBill.date} ${saleBill.time}</div>
+        </div>
+      </body></html>`;
+      triggerPrint(html);
+    } catch (err) {
+      console.error('Failed to print bill slip:', err);
+    }
+  };
+
+  const handleMedSearchEnter = () => {
+    if (medResults.length >= 1) {
+      addMedicineToCart(medResults[0]);
+      setTimeout(() => medSearchRef.current?.focus(), 50);
+    }
+  };
+
+  const handleOutdoorFieldEnter = (field: 'name' | 'mobile' | 'age') => {
+    if (field === 'name') outdoorMobileRef.current?.focus();
+    else if (field === 'mobile') outdoorAgeRef.current?.focus();
+    else if (field === 'age') {
+      setTimeout(() => medSearchRef.current?.focus(), 50);
+    }
   };
 
   /* ==================== PRESCRIPTIONS ==================== */
@@ -374,6 +498,85 @@ export default function PharmacyPage() {
   return (
     <div className="space-y-5">
       {toast && <div className={`toast ${toast.type === 'success' ? 'toast-success' : 'toast-error'}`}>{toast.msg}</div>}
+
+      {/* Sale Bill Modal */}
+      {saleBill && (
+        <div className="modal-overlay" onClick={closeBill}>
+          <div className="modal-content" style={{ maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-slate-800">Sale Bill</h3>
+              <button onClick={closeBill} className="btn btn-outline btn-sm">Close</button>
+            </div>
+
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div><span className="text-slate-500">Patient ID:</span> <span className="font-mono font-bold text-blue-600">{saleBill.patientNo}</span></div>
+                <div><span className="text-slate-500">Name:</span> <span className="font-semibold">{saleBill.patientName}</span></div>
+                <div><span className="text-slate-500">Mobile:</span> <span>{saleBill.patientMobile}</span></div>
+                <div><span className="text-slate-500">Type:</span> <span className={`badge ${saleBill.type === 'Indoor' ? 'badge-blue' : 'badge-amber'}`}>{saleBill.type}</span></div>
+                <div><span className="text-slate-500">Date:</span> <span>{saleBill.date} {saleBill.time}</span></div>
+                <div><span className="text-slate-500">Served By:</span> <span>{saleBill.servedBy}</span></div>
+              </div>
+            </div>
+
+            <div className="border border-slate-200 rounded-lg overflow-hidden mb-4">
+              <table className="data-table">
+                <thead><tr><th>#</th><th>Medicine</th><th>Form</th><th>Strength</th><th className="text-right">Price</th><th className="text-center">Qty</th><th className="text-right">Total</th></tr></thead>
+                <tbody>
+                  {saleBill.items.map((it, i) => (
+                    <tr key={i}>
+                      <td className="text-sm text-slate-400">{i + 1}</td>
+                      <td><p className="font-semibold text-sm">{it.name}</p><p className="text-xs text-slate-400">{it.genericName}</p></td>
+                      <td><span className="badge badge-blue text-xs">{it.form}</span></td>
+                      <td className="text-sm">{it.strength}</td>
+                      <td className="text-right text-sm">{currency} {it.price.toLocaleString()}</td>
+                      <td className="text-center text-sm font-semibold">{it.quantity}</td>
+                      <td className="text-right text-sm font-bold">{currency} {it.total.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="space-y-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Subtotal ({saleBill.items.length} items)</span>
+                <span className="font-semibold">{currency} {saleBill.totalAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-slate-600">Discount (%)</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={billDiscount}
+                  onChange={e => setBillDiscount(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                  className="w-20 h-9 text-right border border-slate-300 rounded-lg px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                  placeholder="0"
+                />
+              </div>
+              {billDiscount > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-red-500">Discount Amount ({billDiscount}%)</span>
+                  <span className="font-semibold text-red-500">-{currency} {Math.round(saleBill.totalAmount * billDiscount / 100).toLocaleString()}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-3 border-t-2 border-slate-300">
+                <span className="text-lg font-bold text-slate-800">Grand Total</span>
+                <span className="text-2xl font-black text-emerald-700">{currency} {(saleBill.totalAmount - Math.round(saleBill.totalAmount * billDiscount / 100)).toLocaleString()}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-4">
+              <button onClick={printBillSlip} className="btn btn-primary flex-1">
+                <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                Print Slip
+              </button>
+              <button onClick={closeBill} className="btn btn-outline flex-1">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div>
@@ -520,15 +723,15 @@ export default function PharmacyPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
                     <label className="form-label">Full Name *</label>
-                    <input type="text" className="form-input" placeholder="Patient name" value={outdoorName} onChange={e => setOutdoorName(e.target.value)} />
+                    <input ref={outdoorNameRef} type="text" className="form-input" placeholder="Patient name" value={outdoorName} onChange={e => setOutdoorName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('name'); } }} />
                   </div>
                   <div>
                     <label className="form-label">Mobile Number *</label>
-                    <input type="text" className="form-input" placeholder="03XX-XXXXXXX" value={outdoorMobile} onChange={e => setOutdoorMobile(e.target.value)} />
+                    <input ref={outdoorMobileRef} type="text" className="form-input" maxLength={11} inputMode="numeric" placeholder="03XX-XXXXXXX" value={outdoorMobile.replace(/[^0-9]/g,'')} onChange={e => setOutdoorMobile(e.target.value.replace(/[^0-9]/g,''))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('mobile'); } }} />
                   </div>
                   <div>
                     <label className="form-label">Age</label>
-                    <input type="text" className="form-input" placeholder="e.g. 35" value={outdoorAge} onChange={e => setOutdoorAge(e.target.value)} />
+                    <input ref={outdoorAgeRef} type="text" className="form-input" maxLength={2} inputMode="numeric" placeholder="e.g. 35" value={outdoorAge.replace(/[^0-9]/g,'')} onChange={e => setOutdoorAge(e.target.value.replace(/[^0-9]/g,''))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('age'); } }} />
                   </div>
                   <div>
                     <label className="form-label">Gender</label>
@@ -556,12 +759,14 @@ export default function PharmacyPage() {
                 <div className="flex-1 relative">
                   <svg className="w-5 h-5 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                   <input
+                    ref={medSearchRef}
                     type="text"
                     className="form-input pl-10 text-base"
                     placeholder="Search medicine... e.g. Paracetamol, Amoxicillin, Vitamin C"
                     value={medQuery}
                     onChange={e => handleMedSearch(e.target.value)}
                     onFocus={() => { if (medResults.length > 0) setShowMedDropdown(true); }}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleMedSearchEnter(); } }}
                   />
                 </div>
                 {showMedDropdown && (

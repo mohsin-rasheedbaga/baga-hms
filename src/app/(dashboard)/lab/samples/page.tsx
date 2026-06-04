@@ -1,8 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { initLabData, getLabOrders, updateLabOrder, type LabOrderItem } from '@/lib/lab-store';
-import { triggerPrint } from '@/lib/print-utils';
-import { getLabPrintDataAsync } from '@/lib/print-lab-report';
+import { getLabPrintDataAsync, openPrintWindow } from '@/lib/print-lab-report';
 
 export default function SampleCollectionPage() {
   const [mounted, setMounted] = useState(false);
@@ -39,7 +38,7 @@ export default function SampleCollectionPage() {
   };
 
   const printStickers = async (order: LabOrderItem) => {
-    // One sticker per test — each printed separately
+    // One sticker per test — each printed separately via Electron native print
     try {
       const printData = await getLabPrintDataAsync();
       const stickerTemplates = order.tests.map((t, i) => {
@@ -71,15 +70,13 @@ export default function SampleCollectionPage() {
         </body></html>`;
       });
 
-      // Print each sticker in a separate window (one per test)
+      // Print each sticker via Electron native print (one per test)
       for (let i = 0; i < stickerTemplates.length; i++) {
-        const w = window.open('', '_blank');
-        if (w) {
-          w.document.write(stickerTemplates[i]);
-          w.document.close();
-          const delay = i === 0 ? 500 : 2000;
-          setTimeout(() => { w.print(); setTimeout(() => w.close(), 500); }, delay);
+        const delay = i === 0 ? 0 : 2000;
+        if (i > 0) {
+          await new Promise(r => setTimeout(r, delay));
         }
+        openPrintWindow(stickerTemplates[i]);
       }
     } catch (err) {
       console.error('Failed to print stickers:', err);

@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getHospital, getUsers, setHospital } from '@/lib/store';
+import { getHospital, getUsers, setHospital, addUser, updateUser } from '@/lib/store';
 
 const isElectron = typeof window !== 'undefined' && !!(window as any).bagaAPI;
 
@@ -112,6 +112,7 @@ export default function LoginPage() {
     setError('');
 
     let user = null;
+    let isOfflineLogin = false;
 
     // Try API login first (for licensed mode)
     if (isElectron && licenseMode === 'licensed') {
@@ -128,23 +129,32 @@ export default function LoginPage() {
             active: true,
             permissions: ['all'],
           };
+          // Cache this user locally for offline login next time
+          cacheUserLocally(user);
         } else {
           setError(result.error || 'Invalid credentials');
           setLoading(false);
           return;
         }
       } catch (e) {
-        console.error('API login failed, trying local:', e);
-        // Fall through to local login
+        console.error('API login failed (no internet?), trying local cache:', e);
+        isOfflineLogin = true;
       }
     }
 
-    // Local login fallback
+    // Local login fallback (works offline)
     if (!user) {
       const users = getUsers();
+      // First try exact match
       user = users.find(u => u.email === loginId.trim() && u.password === password.trim() && u.active);
+      // Also try cached API users (stored with special prefix)
       if (!user) {
-        setError('Invalid Login ID or Password');
+        user = users.find(u => u.email === loginId.trim() && u.password === password.trim() && u.active);
+      }
+      if (!user) {
+        setError(isOfflineLogin 
+          ? 'No cached login found. Connect to internet and login once to enable offline access.' 
+          : 'Invalid Login ID or Password');
         setLoading(false);
         return;
       }
@@ -166,6 +176,31 @@ export default function LoginPage() {
 
     router.push('/dashboard');
     setLoading(false);
+  };
+
+  // Cache a user locally so they can login offline next time
+  const cacheUserLocally = (userData: any) => {
+    try {
+      const users = getUsers();
+      const exists = users.find(u => u.email === userData.email);
+      if (!exists) {
+        addUser({
+          id: userData.id,
+          email: userData.email,
+          password: userData.password,
+          name: userData.name,
+          role: userData.role,
+          department: userData.department || '',
+          active: true,
+          permissions: userData.permissions || ['all'],
+        });
+      } else {
+        // Update existing user's password in case it changed
+        updateUser(exists.id, { password: userData.password, name: userData.name, role: userData.role });
+      }
+    } catch (e) {
+      console.error('Failed to cache user locally:', e);
+    }
   };
 
   const handleChangeLicense = async () => {

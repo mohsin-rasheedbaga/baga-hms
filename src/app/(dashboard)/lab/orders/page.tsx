@@ -225,7 +225,7 @@ export default function TestOrdersPage() {
                   <input className="form-input bg-slate-100 text-blue-700 font-bold font-mono cursor-not-allowed" value={autoPatientNo} readOnly tabIndex={-1} />
                 </div>
                 <div><label className="form-label">Mobile</label><input className="form-input" maxLength={11} inputMode="numeric" pattern="[0-9]{0,11}" value={formPatient.mobile.replace(/[^0-9]/g,'')} onChange={e => setFormPatient(p => ({...p, mobile: e.target.value.replace(/[^0-9]/g,'')}))} placeholder="03xxxxxxxxx" /></div>
-                <div><label className="form-label">Age</label><input className="form-input" value={formPatient.age} onChange={e => setFormPatient(p => ({...p, age: e.target.value}))} placeholder="e.g. 35" /></div>
+                <div><label className="form-label">Age</label><input className="form-input" maxLength={2} inputMode="numeric" value={formPatient.age.replace(/[^0-9]/g,'')} onChange={e => setFormPatient(p => ({...p, age: e.target.value.replace(/[^0-9]/g,'')}))} placeholder="e.g. 35" /></div>
                 <div>
                   <label className="form-label">Gender</label>
                   <select className="form-input" value={formPatient.gender} onChange={e => setFormPatient(p => ({...p, gender: e.target.value}))}>
