@@ -429,6 +429,148 @@ export async function getLabPrintDataAsync(): Promise<{
   return { hospitalName, hospitalAddress, hospitalPhone, hospitalMobile, hospitalEmail, techName, reportDocHtml, hospitalLogo };
 }
 
+/** Order Slip params */
+interface OrderSlipParams {
+  patientNo: string;
+  patientName: string;
+  age: string;
+  gender: string;
+  mobile: string;
+  tests: { testName: string; price: number }[];
+  urgency: 'routine' | 'urgent' | 'stat';
+  orderedBy: string;
+  sampleType: string;
+  totalAmount: number;
+  date: string;
+  time: string;
+  hospitalName: string;
+  hospitalAddress: string;
+  hospitalPhone: string;
+  hospitalMobile: string;
+  hospitalEmail: string;
+  hospitalLogo: string;
+}
+
+/** Generate a professional A5/A6 order slip HTML for printing */
+export function generateOrderSlipHtml(params: OrderSlipParams): string {
+  const {
+    patientNo, patientName, age, gender, mobile,
+    tests, urgency, orderedBy, sampleType,
+    totalAmount, date, time,
+    hospitalName, hospitalAddress, hospitalPhone,
+    hospitalMobile, hospitalEmail, hospitalLogo,
+  } = params;
+
+  const isUrgent = urgency !== 'routine';
+  const urgencyBadge = urgency === 'stat'
+    ? '<span style="background:#dc2626;color:#fff;padding:2px 10px;border-radius:3px;font-weight:800;font-size:10px;letter-spacing:1px;">STAT</span>'
+    : urgency === 'urgent'
+    ? '<span style="background:#f59e0b;color:#fff;padding:2px 10px;border-radius:3px;font-weight:800;font-size:10px;letter-spacing:1px;">URGENT</span>'
+    : '';
+
+  const testRows = tests.map((t, i) => {
+    const alt = i % 2 === 0 ? '#fff' : '#f8fafc';
+    return `<tr style="background:${alt};">
+      <td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #e2e8f0;">${i + 1}</td>
+      <td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #e2e8f0;font-weight:600;">${t.testName}</td>
+      <td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:right;">Rs. ${t.price.toLocaleString()}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Lab Order Slip - ${patientName}</title><style>
+    @page{size:A5;margin:6mm 8mm;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#1e293b;background:#fff;font-size:10px;line-height:1.35;}
+    .slip{width:100%;max-width:148mm;margin:0 auto;border:1.5px solid #c8d6e5;border-radius:5px;overflow:hidden;}
+
+    .header{background:linear-gradient(135deg,#0c2340 0%,#1a3a5c 60%,#1e4d7b 100%);color:#fff;padding:10px 16px;display:flex;justify-content:center;align-items:center;gap:12px;position:relative;}
+    .header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#f59e0b,#ef4444,#3b82f6,#10b981,#f59e0b);}
+    .logo{width:40px;height:40px;border-radius:5px;object-fit:contain;background:#fff;padding:2px;}
+    .hname{font-size:16px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;text-shadow:0 1px 2px rgba(0,0,0,0.3);}
+    .hsub{font-size:8px;letter-spacing:1.2px;opacity:0.85;text-transform:uppercase;text-align:center;}
+
+    .contact{background:#eef2f7;padding:3px 16px;display:flex;justify-content:space-between;font-size:7.5px;color:#475569;border-bottom:1px solid #d1d9e6;}
+
+    .title-bar{background:#fef3c7;border-bottom:2px solid #f59e0b;padding:6px 16px;text-align:center;}
+    .title-bar h2{font-size:13px;font-weight:800;color:#0c2340;letter-spacing:1.5px;text-transform:uppercase;}
+
+    .patient-info{padding:6px 16px;display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;background:#f8fafc;border-bottom:1px solid #e2e8f0;}
+    .prow{display:flex;gap:4px;font-size:10px;}
+    .prow .l{color:#64748b;font-weight:600;min-width:60px;}
+    .prow .v{color:#1e293b;font-weight:500;}
+
+    .urgency-strip{${isUrgent ? 'background:#fef2f2;border-bottom:2px solid #dc2626;' : 'display:none;'}padding:4px 16px;text-align:center;}
+
+    .tests-section{padding:6px 16px;}
+    .tests-section h3{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#0c2340;margin-bottom:4px;}
+    table{width:100%;border-collapse:collapse;}
+    th{padding:4px 8px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#0c2340;background:#eef2f7;border-bottom:2px solid #0c2340;text-align:left;}
+    td{padding:4px 8px;font-size:10px;border-bottom:1px solid #f1f5f9;}
+
+    .total-row{padding:6px 16px;display:flex;justify-content:space-between;align-items:center;border-top:2px solid #0c2340;background:#f0fdf4;}
+    .total-row .tl{font-size:11px;font-weight:700;color:#0c2340;}
+    .total-row .tv{font-size:14px;font-weight:900;color:#0c2340;}
+
+    .footer{padding:8px 16px;text-align:center;background:#f1f5f9;border-top:1px solid #d1d9e6;}
+    .footer .ty{font-size:9px;color:#64748b;font-style:italic;}
+    .footer .info{font-size:7px;color:#94a3b8;margin-top:2px;}
+
+    @media print{
+      body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    }
+  </style></head><body>
+    <div class="slip">
+      <div class="header">
+        ${hospitalLogo ? `<img class="logo" src="${hospitalLogo}" alt="" />` : ''}
+        <div>
+          <div class="hname">${hospitalName}</div>
+          <div class="hsub">Pathology & Diagnostic Laboratory</div>
+        </div>
+      </div>
+
+      <div class="contact">
+        <span>${hospitalAddress || 'Comprehensive Healthcare Services'}</span>
+        <span>${hospitalPhone ? 'Tel: ' + hospitalPhone : ''}${hospitalMobile ? ' | Mob: ' + hospitalMobile : ''}</span>
+      </div>
+
+      <div class="title-bar">
+        <h2>Laboratory Test Order Slip</h2>
+      </div>
+
+      <div class="patient-info">
+        <div class="prow"><span class="l">Patient No:</span><span class="v" style="font-weight:800;color:#1e4d7b;">${patientNo}</span></div>
+        <div class="prow"><span class="l">Patient:</span><span class="v">${patientName}</span></div>
+        <div class="prow"><span class="l">Age / Gender:</span><span class="v">${age} / ${gender}</span></div>
+        <div class="prow"><span class="l">Mobile:</span><span class="v">${mobile || '-'}</span></div>
+        <div class="prow"><span class="l">Sample:</span><span class="v">${sampleType}</span></div>
+        <div class="prow"><span class="l">Doctor:</span><span class="v">${orderedBy}</span></div>
+      </div>
+
+      <div class="urgency-strip">${urgencyBadge}</div>
+
+      <div class="tests-section">
+        <h3>Tests Ordered</h3>
+        <table>
+          <thead><tr><th style="width:8%;">#</th><th>Test Name</th><th style="width:25%;text-align:right;">Price</th></tr></thead>
+          <tbody>${testRows}</tbody>
+        </table>
+      </div>
+
+      <div class="total-row">
+        <span class="tl">Total Amount (${tests.length} test${tests.length !== 1 ? 's' : ''})</span>
+        <span class="tv">Rs. ${totalAmount.toLocaleString()}</span>
+      </div>
+
+      <div class="footer">
+        <div class="ty">Thank you for choosing ${hospitalName}!</div>
+        <div class="info">Order Date: ${date} | Time: ${time} | Order ID: ${patientNo}</div>
+      </div>
+    </div>
+  </body></html>`;
+
+  return html;
+}
+
 /** Helper: open print window - uses Electron native print if available */
 export function openPrintWindow(html: string, autoPrint = true): void {
   const isEl = typeof window !== 'undefined' && !!(window as any).bagaAPI?.printHtml;

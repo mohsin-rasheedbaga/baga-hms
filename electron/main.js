@@ -6,7 +6,7 @@ const crypto = require('crypto');
 // ============================================================
 // CONFIGURATION
 // ============================================================
-const APP_VERSION = '3.0.3';
+const APP_VERSION = '3.0.4';
 const API_BASE = 'https://baga-hospital-api.vercel.app';
 const SERVER_PORT = 18765;
 const STORE_PATH = path.join(app.getPath('userData'), 'baga-store.json');

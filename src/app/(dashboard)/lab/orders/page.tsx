@@ -2,6 +2,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { initLabData, getLabOrders, addLabOrder, updateLabOrder, getActiveLabTests, genId, nowTime, todayStr, type LabOrderItem } from '@/lib/lab-store';
+import { dbGetCounter, dbSetCounter } from '@/lib/db-bridge';
+import { generateOrderSlipHtml, getLabPrintDataAsync } from '@/lib/print-lab-report';
+import { triggerPrint } from '@/lib/print-utils';
 
 export default function TestOrdersPage() {
   const router = useRouter();
@@ -15,6 +18,14 @@ export default function TestOrdersPage() {
 
   // New order form
   const [formPatient, setFormPatient] = useState({ name: '', no: '', mobile: '', gender: 'Male', age: '' });
+  const [autoPatientNo, setAutoPatientNo] = useState('');
+
+  const getNextPatientNo = (): string => {
+    const counter = dbGetCounter('lab_patient_counter');
+    const nextVal = (counter ?? 0) + 1;
+    dbSetCounter('lab_patient_counter', nextVal);
+    return 'LAB-' + String(nextVal).padStart(4, '0');
+  };
   const [formTests, setFormTests] = useState<{ testId: string; name: string; price: number; selected: boolean }[]>([]);
   const [formUrgency, setFormUrgency] = useState<'routine' | 'urgent' | 'stat'>('routine');
   const [formDoctor, setFormDoctor] = useState('');
@@ -46,7 +57,9 @@ export default function TestOrdersPage() {
   };
 
   const openNewOrder = () => {
-    setFormPatient({ name: '', no: '', mobile: '', gender: 'Male', age: '' });
+    const newPatientNo = getNextPatientNo();
+    setAutoPatientNo(newPatientNo);
+    setFormPatient({ name: '', no: newPatientNo, mobile: '', gender: 'Male', age: '' });
     setFormTests(catalog.map(t => ({ testId: t.id, name: t.name, price: t.price, selected: false })));
     setFormUrgency('routine');
     setFormDoctor('');
@@ -61,7 +74,7 @@ export default function TestOrdersPage() {
   };
 
   const createOrder = () => {
-    if (!formPatient.name.trim() || !formPatient.no.trim()) { showToast('Patient name and ID required', 'error'); return; }
+    if (!formPatient.name.trim()) { showToast('Patient name required', 'error'); return; }
     const selectedTests = formTests.filter(t => t.selected);
     if (selectedTests.length === 0) { showToast('Select at least one test', 'error'); return; }
     if (!formDoctor.trim()) { showToast('Ordering doctor required', 'error'); return; }
@@ -71,7 +84,7 @@ export default function TestOrdersPage() {
       id: genId(),
       visitId: '',
       patientId: genId(),
-      patientNo: formPatient.no,
+      patientNo: autoPatientNo || formPatient.no,
       patientName: formPatient.name,
       gender: formPatient.gender,
       age: formPatient.age,
@@ -91,6 +104,38 @@ export default function TestOrdersPage() {
     setShowModal(false);
     loadData();
     showToast('Order created successfully', 'success');
+
+    // Auto-print order slip
+    printOrderSlip(order);
+  };
+
+  const printOrderSlip = async (order: LabOrderItem) => {
+    try {
+      const printData = await getLabPrintDataAsync();
+      const slipHtml = generateOrderSlipHtml({
+        patientNo: order.patientNo,
+        patientName: order.patientName,
+        age: order.age,
+        gender: order.gender,
+        mobile: '',
+        tests: order.tests,
+        urgency: order.urgency,
+        orderedBy: order.orderedBy,
+        sampleType: order.sampleType,
+        totalAmount: order.totalAmount,
+        date: order.date,
+        time: order.time,
+        hospitalName: printData.hospitalName,
+        hospitalAddress: printData.hospitalAddress,
+        hospitalPhone: printData.hospitalPhone,
+        hospitalMobile: printData.hospitalMobile,
+        hospitalEmail: printData.hospitalEmail,
+        hospitalLogo: printData.hospitalLogo,
+      });
+      triggerPrint(slipHtml);
+    } catch (err) {
+      console.error('Failed to print order slip:', err);
+    }
   };
 
   const collectSample = (order: LabOrderItem) => {
@@ -179,7 +224,10 @@ export default function TestOrdersPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="form-label">Patient Name *</label><input className="form-input" value={formPatient.name} onChange={e => setFormPatient(p => ({...p, name: e.target.value}))} placeholder="Full Name" /></div>
-                <div><label className="form-label">Patient No *</label><input className="form-input" value={formPatient.no} onChange={e => setFormPatient(p => ({...p, no: e.target.value}))} placeholder="e.g. BAGA-0001" /></div>
+                <div>
+                  <label className="form-label">Patient No (Auto)</label>
+                  <input className="form-input bg-slate-100 text-blue-700 font-bold font-mono cursor-not-allowed" value={autoPatientNo} readOnly tabIndex={-1} />
+                </div>
                 <div><label className="form-label">Mobile</label><input className="form-input" value={formPatient.mobile} onChange={e => setFormPatient(p => ({...p, mobile: e.target.value}))} placeholder="03xx-xxxxxxx" /></div>
                 <div><label className="form-label">Age</label><input className="form-input" value={formPatient.age} onChange={e => setFormPatient(p => ({...p, age: e.target.value}))} placeholder="e.g. 35" /></div>
                 <div>
