@@ -6,7 +6,7 @@ const crypto = require('crypto');
 // ============================================================
 // CONFIGURATION
 // ============================================================
-const APP_VERSION = '3.0.1';
+const APP_VERSION = '3.0.2';
 const API_BASE = 'https://baga-hospital-api.vercel.app';
 const SERVER_PORT = 18765;
 const STORE_PATH = path.join(app.getPath('userData'), 'baga-store.json');
@@ -830,6 +830,12 @@ ipcMain.handle('get-app-version', () => APP_VERSION);
 ipcMain.handle('get-machine-id', () => getMachineId());
 ipcMain.handle('get-api-base', () => API_BASE);
 ipcMain.handle('check-update', () => { checkForUpdates(); return { checking: true }; });
+ipcMain.handle('manual-check-update', async () => {
+  // For v3.0.0 users who don't have auto-update — open release page in browser
+  const releaseUrl = 'https://github.com/mohsin-rasheedbaga/baga-hms/releases/latest';
+  shell.openExternal(releaseUrl);
+  return { opened: true, url: releaseUrl };
+});
 ipcMain.handle('quit-app', () => app.quit());
 
 // ============================================================

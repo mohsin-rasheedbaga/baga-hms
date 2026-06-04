@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('bagaAPI', {
   
   // Update
   checkForUpdate: () => ipcRenderer.invoke('check-update'),
+  manualCheckUpdate: () => ipcRenderer.invoke('manual-check-update'),
   onUpdateStatus: (callback) => {
     const listener = (event, data) => callback(data);
     ipcRenderer.on('update-status', listener);

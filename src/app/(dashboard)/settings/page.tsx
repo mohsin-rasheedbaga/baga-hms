@@ -181,6 +181,7 @@ export default function SettingsPage() {
   const [changeLicenseLoading, setChangeLicenseLoading] = useState(false);
   const [changeLicenseError, setChangeLicenseError] = useState('');
   const [changeLicenseSuccess, setChangeLicenseSuccess] = useState('');
+  const [appVersion, setAppVersion] = useState('...');
 
   // Room type modal
   const [roomModal, setRoomModal] = useState(false);
@@ -214,6 +215,12 @@ export default function SettingsPage() {
           } catch (e) {}
         } else if (info.logoUrl) {
           setLogoSrc(info.logoUrl);
+        }
+        // Load app version
+        try {
+          (window as any).bagaAPI.getAppVersion().then((v: string) => setAppVersion(v || 'Unknown'));
+        } catch (e) { setAppVersion('Unknown'); }
+        if (!info.logoPath && !info.logoUrl) {
           setLogoIsCustom(false);
         }
       }).catch(() => {});
@@ -734,7 +741,7 @@ export default function SettingsPage() {
           <div className="space-y-3 text-sm">
             <div className="flex justify-between py-2 border-b border-slate-100">
               <span className="text-slate-500">Version</span>
-              <span className="font-medium">3.0.0</span>
+              <span className="font-medium">{appVersion}</span>
             </div>
             <div className="flex justify-between py-2 border-b border-slate-100">
               <span className="text-slate-500">System Name</span>
@@ -748,9 +755,25 @@ export default function SettingsPage() {
               <span className="text-slate-500">Database</span>
               <span className="badge badge-green">Local Storage (Offline)</span>
             </div>
-            <div className="flex justify-between py-2">
+            <div className="flex justify-between py-2 border-b border-slate-100">
               <span className="text-slate-500">Last Updated</span>
               <span className="font-medium">{todayStr()}</span>
+            </div>
+            <div className="pt-3">
+              <button
+                onClick={() => {
+                  if (isElectron) {
+                    try { (window as any).bagaAPI.manualCheckUpdate(); } catch (e) {}
+                  } else {
+                    window.open('https://github.com/mohsin-rasheedbaga/baga-hms/releases/latest', '_blank');
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition font-medium"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                Check for Updates
+              </button>
+              <p className="text-xs text-slate-400 mt-1 text-center">Opens the download page in your browser. Download the latest Setup file to update.</p>
             </div>
           </div>
         </div>
