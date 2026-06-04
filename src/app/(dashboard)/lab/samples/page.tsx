@@ -1,6 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { initLabData, getLabOrders, updateLabOrder, type LabOrderItem } from '@/lib/lab-store';
+import { triggerPrint } from '@/lib/print-utils';
+import { getLabPrintDataAsync } from '@/lib/print-lab-report';
 
 export default function SampleCollectionPage() {
   const [mounted, setMounted] = useState(false);
@@ -36,37 +38,52 @@ export default function SampleCollectionPage() {
     showToast(`Sent to lab for processing`, 'success');
   };
 
-  const printSticker = (order: LabOrderItem) => {
-    const html = `<!DOCTYPE html><html><head><title>Sample Sticker</title><style>
-      body{margin:0;padding:20px;font-family:Arial,sans-serif;}
-      .sticker{border:2px solid #000;padding:15px;width:300px;page-break-after:always;}
-      h2{margin:0 0 5px;font-size:14px;text-align:center;} .center{text-align:center;}
-      .row{display:flex;justify-content:space-between;margin:3px 0;font-size:12px;}
-      .bold{font-weight:bold;} .small{font-size:10px;}
-      table{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px;}
-      th,td{border:1px solid #000;padding:4px 6px;text-align:left;}
-      th{background:#f0f0f0;font-size:10px;}
-      @media print{body{padding:0;}}
-    </style></head><body>
-      <div class="sticker">
-        <h2 class="center">BAGA HOSPITAL - LABORATORY</h2>
-        <div class="row"><span class="bold">Patient:</span><span>${order.patientName}</span></div>
-        <div class="row"><span class="bold">ID:</span><span>${order.patientNo}</span></div>
-        <div class="row"><span class="bold">Gender/Age:</span><span>${order.gender} / ${order.age}</span></div>
-        <div class="row"><span class="bold">Order ID:</span><span>${order.id}</span></div>
-        <div class="row"><span class="bold">Date:</span><span>${order.date} ${order.time}</span></div>
-        <div class="row"><span class="bold">Sample:</span><span>${order.sampleType}</span></div>
-        <div class="row"><span class="bold">Urgency:</span><span>${order.urgency.toUpperCase()}</span></div>
-        <table>
-          <tr><th>#</th><th>Test Name</th></tr>
-          ${order.tests.map((t,i) => `<tr><td>${i+1}</td><td>${t.testName}</td></tr>`).join('')}
-        </table>
-        <div class="row small" style="margin-top:10px;"><span>Ordered by: ${order.orderedBy}</span></div>
-        <div class="row small"><span>Collected: ${order.collectedAt || '-'} by ${order.collectedBy || '-'}</span></div>
-      </div>
-    </body></html>`;
-    const w = window.open('', '_blank');
-    if (w) { w.document.write(html); w.document.close(); w.print(); }
+  const printStickers = async (order: LabOrderItem) => {
+    // One sticker per test — each printed separately
+    try {
+      const printData = await getLabPrintDataAsync();
+      const stickerTemplates = order.tests.map((t, i) => {
+        const barcode = `${order.patientNo}-${t.testName.replace(/\s+/g,'').substring(0,6).toUpperCase()}`;
+        return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sticker ${i+1}</title><style>
+          @page{size:50mm 25mm;margin:2mm;}
+          *{margin:0;padding:0;box-sizing:border-box;}
+          body{font-family:Arial,sans-serif;width:50mm;height:25mm;overflow:hidden;border:1px dashed #999;padding:2mm;position:relative;}
+          .logo{height:5mm;max-width:15mm;object-fit:contain;position:absolute;top:2mm;left:2mm;}
+          .hname{font-size:5pt;font-weight:800;color:#0c2340;position:absolute;top:2mm;left:18mm;max-width:30mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+          .pid{font-size:5.5pt;font-weight:700;color:#2563eb;font-family:monospace;position:absolute;top:7mm;left:2mm;}
+          .pname{font-size:5pt;font-weight:600;position:absolute;top:7mm;left:20mm;max-width:26mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+          .testname{font-size:8pt;font-weight:900;color:#0c2340;text-align:center;position:absolute;top:12mm;left:2mm;right:2mm;background:#f0f4ff;border-radius:1mm;padding:1mm 0;}
+          .sample{font-size:4.5pt;color:#64748b;position:absolute;top:17mm;left:2mm;}
+          .date{font-size:4.5pt;color:#64748b;position:absolute;top:17mm;right:2mm;}
+          .barcode{font-size:5pt;font-family:monospace;color:#334155;background:#f8fafc;border:0.3mm solid #e2e8f0;border-radius:0.5mm;padding:0.5mm 1mm;text-align:center;position:absolute;bottom:2mm;left:2mm;right:2mm;letter-spacing:1px;}
+          .urgency{position:absolute;top:2mm;right:2mm;font-size:4pt;font-weight:800;padding:0.3mm 1.5mm;border-radius:1mm;}
+          .stat{background:#dc2626;color:#fff;} .urgent{background:#f59e0b;color:#fff;} .routine{background:#e2e8f0;color:#475569;}
+        </style></head><body>
+          ${printData.hospitalLogo ? `<img class="logo" src="${printData.hospitalLogo}" alt="" />` : ''}
+          <div class="hname">${printData.hospitalName}</div>
+          <div class="pid">${order.patientNo}</div>
+          <div class="pname">${order.patientName} (${order.gender}/${order.age})</div>
+          <div class="testname">${t.testName}</div>
+          <div class="sample">${order.sampleType}</div>
+          <div class="date">${order.date} ${order.time}</div>
+          <div class="barcode">${barcode}</div>
+          <span class="urgency ${order.urgency}">${order.urgency.toUpperCase()}</span>
+        </body></html>`;
+      });
+
+      // Print each sticker in a separate window (one per test)
+      for (let i = 0; i < stickerTemplates.length; i++) {
+        const w = window.open('', '_blank');
+        if (w) {
+          w.document.write(stickerTemplates[i]);
+          w.document.close();
+          const delay = i === 0 ? 500 : 2000;
+          setTimeout(() => { w.print(); setTimeout(() => w.close(), 500); }, delay);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to print stickers:', err);
+    }
   };
 
   const urgencyColor = (u: string) => u === 'stat' ? 'badge-rose' : u === 'urgent' ? 'badge-amber' : 'badge-slate';
@@ -149,7 +166,7 @@ export default function SampleCollectionPage() {
                     <td className="text-sm">{o.collectedAt} <span className="text-slate-400">by {o.collectedBy}</span></td>
                     <td>
                       <div className="flex gap-1">
-                        <button onClick={() => printSticker(o)} className="btn btn-outline btn-sm">Print Sticker</button>
+                        <button onClick={() => printStickers(o)} className="btn btn-outline btn-sm">Print Stickers ({o.tests.length})</button>
                         <button onClick={() => sendToLab(o)} className="btn btn-primary btn-sm">Send to Lab</button>
                       </div>
                     </td>

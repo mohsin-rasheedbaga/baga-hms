@@ -68,10 +68,17 @@ export default function ResultEntryPage() {
   const handleKeyDown = (e: React.KeyboardEvent, idx: number) => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      // Check if all results are filled
+      const allFilled = results.every(r => r.value.trim() !== '');
+      if (idx === results.length - 1 && allFilled) {
+        // Last field, all filled — auto-complete report
+        completeReport();
+        return;
+      }
       if (idx < results.length - 1) {
         const nextInput = inputRefs.current[idx + 1];
         if (nextInput) { nextInput.focus(); nextInput.select(); }
-        // Check if next result is for a different test
+        // Auto-switch test tab when moving to a different test
         if (results[idx + 1].testId !== results[idx].testId) {
           const nextTestIdx = activeOrder!.tests.findIndex(t => t.testId === results[idx + 1].testId);
           if (nextTestIdx >= 0) setActiveTestIdx(nextTestIdx);

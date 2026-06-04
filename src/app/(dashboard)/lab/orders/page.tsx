@@ -14,6 +14,7 @@ export default function TestOrdersPage() {
   const [search, setSearch] = useState('');
   const [orders, setOrders] = useState<LabOrderItem[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [orderSummary, setOrderSummary] = useState<LabOrderItem | null>(null);
   const [catalog, setCatalog] = useState(getActiveLabTests());
 
   // New order form
@@ -105,8 +106,8 @@ export default function TestOrdersPage() {
     loadData();
     showToast('Order created successfully', 'success');
 
-    // Auto-print order slip
-    printOrderSlip(order);
+    // Show order summary modal (print on user click, not auto-print)
+    setOrderSummary(order);
   };
 
   const printOrderSlip = async (order: LabOrderItem) => {
@@ -138,11 +139,7 @@ export default function TestOrdersPage() {
     }
   };
 
-  const collectSample = (order: LabOrderItem) => {
-    updateLabOrder(order.id, { status: 'collected', collectedAt: nowTime(), collectedBy: 'Lab Tech' });
-    loadData();
-    showToast(`Sample collected for ${order.patientName}`, 'success');
-  };
+
 
   const statusColor = (s: string) => s === 'ordered' ? 'badge-amber' : s === 'collected' ? 'badge-blue' : s === 'processing' ? 'badge-purple' : 'badge-green';
   const urgencyColor = (u: string) => u === 'stat' ? 'badge-rose' : u === 'urgent' ? 'badge-amber' : 'badge-slate';
@@ -200,7 +197,6 @@ export default function TestOrdersPage() {
                   <td className="text-sm text-slate-500">{o.date}<br />{o.time}</td>
                   <td>
                     <div className="flex gap-1 flex-wrap">
-                      {o.status === 'ordered' && <button onClick={() => collectSample(o)} className="btn btn-primary btn-sm">Collect</button>}
                       {o.status === 'collected' && <button onClick={() => { updateLabOrder(o.id, { status: 'processing' }); loadData(); showToast('Sent to processing', 'success'); }} className="btn btn-primary btn-sm">Process</button>}
                       {o.status === 'completed' && <button onClick={() => router.push('/lab/reports')} className="btn btn-outline btn-sm">View</button>}
                     </div>
@@ -228,7 +224,7 @@ export default function TestOrdersPage() {
                   <label className="form-label">Patient No (Auto)</label>
                   <input className="form-input bg-slate-100 text-blue-700 font-bold font-mono cursor-not-allowed" value={autoPatientNo} readOnly tabIndex={-1} />
                 </div>
-                <div><label className="form-label">Mobile</label><input className="form-input" value={formPatient.mobile} onChange={e => setFormPatient(p => ({...p, mobile: e.target.value}))} placeholder="03xx-xxxxxxx" /></div>
+                <div><label className="form-label">Mobile</label><input className="form-input" maxLength={11} inputMode="numeric" pattern="[0-9]{0,11}" value={formPatient.mobile.replace(/[^0-9]/g,'')} onChange={e => setFormPatient(p => ({...p, mobile: e.target.value.replace(/[^0-9]/g,'')}))} placeholder="03xxxxxxxxx" /></div>
                 <div><label className="form-label">Age</label><input className="form-input" value={formPatient.age} onChange={e => setFormPatient(p => ({...p, age: e.target.value}))} placeholder="e.g. 35" /></div>
                 <div>
                   <label className="form-label">Gender</label>
@@ -273,6 +269,45 @@ export default function TestOrdersPage() {
               </div>
 
               <button onClick={createOrder} className="btn btn-success btn-lg w-full">Create Order</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Order Summary Modal */}
+      {orderSummary && (
+        <div className="modal-overlay" onClick={() => setOrderSummary(null)}>
+          <div className="modal-content" style={{ maxWidth: '550px' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-slate-800">Order Created Successfully</h3>
+              <button onClick={() => setOrderSummary(null)} className="btn btn-outline btn-sm">Close</button>
+            </div>
+            <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 mb-4">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div><span className="text-slate-500">Patient ID:</span> <span className="font-mono font-bold text-blue-600">{orderSummary.patientNo}</span></div>
+                <div><span className="text-slate-500">Name:</span> <span className="font-semibold">{orderSummary.patientName}</span></div>
+                <div><span className="text-slate-500">Age / Gender:</span> <span>{orderSummary.age} / {orderSummary.gender}</span></div>
+                <div><span className="text-slate-500">Sample:</span> <span>{orderSummary.sampleType}</span></div>
+                <div><span className="text-slate-500">Doctor:</span> <span>{orderSummary.orderedBy}</span></div>
+                <div><span className="text-slate-500">Urgency:</span> <span className={`badge ${orderSummary.urgency === 'stat' ? 'badge-rose' : orderSummary.urgency === 'urgent' ? 'badge-amber' : 'badge-slate'}`}>{orderSummary.urgency.toUpperCase()}</span></div>
+              </div>
+            </div>
+            <div className="border border-slate-200 rounded-lg overflow-hidden mb-4">
+              <table className="data-table">
+                <thead><tr><th>Test</th><th className="text-right">Price</th></tr></thead>
+                <tbody>
+                  {orderSummary.tests.map((t, i) => (
+                    <tr key={i}><td className="text-sm font-medium">{t.testName}</td><td className="text-right text-sm">Rs. {t.price.toLocaleString()}</td></tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-emerald-50"><td className="font-bold">Total</td><td className="text-right font-bold text-emerald-600 text-lg">Rs. {orderSummary.totalAmount.toLocaleString()}</td></tr>
+                </tfoot>
+              </table>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { printOrderSlip(orderSummary); }} className="btn btn-primary flex-1">Print Slip</button>
+              <button onClick={() => setOrderSummary(null)} className="btn btn-outline flex-1">Close</button>
             </div>
           </div>
         </div>
