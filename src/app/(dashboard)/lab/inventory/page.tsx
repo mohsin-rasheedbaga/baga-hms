@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { initLabData, getLabInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getLowStockItems, getExpiringItems, getInventoryCategories, genId, type LabInventoryItem } from '@/lib/lab-store';
+import { getHospitalSettings } from '@/lib/store';
 
 export default function InventoryPage() {
   const [mounted, setMounted] = useState(false);
@@ -23,6 +24,7 @@ export default function InventoryPage() {
 
   if (!mounted) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin" /></div>;
 
+  const settings = getHospitalSettings(); const curr = settings?.currency || 'Rs.';
   const lowStock = getLowStockItems();
   const expiring = getExpiringItems(90);
   const categories = getInventoryCategories();
@@ -119,7 +121,7 @@ export default function InventoryPage() {
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold">Total Value</p>
-          <p className="text-2xl font-bold text-emerald-600 mt-1">Rs. {totalValue.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-emerald-600 mt-1">{curr} {totalValue.toLocaleString()}</p>
         </div>
       </div>
 
@@ -184,7 +186,7 @@ export default function InventoryPage() {
                     )}
                   </td>
                   <td className="text-sm">{item.minStock}</td>
-                  <td className="text-sm">Rs. {item.costPrice.toLocaleString()}</td>
+                  <td className="text-sm">{curr} {item.costPrice.toLocaleString()}</td>
                   <td className="text-sm">{item.expiryDate}</td>
                   <td>
                     <div className="flex gap-1">

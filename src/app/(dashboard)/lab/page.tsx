@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { initLabData, getLabOrders, getLabStatistics, getLabInventory, getLowStockItems, todayStr } from '@/lib/lab-store';
+import { getHospitalSettings } from '@/lib/store';
 
 export default function LabDashboardPage() {
   const router = useRouter();
@@ -13,6 +14,9 @@ export default function LabDashboardPage() {
   }, []);
 
   if (!mounted) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin" /></div>;
+
+  const settings = getHospitalSettings();
+  const curr = settings?.currency || 'Rs.';
 
   const today = todayStr();
   const allOrders = getLabOrders();
@@ -65,7 +69,7 @@ export default function LabDashboardPage() {
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold">Today&apos;s Revenue</p>
-          <p className="text-2xl font-bold text-emerald-600 mt-1">Rs. {stats.revenue.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-emerald-600 mt-1">{curr} {stats.revenue.toLocaleString()}</p>
         </div>
       </div>
 
@@ -83,11 +87,11 @@ export default function LabDashboardPage() {
           </div>
           <div>
             <p className="text-sm text-slate-500">Revenue</p>
-            <p className="text-xl font-bold text-emerald-600">Rs. {monthStats.revenue.toLocaleString()}</p>
+            <p className="text-xl font-bold text-emerald-600">{curr} {monthStats.revenue.toLocaleString()}</p>
           </div>
           <div>
             <p className="text-sm text-slate-500">Expenses</p>
-            <p className="text-xl font-bold text-rose-600">Rs. {monthStats.totalExpenses.toLocaleString()}</p>
+            <p className="text-xl font-bold text-rose-600">{curr} {monthStats.totalExpenses.toLocaleString()}</p>
           </div>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { initLabData, getLabOrders, type LabOrderItem } from '@/lib/lab-store';
 import { generateProfessionalLabReportHtml, getLabPrintDataAsync } from '@/lib/print-lab-report';
 import { triggerPrint } from '@/lib/print-utils';
+import { getHospitalSettings } from '@/lib/store';
 
 export default function CompletedReportsPage() {
   const [mounted, setMounted] = useState(false);
@@ -22,6 +23,7 @@ export default function CompletedReportsPage() {
 
   if (!mounted) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin" /></div>;
 
+  const settings = getHospitalSettings(); const curr = settings?.currency || 'Rs.';
   const completed = orders.filter(o => o.status === 'completed');
   const abnormalReports = completed.filter(o => o.results.some(r => r.flag !== 'Normal'));
   const totalRevenue = completed.reduce((s, o) => s + o.paidAmount, 0);
@@ -118,7 +120,7 @@ export default function CompletedReportsPage() {
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold">Total Revenue</p>
-          <p className="text-2xl font-bold text-emerald-600 mt-1">Rs. {totalRevenue.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-emerald-600 mt-1">{curr} {totalRevenue.toLocaleString()}</p>
         </div>
       </div>
 
@@ -155,7 +157,7 @@ export default function CompletedReportsPage() {
                         <span className="badge badge-green">Normal</span>
                       )}
                     </td>
-                    <td className="font-semibold text-emerald-600">Rs. {o.paidAmount.toLocaleString()}</td>
+                    <td className="font-semibold text-emerald-600">{curr} {o.paidAmount.toLocaleString()}</td>
                     <td className="text-sm text-slate-500">{o.completedAt}</td>
                     <td>
                       <div className="flex gap-1">

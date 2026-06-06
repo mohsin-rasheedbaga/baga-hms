@@ -5,6 +5,7 @@ import { initLabData, getLabOrders, addLabOrder, updateLabOrder, getActiveLabTes
 import { dbGetCounter, dbSetCounter } from '@/lib/db-bridge';
 import { generateOrderSlipHtml, getLabPrintDataAsync } from '@/lib/print-lab-report';
 import { triggerPrint } from '@/lib/print-utils';
+import { getHospitalSettings } from '@/lib/store';
 
 export default function TestOrdersPage() {
   const router = useRouter();
@@ -43,6 +44,7 @@ export default function TestOrdersPage() {
 
   if (!mounted) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin" /></div>;
 
+  const settings = getHospitalSettings(); const curr = settings?.currency || 'Rs.';
   const filteredOrders = orders.filter(o => {
     const matchTab = tab === 'all' || o.status === tab;
     const matchSearch = search === '' || o.patientName.toLowerCase().includes(search.toLowerCase()) || o.patientNo.toLowerCase().includes(search.toLowerCase()) || o.patientId.includes(search);
@@ -188,7 +190,7 @@ export default function TestOrdersPage() {
                   </td>
                   <td>
                     <div className="flex flex-wrap gap-1">{o.tests.map((t,i) => <span key={i} className="badge badge-blue text-xs">{t.testName}</span>)}</div>
-                    <div className="text-xs text-slate-500 mt-1 font-semibold">Rs. {o.totalAmount.toLocaleString()}</div>
+                    <div className="text-xs text-slate-500 mt-1 font-semibold">{curr} {o.totalAmount.toLocaleString()}</div>
                   </td>
                   <td className="text-sm">{o.orderedBy}</td>
                   <td><span className={`badge ${urgencyColor(o.urgency)}`}>{o.urgency.toUpperCase()}</span></td>
@@ -259,12 +261,12 @@ export default function TestOrdersPage() {
                         <input type="checkbox" checked={t.selected} onChange={() => toggleTestSelection(i)} />
                         <span className="text-sm font-medium">{t.name}</span>
                       </div>
-                      <span className="text-sm text-slate-500">Rs. {t.price}</span>
+                      <span className="text-sm text-slate-500">{curr} {t.price}</span>
                     </label>
                   ))}
                 </div>
                 <div className="mt-2 text-sm text-slate-600">
-                  Total: <span className="font-bold text-emerald-600">Rs. {formTests.filter(t => t.selected).reduce((s, t) => s + t.price, 0).toLocaleString()}</span>
+                  Total: <span className="font-bold text-emerald-600">{curr} {formTests.filter(t => t.selected).reduce((s, t) => s + t.price, 0).toLocaleString()}</span>
                 </div>
               </div>
 
@@ -297,11 +299,11 @@ export default function TestOrdersPage() {
                 <thead><tr><th>Test</th><th className="text-right">Price</th></tr></thead>
                 <tbody>
                   {orderSummary.tests.map((t, i) => (
-                    <tr key={i}><td className="text-sm font-medium">{t.testName}</td><td className="text-right text-sm">Rs. {t.price.toLocaleString()}</td></tr>
+                    <tr key={i}><td className="text-sm font-medium">{t.testName}</td><td className="text-right text-sm">{curr} {t.price.toLocaleString()}</td></tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-emerald-50"><td className="font-bold">Total</td><td className="text-right font-bold text-emerald-600 text-lg">Rs. {orderSummary.totalAmount.toLocaleString()}</td></tr>
+                  <tr className="bg-emerald-50"><td className="font-bold">Total</td><td className="text-right font-bold text-emerald-600 text-lg">{curr} {orderSummary.totalAmount.toLocaleString()}</td></tr>
                 </tfoot>
               </table>
             </div>

@@ -10,6 +10,20 @@ import type { Patient, Prescription, MedicineItem } from '@/lib/types';
 import { triggerPrint } from '@/lib/print-utils';
 
 /* ==================== LOCAL TYPES ==================== */
+interface CodeItem {
+  medicineId: string;
+  name: string;
+  genericName: string;
+  form: string;
+  strength: string;
+  packing: string;
+  price: number;
+ days: number;
+ dosage: string;
+ frequency: string;
+ instructions: string;
+}
+
 interface CartItem {
   medicineId: string;
   name: string;
@@ -20,6 +34,9 @@ interface CartItem {
   price: number;
   quantity: number;
   total: number;
+  days: number;
+  dosage: string;
+  frequency: string;
 }
 
 interface PharmacySale {
@@ -106,6 +123,10 @@ export default function PharmacyPage() {
   // Bill modal
   const [saleBill, setSaleBill] = useState<PharmacySale | null>(null);
   const [billDiscount, setBillDiscount] = useState(0);
+  const [discountType, setDiscountType] = useState<'patient' | 'prescriber'>('patient');
+
+  // Code (Prescription Builder)
+  const [codeItems, setCodeItems] = useState<CodeItem[]>([]);
 
   // Cart
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -150,15 +171,16 @@ export default function PharmacyPage() {
     setShowMedDropdown(true);
   };
 
-  const addMedicineToCart = (med: MedicineItem) => {
-    const existing = cart.find(c => c.medicineId === med.id);
+  const addToCode = (med: MedicineItem) => {
+    const existing = codeItems.find(c => c.medicineId === med.id);
     if (existing) {
-      setCart(cart.map(c => c.medicineId === med.id ? { ...c, quantity: c.quantity + 1, total: (c.quantity + 1) * c.price } : c));
+      // Already in code - show toast
+      showToast('Medicine already in code. Use +/- quantity or change days.', 'error');
     } else {
-      setCart([...cart, {
+      setCodeItems([...codeItems, {
         medicineId: med.id, name: med.name, genericName: med.genericName,
         form: med.form, strength: med.strength, packing: med.packing,
-        price: med.price, quantity: 1, total: med.price,
+        price: med.price, days: 7, dosage: '1 tablet', frequency: 'TID (3 times a day)', instructions: '',
       }]);
     }
     setMedQuery('');
@@ -166,6 +188,49 @@ export default function PharmacyPage() {
     setShowMedDropdown(false);
     setTimeout(() => medSearchRef.current?.focus(), 50);
   };
+
+  const updateCodeItemDays = (medId: string, days: number) => {
+    setCodeItems(codeItems.map(c => c.medicineId === medId ? { ...c, days: Math.max(1, days) } : c));
+  };
+  const updateCodeItemDosage = (medId: string, dosage: string) => {
+    setCodeItems(codeItems.map(c => c.medicineId === medId ? { ...c, dosage } : c));
+  };
+  const updateCodeItemFrequency = (medId: string, frequency: string) => {
+    setCodeItems(codeItems.map(c => c.medicineId === medId ? { ...c, frequency } : c));
+  };
+  const removeFromCode = (medId: string) => {
+    setCodeItems(codeItems.filter(c => c.medicineId !== medId));
+  };
+
+  const addAllToCart = () => {
+    if (codeItems.length === 0) return;
+    const count = codeItems.length;
+    setCart(prevCart => {
+      let newCart = [...prevCart];
+      for (const ci of codeItems) {
+        const existing = newCart.find(c => c.medicineId === ci.medicineId);
+        if (existing) {
+          newCart = newCart.map(c =>
+            c.medicineId === ci.medicineId
+              ? { ...c, days: ci.days, dosage: ci.dosage, frequency: ci.frequency, quantity: c.quantity + 1, total: (c.quantity + 1) * c.price }
+              : c
+          );
+        } else {
+          newCart.push({
+            medicineId: ci.medicineId, name: ci.name, genericName: ci.genericName,
+            form: ci.form, strength: ci.strength, packing: ci.packing,
+            price: ci.price, quantity: 1, total: ci.price,
+            days: ci.days, dosage: ci.dosage, frequency: ci.frequency,
+          });
+        }
+      }
+      return newCart;
+    });
+    setCodeItems([]);
+    showToast(`${count} medicine(s) added to cart`, 'success');
+  };
+
+  const codeTotal = codeItems.reduce((a, c) => a + c.price, 0);
 
   const updateCartQty = (medId: string, qty: number) => {
     if (qty < 1) {
@@ -187,6 +252,7 @@ export default function PharmacyPage() {
 
   const resetSale = () => {
     clearCart();
+    setCodeItems([]);
     setSelectedPatient(null);
     setPatientQuery('');
     setPatientResults([]);
@@ -253,12 +319,14 @@ export default function PharmacyPage() {
     showToast(`Sale completed! ${currency} ${cartTotal.toLocaleString()}`, 'success');
     setSaleBill(sale);
     setBillDiscount(0);
+    setDiscountType('patient');
     loadSales();
   };
 
   const closeBill = () => {
     setSaleBill(null);
     setBillDiscount(0);
+    setDiscountType('patient');
     resetSale();
   };
 
@@ -289,6 +357,8 @@ export default function PharmacyPage() {
           <td style="padding:3px 6px;font-size:9px;border-bottom:1px solid #e2e8f0;">${it.form}</td>
           <td style="padding:3px 6px;font-size:9px;border-bottom:1px solid #e2e8f0;">${it.strength}</td>
           <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:right;">${cur} ${it.price.toLocaleString()}</td>
+          <td style="padding:3px 6px;font-size:9px;border-bottom:1px solid #e2e8f0;text-align:center;">${it.days || '-'}</td>
+          <td style="padding:3px 6px;font-size:9px;border-bottom:1px solid #e2e8f0;text-align:center;">${it.dosage || '-'}</td>
           <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:center;">${it.quantity}</td>
           <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:700;">${cur} ${it.total.toLocaleString()}</td>
         </tr>`;
@@ -335,12 +405,12 @@ export default function PharmacyPage() {
         </div>
         <div class="title-bar"><h3>Medicine Bill / Slip</h3></div>
         <table>
-          <thead><tr><th>#</th><th>Medicine</th><th>Form</th><th>Str</th><th>Price</th><th>Qty</th><th>Total</th></tr></thead>
+          <thead><tr><th>#</th><th>Medicine</th><th>Form</th><th>Str</th><th>Price</th><th>Days</th><th>Dosage</th><th>Qty</th><th>Total</th></tr></thead>
           <tbody>${itemRows}</tbody>
         </table>
         <div class="totals">
           <div class="total-row"><span>Subtotal (${saleBill.items.length} items)</span><span>${cur} ${saleBill.totalAmount.toLocaleString()}</span></div>
-          ${billDiscount > 0 ? `<div class="total-row discount"><span>Discount (${billDiscount}%)</span><span>-${cur} ${discountAmt.toLocaleString()}</span></div>` : ''}
+          ${billDiscount > 0 ? `<div class="total-row discount"><span>Discount (${billDiscount}% ${discountType === 'patient' ? '- Patient' : '- Prescriber'})</span><span>-${cur} ${discountAmt.toLocaleString()}</span></div>` : ''}
           <div class="grand-total"><span>GRAND TOTAL</span><span>${cur} ${grandTotal.toLocaleString()}</span></div>
         </div>
         <div class="footer">
@@ -356,7 +426,7 @@ export default function PharmacyPage() {
 
   const handleMedSearchEnter = () => {
     if (medResults.length >= 1) {
-      addMedicineToCart(medResults[0]);
+      addToCode(medResults[0]);
       setTimeout(() => medSearchRef.current?.focus(), 50);
     }
   };
@@ -530,6 +600,10 @@ export default function PharmacyPage() {
                       <td><span className="badge badge-blue text-xs">{it.form}</span></td>
                       <td className="text-sm">{it.strength}</td>
                       <td className="text-right text-sm">{currency} {it.price.toLocaleString()}</td>
+                      <td className="text-center">
+                        <span className="badge badge-amber text-xs">{it.days || '-'}</span>
+                        <p className="text-xs text-slate-400">{it.dosage || '-'}</p>
+                      </td>
                       <td className="text-center text-sm font-semibold">{it.quantity}</td>
                       <td className="text-right text-sm font-bold">{currency} {it.total.toLocaleString()}</td>
                     </tr>
@@ -542,6 +616,23 @@ export default function PharmacyPage() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-600">Subtotal ({saleBill.items.length} items)</span>
                 <span className="font-semibold">{currency} {saleBill.totalAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-slate-600">Discount Type</span>
+                <div className="flex bg-slate-100 rounded-lg p-0.5">
+                  <button
+                    onClick={() => setDiscountType('patient')}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${discountType === 'patient' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Patient
+                  </button>
+                  <button
+                    onClick={() => setDiscountType('prescriber')}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${discountType === 'prescriber' ? 'bg-white shadow-sm text-purple-700' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Prescriber
+                  </button>
+                </div>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm text-slate-600">Discount (%)</span>
@@ -557,7 +648,7 @@ export default function PharmacyPage() {
               </div>
               {billDiscount > 0 && (
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-red-500">Discount Amount ({billDiscount}%)</span>
+                  <span className="text-sm text-red-500">Discount Amount ({billDiscount}% - {discountType === 'patient' ? 'Patient' : 'Prescriber'})</span>
                   <span className="font-semibold text-red-500">-{currency} {Math.round(saleBill.totalAmount * billDiscount / 100).toLocaleString()}</span>
                 </div>
               )}
@@ -780,7 +871,7 @@ export default function PharmacyPage() {
                   {medResults.map(m => (
                     <button
                       key={m.id}
-                      onClick={() => addMedicineToCart(m)}
+                      onClick={() => addToCode(m)}
                       className="w-full text-left px-4 py-3 hover:bg-emerald-50 border-b border-slate-100 last:border-0 transition-colors group"
                     >
                       <div className="flex items-center justify-between">
@@ -796,7 +887,7 @@ export default function PharmacyPage() {
                         <div className="text-right">
                           <p className="font-bold text-emerald-700">{currency} {m.price.toLocaleString()}</p>
                           <p className="text-xs text-slate-400">{m.category}</p>
-                          <p className="text-xs text-emerald-600 mt-1 font-medium">+ Add</p>
+                          <p className="text-xs text-emerald-600 mt-1 font-medium">+ Add to Code</p>
                         </div>
                       </div>
                     </button>
@@ -810,6 +901,106 @@ export default function PharmacyPage() {
               )}
             </div>
           </div>
+
+          {/* ========= PRESCRIPTION CODE PANEL ========= */}
+          {codeItems.length > 0 && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-300 p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2zm-6 4h3m-3 4h3" /></svg>
+                  <h3 className="font-bold text-blue-800">Prescription Code ({codeItems.length} medicine{codeItems.length > 1 ? 's' : ''})</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-blue-700">{currency} {codeTotal.toLocaleString()}</span>
+                  <button onClick={() => setCodeItems([])} className="btn btn-outline btn-sm text-red-500 border-red-200 hover:bg-red-50">Clear Code</button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {codeItems.map((ci, idx) => (
+                  <div key={ci.medicineId} className="bg-white border border-blue-200 rounded-lg p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded">{idx + 1}</span>
+                          <span className="font-bold text-slate-800">{ci.name}</span>
+                          <span className="text-xs text-slate-400">({ci.genericName})</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <span className="badge badge-blue">{ci.form}</span>
+                          <span>{ci.strength}</span>
+                          <span className="text-slate-300">|</span>
+                          <span className="font-bold text-emerald-700">{currency} {ci.price.toLocaleString()}</span>
+                        </div>
+                      </div>
+                      <button onClick={() => removeFromCode(ci.medicineId)} className="w-7 h-7 rounded flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-600 shrink-0" title="Remove">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 mt-2">
+                      <div>
+                        <label className="text-xs text-slate-500 font-medium">Days *</label>
+                        <select
+                          className="form-input h-8 text-xs"
+                          value={ci.days}
+                          onChange={e => updateCodeItemDays(ci.medicineId, Number(e.target.value))}
+                        >
+                          <option value={1}>1 day</option>
+                          <option value={3}>3 days</option>
+                          <option value={5}>5 days</option>
+                          <option value={7}>7 days</option>
+                          <option value={10}>10 days</option>
+                          <option value={14}>14 days</option>
+                          <option value={15}>15 days</option>
+                          <option value={21}>21 days</option>
+                          <option value={30}>30 days</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 font-medium">Dosage</label>
+                        <select
+                          className="form-input h-8 text-xs"
+                          value={ci.dosage}
+                          onChange={e => updateCodeItemDosage(ci.medicineId, e.target.value)}
+                        >
+                          <option value="1 tablet">1 tablet</option>
+                          <option value="0.5 tablet">0.5 tablet</option>
+                          <option value="2 tablets">2 tablets</option>
+                          <option value="1 capsule">1 capsule</option>
+                          <option value="1 spoon">1 spoon (5ml)</option>
+                          <option value="2 spoons">2 spoons (10ml)</option>
+                          <option value="1 injection">1 injection</option>
+                          <option value="as prescribed">As prescribed</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 font-medium">Frequency</label>
+                        <select
+                          className="form-input h-8 text-xs"
+                          value={ci.frequency}
+                          onChange={e => updateCodeItemFrequency(ci.medicineId, e.target.value)}
+                        >
+                          <option value="OD (once a day)">OD (Once a day)</option>
+                          <option value="BID (twice a day)">BID (Twice a day)</option>
+                          <option value="TID (3 times a day)">TID (3 times a day)</option>
+                          <option value="QID (4 times a day)">QID (4 times a day)</option>
+                          <option value="SOS (as needed)">SOS (As needed)</option>
+                          <option value="At bedtime">At bedtime</option>
+                          <option value="Empty stomach">Empty stomach</option>
+                          <option value="After meal">After meal</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button onClick={addAllToCart} className="btn btn-primary btn-lg w-full flex items-center justify-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                Add {codeItems.length} Medicine{codeItems.length > 1 ? 's' : ''} to Cart
+              </button>
+            </div>
+          )}
 
           {/* Cart / Sale Table */}
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -848,8 +1039,9 @@ export default function PharmacyPage() {
                         <th>Form</th>
                         <th>Strength</th>
                         <th>Packing</th>
+                        <th className="text-center">Days</th>
                         <th className="text-right">Price</th>
-                        <th className="text-center w-32">Quantity</th>
+                        <th className="text-center w-32">Qty</th>
                         <th className="text-right">Total</th>
                         <th className="w-20">Action</th>
                       </tr>
@@ -865,6 +1057,9 @@ export default function PharmacyPage() {
                           <td><span className="badge badge-blue">{item.form}</span></td>
                           <td className="text-sm text-slate-600">{item.strength}</td>
                           <td className="text-sm text-slate-500">{item.packing}</td>
+                          <td className="text-center">
+                            <span className="badge badge-amber text-xs">{item.days} days</span>
+                          </td>
                           <td className="text-right font-medium text-slate-700">{currency} {item.price.toLocaleString()}</td>
                           <td className="text-center">
                             <div className="flex items-center justify-center gap-1">

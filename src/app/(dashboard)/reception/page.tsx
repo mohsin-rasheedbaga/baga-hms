@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   getPatients, setPatients, getPatientCounter, setPatientCounter,
   getVisits, setVisits, addVisit,
@@ -407,6 +407,21 @@ export default function ReceptionPage() {
     refreshData();
     showToast('New visit created successfully!', 'success');
   };
+
+  // Auto-print when printContent changes (patient card or visit slip)
+  const autoPrintTriggered = useRef(false);
+  useEffect(() => {
+    if (printContent && !autoPrintTriggered.current) {
+      autoPrintTriggered.current = true;
+      const timer = setTimeout(() => {
+        triggerPrint(printContent);
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+    if (!printContent) {
+      autoPrintTriggered.current = false;
+    }
+  }, [printContent]);
 
   // ========= PRINT CARD =========
   const handlePrintCard = (patient: Patient, visit: Visit | null) => {

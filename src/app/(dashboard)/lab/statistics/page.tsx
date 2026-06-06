@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { initLabData, getLabStatistics, todayStr } from '@/lib/lab-store';
+import { getHospitalSettings } from '@/lib/store';
 
 export default function StatisticsPage() {
   const [mounted, setMounted] = useState(false);
@@ -10,6 +11,7 @@ export default function StatisticsPage() {
 
   if (!mounted) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin" /></div>;
 
+  const settings = getHospitalSettings(); const curr = settings?.currency || 'Rs.';
   const stats = getLabStatistics(period);
   const dailyStats = stats.dailyStats;
   const maxOrders = Math.max(...dailyStats.map(d => d.orders), 1);
@@ -42,16 +44,16 @@ export default function StatisticsPage() {
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold">Revenue</p>
-          <p className="text-2xl font-bold text-emerald-600 mt-1">Rs. {stats.revenue.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-emerald-600 mt-1">{curr} {stats.revenue.toLocaleString()}</p>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold">Expenses</p>
-          <p className="text-2xl font-bold text-rose-600 mt-1">Rs. {stats.totalExpenses.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-rose-600 mt-1">{curr} {stats.totalExpenses.toLocaleString()}</p>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold">Profit</p>
           <p className={`text-2xl font-bold mt-1 ${stats.profit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-            Rs. {stats.profit.toLocaleString()}
+            {curr} {stats.profit.toLocaleString()}
           </p>
         </div>
       </div>
