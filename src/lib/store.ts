@@ -179,6 +179,11 @@ export function searchPatients(q: string): Patient[] {
     p.name.toLowerCase().includes(lq)
   );
 }
+/* Department-specific Patient ID counters:
+ * Reception: baga_patient_counter → BAGA-XXXX
+ * Lab:       lab_patient_counter  → LAB-XXXX  (in lab-store.ts)
+ * Pharmacy:  baga_outdoor_counter → OUT-XXXX   (in pharmacy page.tsx)
+ */
 export function getPatientCounter(): number {
   if (isElectron()) {
     const val = dbGetCounter('patient_counter');

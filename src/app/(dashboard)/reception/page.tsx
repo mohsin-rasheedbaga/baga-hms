@@ -8,7 +8,7 @@ import {
   getXRayOrders, getXRayOrdersByVisit,
   getUltrasoundOrders, getUltrasoundOrdersByVisit,
   getBills, addBill,
-  getHospitalSettings,
+  getHospitalSettings, getHospital,
   addPatient, updatePatient,
   todayStr, timeStr, genId, getNextTokenNo,
 } from '@/lib/store';
@@ -425,6 +425,10 @@ export default function ReceptionPage() {
 
   // ========= PRINT CARD =========
   const handlePrintCard = (patient: Patient, visit: Visit | null) => {
+    const hospital = getHospital();
+    const hospitalName = hospital.name;
+    const hospitalAddress = hospital.address;
+    const hospitalPhone = hospital.phone;
     const curr = settings?.currency || 'Rs.';
     const cardHtml = `
       <html><head><title>Patient Card - ${patient.patientNo}</title>
@@ -498,7 +502,8 @@ export default function ReceptionPage() {
         <div class="page">
           <div class="card">
             <div class="header">
-              <h1>BAGA Hospital</h1>
+              <h1>${hospitalName}</h1>
+              <p>${hospitalAddress} | ${hospitalPhone}</p>
               <p>Patient Card</p>
             </div>
             <div class="row"><span class="label">Patient No:</span><span class="value">${patient.patientNo}</span></div>
@@ -1108,7 +1113,7 @@ export default function ReceptionPage() {
             )}
 
             {/* Lab Tests */}
-            {billModal.labTests.length > 0 && (
+            {billModal.labTests.length > 0 && (settings?.receptionCanCollectLab !== false) && (
               <div className="border border-green-200 rounded-lg mb-3">
                 <div className="flex items-center justify-between p-3 bg-green-50 rounded-t-lg border-b border-green-200">
                   <div className="flex items-center gap-2">
@@ -1141,8 +1146,18 @@ export default function ReceptionPage() {
               </div>
             )}
 
+            {/* Lab Tests hidden by Super Admin */}
+            {billModal.labTests.length > 0 && (settings?.receptionCanCollectLab === false) && (
+              <div className="border border-slate-200 rounded-lg mb-3 p-3 bg-slate-100">
+                <p className="text-sm text-slate-500 text-center">
+                  <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                  Lab payment collection is disabled by Super Admin. Patients will pay directly at Lab.
+                </p>
+              </div>
+            )}
+
             {/* X-Ray */}
-            {billModal.xrays.length > 0 && (
+            {billModal.xrays.length > 0 && (settings?.receptionCanCollectXray !== false) && (
               <div className="border border-red-200 rounded-lg mb-3">
                 <div className="flex items-center justify-between p-3 bg-red-50 rounded-t-lg border-b border-red-200">
                   <div className="flex items-center gap-2">
@@ -1175,8 +1190,18 @@ export default function ReceptionPage() {
               </div>
             )}
 
+            {/* X-Ray hidden by Super Admin */}
+            {billModal.xrays.length > 0 && (settings?.receptionCanCollectXray === false) && (
+              <div className="border border-slate-200 rounded-lg mb-3 p-3 bg-slate-100">
+                <p className="text-sm text-slate-500 text-center">
+                  <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                  X-Ray payment collection is disabled by Super Admin. Patients will pay directly at X-Ray.
+                </p>
+              </div>
+            )}
+
             {/* Ultrasound */}
-            {billModal.ultrasounds.length > 0 && (
+            {billModal.ultrasounds.length > 0 && (settings?.receptionCanCollectUltrasound !== false) && (
               <div className="border border-purple-200 rounded-lg mb-3">
                 <div className="flex items-center justify-between p-3 bg-purple-50 rounded-t-lg border-b border-purple-200">
                   <div className="flex items-center gap-2">
@@ -1206,6 +1231,16 @@ export default function ReceptionPage() {
                     </label>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Ultrasound hidden by Super Admin */}
+            {billModal.ultrasounds.length > 0 && (settings?.receptionCanCollectUltrasound === false) && (
+              <div className="border border-slate-200 rounded-lg mb-3 p-3 bg-slate-100">
+                <p className="text-sm text-slate-500 text-center">
+                  <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                  Ultrasound payment collection is disabled by Super Admin. Patients will pay directly at Ultrasound.
+                </p>
               </div>
             )}
 

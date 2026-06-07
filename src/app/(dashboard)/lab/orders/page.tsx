@@ -16,6 +16,8 @@ export default function TestOrdersPage() {
   const [orders, setOrders] = useState<LabOrderItem[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [orderSummary, setOrderSummary] = useState<LabOrderItem | null>(null);
+  const [slipHtml, setSlipHtml] = useState('');
+  const [showSlipPreview, setShowSlipPreview] = useState(false);
   const [catalog, setCatalog] = useState(getActiveLabTests());
 
   // New order form
@@ -76,7 +78,7 @@ export default function TestOrdersPage() {
     setFormTests(updated);
   };
 
-  const createOrder = () => {
+  const createOrder = async () => {
     if (!formPatient.name.trim()) { showToast('Patient name required', 'error'); return; }
     const selectedTests = formTests.filter(t => t.selected);
     if (selectedTests.length === 0) { showToast('Select at least one test', 'error'); return; }
@@ -108,6 +110,35 @@ export default function TestOrdersPage() {
     loadData();
     showToast('Order created successfully', 'success');
 
+    // Generate slip HTML for preview
+    try {
+      const printData = await getLabPrintDataAsync();
+      const slipData = {
+        patientNo: order.patientNo,
+        patientName: order.patientName,
+        age: order.age,
+        gender: order.gender,
+        mobile: formPatient.mobile,
+        tests: order.tests.map(t => ({ testName: t.testName, price: t.price })),
+        urgency: order.urgency,
+        orderedBy: order.orderedBy,
+        sampleType: order.sampleType,
+        totalAmount: order.totalAmount,
+        date: order.date,
+        time: order.time,
+        hospitalName: printData.hospitalName,
+        hospitalAddress: printData.hospitalAddress,
+        hospitalPhone: printData.hospitalPhone,
+        hospitalMobile: printData.hospitalMobile,
+        hospitalEmail: printData.hospitalEmail,
+        hospitalLogo: printData.hospitalLogo,
+      };
+      setSlipHtml(generateOrderSlipHtml(slipData));
+      setShowSlipPreview(true);
+    } catch (err) {
+      console.error('Failed to generate slip preview:', err);
+    }
+
     // Show order summary modal (print on user click, not auto-print)
     setOrderSummary(order);
   };
@@ -120,7 +151,7 @@ export default function TestOrdersPage() {
         patientName: order.patientName,
         age: order.age,
         gender: order.gender,
-        mobile: '',
+        mobile: formPatient.mobile || '',
         tests: order.tests,
         urgency: order.urgency,
         orderedBy: order.orderedBy,
@@ -278,11 +309,11 @@ export default function TestOrdersPage() {
 
       {/* Order Summary Modal */}
       {orderSummary && (
-        <div className="modal-overlay" onClick={() => setOrderSummary(null)}>
-          <div className="modal-content" style={{ maxWidth: '550px' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={() => { setShowSlipPreview(false); setSlipHtml(''); setOrderSummary(null); }}>
+          <div className="modal-content" style={{ maxWidth: '550px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-slate-800">Order Created Successfully</h3>
-              <button onClick={() => setOrderSummary(null)} className="btn btn-outline btn-sm">Close</button>
+              <button onClick={() => { setShowSlipPreview(false); setSlipHtml(''); setOrderSummary(null); }} className="btn btn-outline btn-sm">Close</button>
             </div>
             <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 mb-4">
               <div className="grid grid-cols-2 gap-2 text-sm">
@@ -307,9 +338,10 @@ export default function TestOrdersPage() {
                 </tfoot>
               </table>
             </div>
+            {showSlipPreview && <iframe srcDoc={slipHtml} style={{width:'100%',height:'400px',border:'1px solid #e2e8f0',borderRadius:'8px',marginBottom:'12px'}} />}
             <div className="flex gap-2">
-              <button onClick={() => { printOrderSlip(orderSummary); }} className="btn btn-primary flex-1">Print Slip</button>
-              <button onClick={() => setOrderSummary(null)} className="btn btn-outline flex-1">Close</button>
+              <button onClick={() => { triggerPrint(slipHtml); }} className="btn btn-primary flex-1">Print Slip</button>
+              <button onClick={() => { setShowSlipPreview(false); setSlipHtml(''); setOrderSummary(null); }} className="btn btn-outline flex-1">Close</button>
             </div>
           </div>
         </div>

@@ -7,6 +7,9 @@ export default function SampleCollectionPage() {
   const [mounted, setMounted] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [orders, setOrders] = useState<LabOrderItem[]>([]);
+  const [stickerPreviewHtml, setStickerPreviewHtml] = useState('');
+  const [showStickerPreview, setShowStickerPreview] = useState(false);
+  const [allStickerTemplates, setAllStickerTemplates] = useState<string[]>([]);
 
   const showToast = (msg: string, type: 'success' | 'error') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
 
@@ -26,7 +29,7 @@ export default function SampleCollectionPage() {
     const m = now.getMinutes().toString().padStart(2, '0');
     const ampm = h >= 12 ? 'PM' : 'AM';
     const time = `${h % 12 || 12}:${m} ${ampm}`;
-    updateLabOrder(order.id, { status: 'collected', collectedAt: time, collectedBy: 'Lab Tech' });
+    updateLabOrder(order.id, { status: 'collected', collectedAt: time, collectedBy: (typeof window !== 'undefined' && localStorage.getItem('baga_session')) ? JSON.parse(localStorage.getItem('baga_session')!).name || 'Lab Tech' : 'Lab Tech' });
     loadData();
     showToast(`Sample collected for ${order.patientName}`, 'success');
   };
@@ -37,50 +40,59 @@ export default function SampleCollectionPage() {
     showToast(`Sent to lab for processing`, 'success');
   };
 
-  const printStickers = async (order: LabOrderItem) => {
-    // One sticker per test — each printed separately via Electron native print
-    try {
-      const printData = await getLabPrintDataAsync();
-      const stickerTemplates = order.tests.map((t, i) => {
-        const barcode = `${order.patientNo}-${t.testName.replace(/\s+/g,'').substring(0,6).toUpperCase()}`;
-        return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sticker ${i+1}</title><style>
-          @page{size:50mm 25mm;margin:2mm;}
-          *{margin:0;padding:0;box-sizing:border-box;}
-          body{font-family:Arial,sans-serif;width:50mm;height:25mm;overflow:hidden;border:1px dashed #999;padding:2mm;position:relative;}
-          .logo{height:5mm;max-width:15mm;object-fit:contain;position:absolute;top:2mm;left:2mm;}
-          .hname{font-size:5pt;font-weight:800;color:#0c2340;position:absolute;top:2mm;left:18mm;max-width:30mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-          .pid{font-size:5.5pt;font-weight:700;color:#2563eb;font-family:monospace;position:absolute;top:7mm;left:2mm;}
-          .pname{font-size:5pt;font-weight:600;position:absolute;top:7mm;left:20mm;max-width:26mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-          .testname{font-size:8pt;font-weight:900;color:#0c2340;text-align:center;position:absolute;top:12mm;left:2mm;right:2mm;background:#f0f4ff;border-radius:1mm;padding:1mm 0;}
-          .sample{font-size:4.5pt;color:#64748b;position:absolute;top:17mm;left:2mm;}
-          .date{font-size:4.5pt;color:#64748b;position:absolute;top:17mm;right:2mm;}
-          .barcode{font-size:5pt;font-family:monospace;color:#334155;background:#f8fafc;border:0.3mm solid #e2e8f0;border-radius:0.5mm;padding:0.5mm 1mm;text-align:center;position:absolute;bottom:2mm;left:2mm;right:2mm;letter-spacing:1px;}
-          .urgency{position:absolute;top:2mm;right:2mm;font-size:4pt;font-weight:800;padding:0.3mm 1.5mm;border-radius:1mm;}
-          .stat{background:#dc2626;color:#fff;} .urgent{background:#f59e0b;color:#fff;} .routine{background:#e2e8f0;color:#475569;}
-        </style></head><body>
-          ${printData.hospitalLogo ? `<img class="logo" src="${printData.hospitalLogo}" alt="" />` : ''}
-          <div class="hname">${printData.hospitalName}</div>
-          <div class="pid">${order.patientNo}</div>
-          <div class="pname">${order.patientName} (${order.gender}/${order.age})</div>
-          <div class="testname">${t.testName}</div>
-          <div class="sample">${order.sampleType}</div>
-          <div class="date">${order.date} ${order.time}</div>
-          <div class="barcode">${barcode}</div>
-          <span class="urgency ${order.urgency}">${order.urgency.toUpperCase()}</span>
-        </body></html>`;
-      });
+  const generateStickerTemplates = async (order: LabOrderItem): Promise<string[]> => {
+    const printData = await getLabPrintDataAsync();
+    return order.tests.map((t, i) => {
+      const barcode = `${order.patientNo}-${t.testName.replace(/\s+/g,'').substring(0,6).toUpperCase()}`;
+      return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sticker ${i+1}</title><style>
+        @page{size:50mm 25mm;margin:2mm;}
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{font-family:Arial,sans-serif;width:50mm;height:25mm;overflow:hidden;border:1px dashed #999;padding:2mm;position:relative;}
+        .logo{height:5mm;max-width:15mm;object-fit:contain;position:absolute;top:2mm;left:2mm;}
+        .hname{font-size:5pt;font-weight:800;color:#0c2340;position:absolute;top:2mm;left:18mm;max-width:30mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .pid{font-size:5.5pt;font-weight:700;color:#2563eb;font-family:monospace;position:absolute;top:7mm;left:2mm;}
+        .pname{font-size:5pt;font-weight:600;position:absolute;top:7mm;left:20mm;max-width:26mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .testname{font-size:8pt;font-weight:900;color:#0c2340;text-align:center;position:absolute;top:12mm;left:2mm;right:2mm;background:#f0f4ff;border-radius:1mm;padding:1mm 0;}
+        .sample{font-size:4.5pt;color:#64748b;position:absolute;top:17mm;left:2mm;}
+        .date{font-size:4.5pt;color:#64748b;position:absolute;top:17mm;right:2mm;}
+        .barcode{font-size:5pt;font-family:monospace;color:#334155;background:#f8fafc;border:0.3mm solid #e2e8f0;border-radius:0.5mm;padding:0.5mm 1mm;text-align:center;position:absolute;bottom:2mm;left:2mm;right:2mm;letter-spacing:1px;}
+        .urgency{position:absolute;top:2mm;right:2mm;font-size:4pt;font-weight:800;padding:0.3mm 1.5mm;border-radius:1mm;}
+        .stat{background:#dc2626;color:#fff;} .urgent{background:#f59e0b;color:#fff;} .routine{background:#e2e8f0;color:#475569;}
+      </style></head><body>
+        ${printData.hospitalLogo ? `<img class="logo" src="${printData.hospitalLogo}" alt="" />` : ''}
+        <div class="hname">${printData.hospitalName}</div>
+        <div class="pid">${order.patientNo}</div>
+        <div class="pname">${order.patientName} (${order.gender}/${order.age})</div>
+        <div class="testname">${t.testName}</div>
+        <div class="sample">${order.sampleType}</div>
+        <div class="date">${order.date} ${order.time}</div>
+        <div class="barcode">${barcode}</div>
+        <span class="urgency ${order.urgency}">${order.urgency.toUpperCase()}</span>
+      </body></html>`;
+    });
+  };
 
-      // Print each sticker via Electron native print (one per test)
-      for (let i = 0; i < stickerTemplates.length; i++) {
-        const delay = i === 0 ? 0 : 2000;
-        if (i > 0) {
-          await new Promise(r => setTimeout(r, delay));
-        }
-        openPrintWindow(stickerTemplates[i]);
-      }
+  const printStickers = async (order: LabOrderItem) => {
+    try {
+      const templates = await generateStickerTemplates(order);
+      if (templates.length === 0) return;
+      // Show preview of first sticker
+      setAllStickerTemplates(templates);
+      setStickerPreviewHtml(templates[0]);
+      setShowStickerPreview(true);
     } catch (err) {
-      console.error('Failed to print stickers:', err);
+      console.error('Failed to generate sticker preview:', err);
     }
+  };
+
+  const printAllStickers = async () => {
+    setShowStickerPreview(false);
+    for (let i = 0; i < allStickerTemplates.length; i++) {
+      if (i > 0) await new Promise(r => setTimeout(r, 2000));
+      openPrintWindow(allStickerTemplates[i]);
+    }
+    setAllStickerTemplates([]);
+    setStickerPreviewHtml('');
   };
 
   const urgencyColor = (u: string) => u === 'stat' ? 'badge-rose' : u === 'urgent' ? 'badge-amber' : 'badge-slate';
@@ -174,6 +186,22 @@ export default function SampleCollectionPage() {
           </div>
         )}
       </div>
+
+      {/* Sticker Preview Modal */}
+      {showStickerPreview && (
+        <div className="modal-overlay" onClick={() => { setShowStickerPreview(false); setStickerPreviewHtml(''); setAllStickerTemplates([]); }}>
+          <div className="modal-content" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-slate-800">Sticker Preview (1 of {allStickerTemplates.length})</h3>
+              <button onClick={() => { setShowStickerPreview(false); setStickerPreviewHtml(''); setAllStickerTemplates([]); }} className="btn btn-outline btn-sm">Close</button>
+            </div>
+            <iframe srcDoc={stickerPreviewHtml} style={{width:'100%',height:'200px',border:'1px solid #e2e8f0',borderRadius:'8px',marginBottom:'12px'}} />\n            <div className="flex gap-2">
+              <button onClick={printAllStickers} className="btn btn-primary flex-1">Print All Stickers ({allStickerTemplates.length})</button>
+              <button onClick={() => { setShowStickerPreview(false); setStickerPreviewHtml(''); setAllStickerTemplates([]); }} className="btn btn-outline flex-1">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

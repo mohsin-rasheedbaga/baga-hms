@@ -46,6 +46,7 @@ const JSON_TABLES = [
   'attendance',
   'salaries',
   'pharmacy_expenses',
+  'pharmacy_sales',
 ];
 
 const KV_TABLES = [
@@ -274,6 +275,7 @@ const SEED_EMPLOYEES = [
 const SEED_COUNTERS = {
   patient_counter: '4',
   employee_counter: '1',
+  lab_patient_counter: '1',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

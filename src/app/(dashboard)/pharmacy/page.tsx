@@ -50,6 +50,7 @@ interface PharmacySale {
   date: string;
   time: string;
   servedBy: string;
+  paymentMethod: 'Cash' | 'Card' | 'Online';
 }
 
 /* ==================== LOCAL STORAGE HELPERS ==================== */
@@ -124,6 +125,7 @@ export default function PharmacyPage() {
   const [saleBill, setSaleBill] = useState<PharmacySale | null>(null);
   const [billDiscount, setBillDiscount] = useState(0);
   const [discountType, setDiscountType] = useState<'patient' | 'prescriber'>('patient');
+  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'Online'>('Cash');
 
   // Code (Prescription Builder)
   const [codeItems, setCodeItems] = useState<CodeItem[]>([]);
@@ -312,10 +314,20 @@ export default function PharmacyPage() {
       totalAmount: cartTotal,
       date: todayStr(),
       time: timeStr(),
-      servedBy: 'Pharmacist',
+      servedBy: (typeof window !== 'undefined' && localStorage.getItem('baga_session')) ? JSON.parse(localStorage.getItem('baga_session')!).name || 'Pharmacist' : 'Pharmacist',
+      paymentMethod,
     };
 
     addPharmacySale(sale);
+    // Deduct stock for sold medicines
+    for (const item of cart) {
+      const meds = getMedicines();
+      const med = meds.find(m => m.id === item.medicineId);
+      if (med) {
+        updateMedicine(med.id, { stock: Math.max(0, med.stock - item.quantity) });
+      }
+    }
+    loadInventory();
     showToast(`Sale completed! ${currency} ${cartTotal.toLocaleString()}`, 'success');
     setSaleBill(sale);
     setBillDiscount(0);
@@ -327,6 +339,7 @@ export default function PharmacyPage() {
     setSaleBill(null);
     setBillDiscount(0);
     setDiscountType('patient');
+    setPaymentMethod('Cash');
     resetSale();
   };
 
@@ -402,6 +415,7 @@ export default function PharmacyPage() {
           <div class="info-row"><span class="label">Type:</span><span class="value">${saleBill.type}</span></div>
           <div class="info-row"><span class="label">Date:</span><span class="value">${saleBill.date} ${saleBill.time}</span></div>
           <div class="info-row"><span class="label">Served By:</span><span class="value">${saleBill.servedBy}</span></div>
+          <div class="info-row"><span class="label">Payment:</span><span class="value">${saleBill.paymentMethod}</span></div>
         </div>
         <div class="title-bar"><h3>Medicine Bill / Slip</h3></div>
         <table>
@@ -632,6 +646,20 @@ export default function PharmacyPage() {
                   >
                     Prescriber
                   </button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-slate-600">Payment Method</span>
+                <div className="flex bg-slate-100 rounded-lg p-0.5">
+                  {(['Cash', 'Card', 'Online'] as const).map(method => (
+                    <button
+                      key={method}
+                      onClick={() => setPaymentMethod(method)}
+                      className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${paymentMethod === method ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      {method}
+                    </button>
+                  ))}
                 </div>
               </div>
               <div className="flex items-center justify-between gap-3">
