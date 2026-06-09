@@ -366,7 +366,17 @@ export function updateAdmission(id: string, data: Partial<Admission>): void {
 export function getAdmissionsByPatient(patientId: string): Admission[] { return getAdmissions().filter(a => a.patientId === patientId); }
 export function getActiveAdmissions(): Admission[] { return getAdmissions().filter(a => a.status === 'Admitted'); }
 export function getNextTokenNo(): number {
-  const todayVisits = getVisits().filter(v => v.date === todayStr());
+  const today = todayStr();
+  const key = `token_${today}`;
+  if (isElectron()) {
+    const val = dbGetCounter(key);
+    if (val !== null) {
+      dbSetCounter(key, val + 1);
+      return val + 1;
+    }
+  }
+  // Fallback: count today's visits
+  const todayVisits = getVisits().filter(v => v.date === today);
   return todayVisits.length + 1;
 }
 
@@ -611,6 +621,54 @@ export function getSalaryByMonth(month: string): SalaryRecord[] { return getSala
 export function todayStr(): string { return new Date().toISOString().split('T')[0]; }
 export function timeStr(): string { return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); }
 export function genId(): string { return Date.now().toString(36) + Math.random().toString(36).substr(2, 5); }
+
+/* ========== PHARMACY SALES (SQLite + localStorage) ========== */
+export function getPharmacySales(): any[] {
+  if (typeof window === 'undefined') return [];
+  if (isElectron()) {
+    const data = dbGetAll('pharmacy_sales');
+    if (data !== null && data.length > 0) {
+      return data.map((row: any) => typeof row.data === 'string' ? JSON.parse(row.data) : row.data);
+    }
+  }
+  try { const d = localStorage.getItem('baga_pharmacy_sales'); return d ? JSON.parse(d) : []; }
+  catch { return []; }
+}
+
+export function setPharmacySales(sales: any[]): void {
+  if (typeof window === 'undefined') return;
+  if (isElectron()) {
+    const rows = sales.map((item: any) => ({
+      id: item.id,
+      data: item
+    }));
+    if (dbSetAll('pharmacy_sales', rows)) return;
+  }
+  localStorage.setItem('baga_pharmacy_sales', JSON.stringify(sales));
+}
+
+export function addPharmacySale(sale: any): void {
+  const all = getPharmacySales();
+  all.push(sale);
+  setPharmacySales(all);
+}
+
+/* ========== OUTDOOR COUNTER (SQLite + localStorage) ========== */
+export function getOutdoorCounter(): number {
+  if (isElectron()) {
+    const val = dbGetCounter('outdoor_counter');
+    if (val !== null) return val;
+  }
+  try { return parseInt(localStorage.getItem('baga_outdoor_counter') || '1'); } catch { return 1; }
+}
+
+export function setOutdoorCounter(n: number): void {
+  if (isElectron()) {
+    dbSetCounter('outdoor_counter', n);
+    return;
+  }
+  localStorage.setItem('baga_outdoor_counter', String(n));
+}
 
 // ==================== PHARMACY EXPENSES ====================
 export interface PharmacyExpense {

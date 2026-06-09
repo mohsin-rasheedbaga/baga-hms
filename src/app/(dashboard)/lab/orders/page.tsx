@@ -10,6 +10,7 @@ import { getHospitalSettings } from '@/lib/store';
 export default function TestOrdersPage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [tab, setTab] = useState<string>('all');
   const [search, setSearch] = useState('');
@@ -42,7 +43,7 @@ export default function TestOrdersPage() {
     setCatalog(getActiveLabTests());
   };
 
-  useEffect(() => { initLabData(); loadData(); setMounted(true); }, []);
+  useEffect(() => { initLabData(); loadData(); setMounted(true); setLoading(false); }, []);
 
   if (!mounted) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin" /></div>;
 

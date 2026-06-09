@@ -276,6 +276,7 @@ const SEED_COUNTERS = {
   patient_counter: '4',
   employee_counter: '1',
   lab_patient_counter: '1',
+  outdoor_counter: '1',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -25,7 +25,7 @@ export default function CompletedReportsPage() {
 
   const settings = getHospitalSettings(); const curr = settings?.currency || 'Rs.';
   const completed = orders.filter(o => o.status === 'completed');
-  const abnormalReports = completed.filter(o => o.results.some(r => r.flag !== 'Normal'));
+  const abnormalReports = completed.filter(o => o.results?.some(r => r.flag !== 'Normal'));
   const totalRevenue = completed.reduce((s, o) => s + o.paidAmount, 0);
 
   const filtered = completed.filter(o => {
@@ -141,7 +141,7 @@ export default function CompletedReportsPage() {
             <thead><tr><th>Patient</th><th>Tests</th><th>Abnormal</th><th>Amount</th><th>Completed</th><th>Actions</th></tr></thead>
             <tbody>
               {filtered.map(o => {
-                const abnormalCount = o.results.filter(r => r.flag !== 'Normal').length;
+                const abnormalCount = (o.results?.filter(r => r.flag !== 'Normal') || []).length;
                 return (
                   <tr key={o.id}>
                     <td>

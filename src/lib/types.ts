@@ -155,7 +155,7 @@ export interface Bill {
   totalAmount: number;
   paidAmount: number;
   status: 'Paid' | 'Partial' | 'Unpaid';
-  paymentMethod: 'Cash' | 'Card' | 'Pending';
+  paymentMethod: 'Cash' | 'Card' | 'Pending' | 'Online';
   date: string;
   time: string;
   receivedBy: string;

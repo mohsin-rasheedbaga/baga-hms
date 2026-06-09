@@ -29,7 +29,7 @@ export default function SampleCollectionPage() {
     const m = now.getMinutes().toString().padStart(2, '0');
     const ampm = h >= 12 ? 'PM' : 'AM';
     const time = `${h % 12 || 12}:${m} ${ampm}`;
-    updateLabOrder(order.id, { status: 'collected', collectedAt: time, collectedBy: (typeof window !== 'undefined' && localStorage.getItem('baga_session')) ? JSON.parse(localStorage.getItem('baga_session')!).name || 'Lab Tech' : 'Lab Tech' });
+    updateLabOrder(order.id, { status: 'collected', collectedAt: new Date().toISOString(), collectedBy: (typeof window !== 'undefined' && localStorage.getItem('baga_session')) ? JSON.parse(localStorage.getItem('baga_session')!).name || 'Lab Tech' : 'Lab Tech' });
     loadData();
     showToast(`Sample collected for ${order.patientName}`, 'success');
   };

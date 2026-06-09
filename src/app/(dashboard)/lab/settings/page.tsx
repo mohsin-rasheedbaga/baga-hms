@@ -1,11 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { initLabData, getLabTests, addLabTest, updateLabTest, deleteLabTest, getLabTestCategories, genId, type LabTestDefinition, type LabParameter } from '@/lib/lab-store';
+import { getHospitalSettings } from '@/lib/store';
 
 export default function TestCatalogPage() {
   const [mounted, setMounted] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [tests, setTests] = useState<LabTestDefinition[]>([]);
+  const [currency, setCurrency] = useState('Rs.');
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('All');
   const [showModal, setShowModal] = useState(false);
@@ -22,6 +24,8 @@ export default function TestCatalogPage() {
   useEffect(() => { initLabData(); loadData(); setMounted(true); }, []);
 
   if (!mounted) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin" /></div>;
+
+  const labCurrency = (() => { try { return getHospitalSettings().currency || 'Rs.'; } catch { return 'Rs.'; } })();
 
   const categories = getLabTestCategories();
   const activeTests = tests.filter(t => t.active);
@@ -155,7 +159,7 @@ export default function TestCatalogPage() {
                 <tr key={t.id} className={!t.active ? 'opacity-50' : ''}>
                   <td className="font-medium">{t.name}</td>
                   <td><span className="badge badge-slate">{t.category}</span></td>
-                  <td className="font-semibold">Rs. {t.price.toLocaleString()}</td>
+                  <td className="font-semibold">{labCurrency} {t.price.toLocaleString()}</td>
                   <td className="text-sm">{t.sampleType}</td>
                   <td className="text-sm">{t.turnaroundTime}</td>
                   <td className="text-sm">{t.parameters.length} params</td>
@@ -197,7 +201,7 @@ export default function TestCatalogPage() {
                 <input className="form-input" value={form.category} onChange={e => setForm(f => ({...f, category: e.target.value}))} placeholder="e.g. Hematology" />
               </div>
               <div>
-                <label className="form-label">Price (Rs.)</label>
+                <label className="form-label">Price ({labCurrency})</label>
                 <input type="number" className="form-input" value={form.price} onChange={e => setForm(f => ({...f, price: e.target.value}))} placeholder="800" />
               </div>
               <div>

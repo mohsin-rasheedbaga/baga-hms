@@ -254,16 +254,19 @@ export default function ResultEntryPage() {
                       <tr key={idx} className={r.value ? flagClass(r.flag) : ''}>
                         <td className="font-medium">{r.parameter}</td>
                         <td>
-                          <input
-                            ref={el => { inputRefs.current[globalIdx] = el; }}
-                            type="text"
-                            className={`form-input text-sm ${r.value ? flagClass(r.flag) : ''}`}
-                            value={r.value}
-                            onChange={e => updateResultValue(globalIdx, e.target.value)}
-                            onKeyDown={e => handleKeyDown(e, globalIdx)}
-                            placeholder="—"
-                            style={{minWidth: '100px'}}
-                          />
+                          <div className="flex items-center gap-1">
+                            <input
+                              ref={el => { inputRefs.current[globalIdx] = el; }}
+                              type="text"
+                              className={`form-input text-sm ${r.value ? flagClass(r.flag) : ''} ${r.flag === 'Critical' ? 'border-2 !border-red-500 bg-red-50' : r.flag === 'High' ? 'border-amber-400' : r.flag === 'Low' ? 'border-blue-400' : ''}`}
+                              value={r.value}
+                              onChange={e => updateResultValue(globalIdx, e.target.value)}
+                              onKeyDown={e => handleKeyDown(e, globalIdx)}
+                              placeholder="—"
+                              style={{minWidth: '100px'}}
+                            />
+                            {r.flag === 'Critical' && <span className="text-red-600 text-xs font-bold ml-1">CRITICAL</span>}
+                          </div>
                         </td>
                         <td className="text-sm text-slate-500">{r.unit || '—'}</td>
                         <td className="text-sm text-slate-500">{r.refRange || '—'}</td>

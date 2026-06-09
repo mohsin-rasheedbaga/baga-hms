@@ -5,6 +5,7 @@ import {
   getMedicineCategories, getActivePrescriptions, updatePrescription, addDispense,
   getPatientCounter, setPatientCounter, addPatient, genId, todayStr, timeStr, getHospitalSettings,
   getExpiredMedicines, getLowStockMedicines,
+  getPharmacySales, addPharmacySale, getOutdoorCounter, setOutdoorCounter,
 } from '@/lib/store';
 import type { Patient, Prescription, MedicineItem } from '@/lib/types';
 import { triggerPrint } from '@/lib/print-utils';
@@ -53,23 +54,8 @@ interface PharmacySale {
   paymentMethod: 'Cash' | 'Card' | 'Online';
 }
 
-/* ==================== LOCAL STORAGE HELPERS ==================== */
-function lsGet<T>(key: string, fallback: T): T {
-  if (typeof window === 'undefined') return fallback;
-  try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : fallback; } catch { return fallback; }
-}
-function lsSet<T>(key: string, data: T): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(key, JSON.stringify(data));
-}
-
-const SALES_KEY = 'baga_pharmacy_sales';
-const OUTDOOR_COUNTER_KEY = 'baga_outdoor_counter';
-
-function getPharmacySales(): PharmacySale[] { return lsGet<PharmacySale[]>(SALES_KEY, []); }
-function addPharmacySale(s: PharmacySale): void { const all = getPharmacySales(); all.push(s); lsSet(SALES_KEY, all); }
-function getOutdoorCounter(): number { return lsGet<number>(OUTDOOR_COUNTER_KEY, 1); }
-function setOutdoorCounter(n: number): void { lsSet(OUTDOOR_COUNTER_KEY, n); }
+/* ==================== STORE FUNCTIONS (from @/lib/store) ==================== */
+// getPharmacySales, addPharmacySale, getOutdoorCounter, setOutdoorCounter are imported from @/lib/store
 
 export default function PharmacyPage() {
   const [initialTab, setInitialTab] = useState<'pos' | 'prescriptions' | 'inventory' | 'reports'>('pos');
@@ -88,6 +74,7 @@ export default function PharmacyPage() {
   useEffect(() => { setMainTab(initialTab); }, [initialTab]);
 
   /* ==================== SHARED ==================== */
+  const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [currency, setCurrency] = useState('Rs.');
   const showToast = (msg: string, type: 'success' | 'error') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
@@ -137,7 +124,7 @@ export default function PharmacyPage() {
   const [sales, setSales] = useState<PharmacySale[]>([]);
   const loadSales = useCallback(() => setSales(getPharmacySales()), []);
 
-  useEffect(() => { loadSales(); }, [loadSales]);
+  useEffect(() => { loadSales(); setLoading(false); }, [loadSales]);
   useEffect(() => { setOutdoorNo(`OUT-${String(getOutdoorCounter()).padStart(4, '0')}`); }, []);
 
   // Stats
@@ -333,6 +320,10 @@ export default function PharmacyPage() {
     setBillDiscount(0);
     setDiscountType('patient');
     loadSales();
+    // FIX: Auto-print bill slip after sale
+    setTimeout(() => {
+      printBillSlip();
+    }, 500);
   };
 
   const closeBill = () => {
@@ -350,17 +341,29 @@ export default function PharmacyPage() {
       const grandTotal = saleBill.totalAmount - discountAmt;
       let hospitalName = 'BAGA HOSPITAL';
       let hospitalLogo = '';
+      let hospitalAddress = '';
+      let hospitalPhone = '';
+      let receiptFooter = '';
       const isEl = typeof window !== 'undefined' && !!(window as any).bagaAPI;
       if (isEl) {
         try {
           const licenseInfo = await (window as any).bagaAPI.getFullLicenseInfo();
           if (licenseInfo && licenseInfo.hospitalName) hospitalName = licenseInfo.hospitalName;
+          if (licenseInfo && licenseInfo.hospitalAddress) hospitalAddress = licenseInfo.hospitalAddress;
+          if (licenseInfo && licenseInfo.hospitalPhone) hospitalPhone = licenseInfo.hospitalPhone;
         } catch (e) {}
         try {
           const logoResult = await (window as any).bagaAPI.getLogoBase64();
           if (logoResult.success) hospitalLogo = logoResult.data;
         } catch (e) {}
       }
+      // Fallback to hospital settings for address/phone
+      try {
+        const hs = getHospitalSettings();
+        if (!hospitalAddress && hs.address) hospitalAddress = hs.address;
+        if (!hospitalPhone && hs.phone) hospitalPhone = hs.phone;
+        if (hs.receiptFooter) receiptFooter = hs.receiptFooter;
+      } catch {}
       const cur = currency;
       const itemRows = saleBill.items.map((it, i) => {
         const alt = i % 2 === 0 ? '#fff' : '#f8fafc';
@@ -405,6 +408,7 @@ export default function PharmacyPage() {
         <div class="header">
           ${hospitalLogo ? `<img class="logo" src="${hospitalLogo}" alt="" />` : ''}
           <div class="hname">${hospitalName}</div>
+          <div class="hsub">${hospitalAddress}${hospitalPhone ? ' | ' + hospitalPhone : ''}</div>
           <div class="hsub">Pharmacy Department</div>
         </div>
         <div class="info">
@@ -428,7 +432,7 @@ export default function PharmacyPage() {
           <div class="grand-total"><span>GRAND TOTAL</span><span>${cur} ${grandTotal.toLocaleString()}</span></div>
         </div>
         <div class="footer">
-          <div class="ty">Thank you for visiting ${hospitalName}!</div>
+          <div class="ty">${receiptFooter || 'Thank you for visiting ' + hospitalName + '!'}</div>
           <div class="info">Computer Generated Bill | ${saleBill.date} ${saleBill.time}</div>
         </div>
       </body></html>`;
@@ -486,11 +490,29 @@ export default function PharmacyPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<MedicineItem | null>(null);
   const [expiredMeds, setExpiredMeds] = useState<MedicineItem[]>([]);
   const [lowStockMeds, setLowStockMeds] = useState<MedicineItem[]>([]);
+  const [showAlerts, setShowAlerts] = useState(true);
+  const [alerts, setAlerts] = useState<{type: 'expired' | 'low'; medicines: string[]}>({type:'expired', medicines:[]});
 
   useEffect(() => {
     if (mainTab === 'inventory') {
       setExpiredMeds(getExpiredMedicines());
       setLowStockMeds(getLowStockMedicines());
+    }
+  }, [mainTab, medicines]);
+
+  useEffect(() => {
+    if (mainTab !== 'pos') return;
+    const expired = getExpiredMedicines();
+    const lowStock = getLowStockMedicines();
+    const expiredNames = expired.map(m => m.name);
+    const lowNames = lowStock.map(m => `${m.name} (${m.stock} left)`);
+    if (expiredNames.length > 0 || lowNames.length > 0) {
+      setAlerts({
+        type: expiredNames.length > 0 ? 'expired' : 'low',
+        medicines: [...expiredNames, ...lowNames]
+      });
+    } else {
+      setAlerts({type:'expired', medicines:[]});
     }
   }, [mainTab, medicines]);
 
@@ -579,6 +601,8 @@ export default function PharmacyPage() {
   };
 
   /* ==================== RENDER ==================== */
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full"></div></div>;
+
   return (
     <div className="space-y-5">
       {toast && <div className={`toast ${toast.type === 'success' ? 'toast-success' : 'toast-error'}`}>{toast.msg}</div>}
@@ -725,6 +749,21 @@ export default function PharmacyPage() {
               <p className="text-2xl font-bold text-amber-700">{todayOutdoor}</p>
             </div>
           </div>
+
+          {/* Expiry & Low Stock Alerts */}
+          {showAlerts && alerts.medicines.length > 0 && (
+            <div className={`border rounded-lg p-3 ${alerts.type === 'expired' ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={alerts.type === 'expired' ? 'text-red-600' : 'text-amber-600'}>
+                    {alerts.type === 'expired' ? 'Expired' : 'Low Stock'} Alert
+                  </span>
+                  <span className="text-sm text-slate-600">{alerts.medicines.slice(0, 5).join(', ')}{alerts.medicines.length > 5 ? ` +${alerts.medicines.length - 5} more` : ''}</span>
+                </div>
+                <button onClick={() => setShowAlerts(false)} className="text-slate-400 hover:text-slate-600 text-sm">Dismiss</button>
+              </div>
+            </div>
+          )}
 
           {/* Patient Mode Toggle + Selection */}
           <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">

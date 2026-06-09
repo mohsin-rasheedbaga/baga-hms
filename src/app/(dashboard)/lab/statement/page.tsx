@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { getHospitalSettings } from '@/lib/store';
-import { getLabOrders, getLabExpenses, getLabTests, addExpense } from '@/lib/lab-store';
+import { initLabData, getLabOrders, getLabExpenses, getLabTests, addExpense } from '@/lib/lab-store';
 import { genId, todayStr } from '@/lib/store';
 import type { LabOrderItem, LabExpense } from '@/lib/lab-store';
 
@@ -33,6 +33,7 @@ export default function LabStatementPage() {
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
 
   useEffect(() => {
+    initLabData();
     try {
       const s = localStorage.getItem('baga_session');
       if (s) setSession(JSON.parse(s));

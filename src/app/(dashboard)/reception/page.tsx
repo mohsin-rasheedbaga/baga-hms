@@ -72,6 +72,7 @@ export default function ReceptionPage() {
   const [patientCounter, setPatientCounterState] = useState(4);
 
   // UI State
+  const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [printContent, setPrintContent] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -102,6 +103,7 @@ export default function ReceptionPage() {
   useEffect(() => {
     initLabData();
     refreshData();
+    setLoading(false);
   }, []);
 
   const refreshData = () => {
@@ -341,6 +343,10 @@ export default function ReceptionPage() {
     if (!form.name.trim() || !form.fatherName.trim() || !form.mobile.trim() || !form.age.trim() || !form.address.trim()) {
       showToast('All 5 fields are compulsory (Name, Father Name, Mobile, Age, Address)', 'error'); return;
     }
+    if (form.mobile && !/^03\d{9}$/.test(form.mobile.replace(/-/g, ''))) {
+      showToast('Mobile number must be 11 digits starting with 03', 'error');
+      return;
+    }
     if (!form.department) { showToast('Please select Department', 'error'); return; }
     if (!form.doctor) { showToast('Please select Doctor', 'error'); return; }
 
@@ -552,8 +558,38 @@ export default function ReceptionPage() {
     showToast('Patient updated!', 'success');
   };
 
+  // ========= RENEW CARD =========
+  const session = (() => { try { return JSON.parse(localStorage.getItem('baga_session') || '{}'); } catch { return {}; } })();
+  const handleRenewCard = (patient: Patient) => {
+    const expiry = new Date();
+    expiry.setFullYear(expiry.getFullYear() + 1);
+    const expiryStr = expiry.toISOString().split('T')[0];
+    updatePatient(patient.id, { cardStatus: 'Active', cardExpiry: expiryStr });
+    // Create a renewal bill
+    addBill({
+      id: genId(),
+      patientId: patient.id,
+      patientNo: patient.patientNo,
+      patientName: patient.name,
+      visitId: '',
+      items: [{ description: 'Card Renewal', amount: 500, type: 'Renewal', selected: true, quantity: 1 }],
+      totalAmount: 500,
+      paidAmount: 500,
+      status: 'Paid',
+      paymentMethod: 'Cash',
+      date: todayStr(),
+      time: timeStr(),
+      receivedBy: session?.name || 'Reception',
+    });
+    showToast(`Card renewed for ${patient.name}. Expiry: ${expiryStr}`, 'success');
+    // Reload patients
+    refreshData();
+  };
+
   const todayVisits = visits.filter(v => v.date === todayStr());
   const curr = settings?.currency || 'Rs.';
+
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full"></div></div>;
 
   return (
     <div className="space-y-5">
@@ -617,6 +653,7 @@ export default function ReceptionPage() {
                         <span className="font-mono font-bold text-blue-600 text-lg">{p.patientNo}</span>
                         {activeVisit && <span className="badge badge-blue">Active Visit</span>}
                         {existingBill && <span className="badge badge-green">Bill Paid</span>}
+                        {p.cardStatus === 'Expired' && <span className="badge badge-rose">Card Expired</span>}
                       </div>
                       <p className="font-semibold text-slate-800 text-lg">{p.name} <span className="text-slate-500 font-normal text-sm">({p.gender}, {p.age})</span></p>
                       <p className="text-sm text-slate-500">Father/Husband: {p.fatherName} | Mobile: {p.mobile}</p>
@@ -763,6 +800,11 @@ export default function ReceptionPage() {
                       )}
                       <button onClick={() => handlePrintCard(p, activeVisit || null)} className="btn btn-outline btn-sm whitespace-nowrap">Print Card</button>
                       <button onClick={() => setEditingPatient({ ...p })} className="btn btn-outline btn-sm whitespace-nowrap">Edit</button>
+                      {p.cardStatus === 'Expired' && (
+                        <button onClick={() => handleRenewCard(p)} className="btn btn-sm whitespace-nowrap" style={{background:'#d97706',color:'white'}}>
+                          Renew Card
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

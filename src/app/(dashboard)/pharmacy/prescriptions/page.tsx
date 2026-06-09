@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   getActivePrescriptions, updatePrescription, addDispense,
+  getMedicines, updateMedicine, triggerPrint, getHospitalSettings,
   genId, todayStr, timeStr,
 } from '@/lib/store';
 import type { Prescription } from '@/lib/types';
@@ -15,14 +16,42 @@ export default function PrescriptionsPage() {
 
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [dispenseRx, setDispenseRx] = useState<Prescription | null>(null);
+  const [currency, setCurrency] = useState('Rs.');
+  const [dispenseReceiptHtml, setDispenseReceiptHtml] = useState('');
+  const [showReceiptPreview, setShowReceiptPreview] = useState(false);
 
   const loadRxs = useCallback(() => {
     setPrescriptions(getActivePrescriptions());
+  }, []);
+  useEffect(() => {
+    const s = getHospitalSettings();
+    setCurrency(s.currency);
   }, []);
   useEffect(() => { loadRxs(); }, [loadRxs]);
 
   const confirmDispense = () => {
     if (!dispenseRx) return;
+
+    // Check stock for each medicine before dispensing
+    const allMeds = getMedicines();
+    let hasStockIssue = false;
+    for (const m of dispenseRx.medicines) {
+      const found = allMeds.find(med => med.name === m.name);
+      if (found && found.stock <= 0) {
+        hasStockIssue = true;
+        showToast(`Warning: ${m.name} is out of stock!`, 'error');
+      }
+    }
+    if (hasStockIssue) return;
+
+    // Reduce stock for each found medicine by 1
+    for (const m of dispenseRx.medicines) {
+      const found = allMeds.find(med => med.name === m.name);
+      if (found) {
+        updateMedicine(found.id, { stock: Math.max(0, found.stock - 1) });
+      }
+    }
+
     updatePrescription(dispenseRx.id, { status: 'Dispensed' });
     addDispense({
       id: genId(), prescriptionId: dispenseRx.id, patientNo: dispenseRx.patientNo,
@@ -30,6 +59,74 @@ export default function PrescriptionsPage() {
       medicines: dispenseRx.medicines.map(m => m.name),
       dispensedBy: 'Pharmacist', date: todayStr(), time: timeStr(),
     });
+
+    // Generate dispense receipt HTML
+    const hospital = (() => { try { return JSON.parse(localStorage.getItem('baga_hospital') || '{}'); } catch { return {}; } })();
+    const hospitalSettings = getHospitalSettings();
+    const hospitalName = hospital.name || 'BAGA Hospital';
+    const hospitalAddress = hospital.address || '';
+    const hospitalPhone = hospital.phone || '';
+    const receiptFooter = hospitalSettings.receiptFooter || 'Thank you for visiting!';
+    const now = new Date();
+    const dispensedBy = (() => { try { const s = JSON.parse(localStorage.getItem('baga_session') || '{}'); return s.name || 'Pharmacist'; } catch { return 'Pharmacist'; } })();
+
+    const medRows = dispenseRx.medicines.map((m, i) => {
+      const alt = i % 2 === 0 ? '#fff' : '#f8fafc';
+      return `<tr style="background:${alt};">
+        <td style="padding:4px 8px;font-size:11px;border-bottom:1px solid #e2e8f0;">${i + 1}</td>
+        <td style="padding:4px 8px;font-size:11px;border-bottom:1px solid #e2e8f0;font-weight:600;">${m.name}</td>
+        <td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #e2e8f0;">${m.form}, ${m.strength}</td>
+        <td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #e2e8f0;">${m.dosage || '-'}</td>
+        <td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #e2e8f0;">${m.duration}</td>
+        <td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #e2e8f0;">${m.frequency || '-'}</td>
+      </tr>`;
+    }).join('');
+
+    const receiptHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Dispense Receipt</title><style>
+      @page{size:80mm auto;margin:3mm;}
+      *{margin:0;padding:0;box-sizing:border-box;}
+      body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;background:#fff;font-size:11px;width:80mm;margin:0 auto;}
+      .header{text-align:center;padding:6px 0;border-bottom:2px dashed #cbd5e1;}
+      .hname{font-size:14px;font-weight:800;color:#0c2340;letter-spacing:1px;}
+      .hsub{font-size:8px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;}
+      .info{padding:4px 0;border-bottom:1px dashed #e2e8f0;}
+      .info-row{display:flex;justify-content:space-between;font-size:10px;padding:1px 0;}
+      .info-row .label{color:#64748b;font-weight:600;}
+      .info-row .value{color:#1e293b;font-weight:500;}
+      .title-bar{text-align:center;padding:4px 0;border-bottom:1px dashed #e2e8f0;border-top:1px dashed #e2e8f0;}
+      .title-bar h3{font-size:12px;font-weight:800;color:#0c2340;letter-spacing:1px;}
+      table{width:100%;border-collapse:collapse;}
+      th{padding:3px 6px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#0c2340;background:#f1f5f9;border-bottom:2px solid #0c2340;text-align:left;}
+      .footer{text-align:center;padding:6px 0;margin-top:4px;border-top:2px dashed #cbd5e1;}
+      .footer .ty{font-size:9px;color:#64748b;font-style:italic;}
+      @media print{body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+    </style></head><body>
+      <div class="header">
+        <div class="hname">${hospitalName}</div>
+        <div class="hsub">${hospitalAddress}${hospitalPhone ? ' | ' + hospitalPhone : ''}</div>
+        <div class="hsub">Pharmacy Department - Dispense Receipt</div>
+      </div>
+      <div class="info">
+        <div class="info-row"><span class="label">Patient:</span><span class="value">${dispenseRx.patientName}</span></div>
+        <div class="info-row"><span class="label">ID:</span><span class="value">${dispenseRx.patientNo}</span></div>
+        <div class="info-row"><span class="label">Prescribed By:</span><span class="value">${dispenseRx.prescribedBy}</span></div>
+        <div class="info-row"><span class="label">Prescribed Date:</span><span class="value">${dispenseRx.date}</span></div>
+        <div class="info-row"><span class="label">Dispensed By:</span><span class="value">${dispensedBy}</span></div>
+        <div class="info-row"><span class="label">Date/Time:</span><span class="value">${todayStr()} ${timeStr()}</span></div>
+      </div>
+      <div class="title-bar"><h3>Dispensed Medicines</h3></div>
+      <table>
+        <thead><tr><th>#</th><th>Medicine</th><th>Form/Str</th><th>Dosage</th><th>Duration</th><th>Frequency</th></tr></thead>
+        <tbody>${medRows}</tbody>
+      </table>
+      ${dispenseRx.notes ? `<div style="padding:4px 0;margin-top:4px;"><p style="font-size:10px;color:#475569;"><strong>Notes:</strong> ${dispenseRx.notes}</p></div>` : ''}
+      <div class="footer">
+        <div class="ty">${receiptFooter}</div>
+      </div>
+    </body></html>`;
+
+    setDispenseReceiptHtml(receiptHtml);
+    setShowReceiptPreview(true);
     setDispenseRx(null);
     loadRxs();
     showToast('Medicines dispensed successfully!', 'success');
@@ -117,6 +214,25 @@ export default function PrescriptionsPage() {
           </table>
         </div>
       </div>
+
+      {/* Dispense Receipt Preview Modal */}
+      {showReceiptPreview && dispenseReceiptHtml && (
+        <div className="modal-overlay" onClick={() => setShowReceiptPreview(false)}>
+          <div className="modal-content" style={{ maxWidth: '600px' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-slate-800">Dispense Receipt</h3>
+              <div className="flex gap-2">
+                <button onClick={() => { triggerPrint(dispenseReceiptHtml); }} className="btn btn-primary btn-sm">
+                  <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                  Print Receipt
+                </button>
+                <button onClick={() => { setShowReceiptPreview(false); setDispenseReceiptHtml(''); }} className="btn btn-outline btn-sm">Close</button>
+              </div>
+            </div>
+            <iframe srcDoc={dispenseReceiptHtml} style={{ width: '100%', height: '500px', border: '1px solid #e2e8f0', borderRadius: '8px' }} title="Dispense Receipt" />
+          </div>
+        </div>
+      )}
 
       {/* Dispense Confirm Modal */}
       {dispenseRx && (

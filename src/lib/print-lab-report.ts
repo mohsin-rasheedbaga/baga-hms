@@ -50,12 +50,13 @@ export function generateProfessionalLabReportHtml(params: PrintLabReportParams):
       const altClass = ri % 2 === 0 ? 'row-even' : 'row-odd';
       const flagColor = r.flag === 'Critical' ? '#fff' : r.flag === 'High' ? '#b91c1c' : r.flag === 'Low' ? '#b45309' : '#15803d';
       const flagBg = r.flag === 'Critical' ? '#dc2626' : r.flag === 'High' ? '#fee2e2' : r.flag === 'Low' ? '#fef3c7' : '#dcfce7';
+      const flagStyle = r.flag === 'Critical' ? 'background:#dc2626;color:#fff;font-weight:700;' : `color:${flagColor};background:${flagBg};`;
       return `<tr class="${altClass} ${flagClass}">
         <td class="param-name">${r.parameter}</td>
         <td class="param-value">${r.value}</td>
         <td class="param-unit">${r.unit || '-'}</td>
         <td class="param-ref">${r.refRange || '-'}</td>
-        <td class="param-flag" style="color:${flagColor};background:${flagBg};">${r.flag || 'Normal'}</td>
+        <td class="param-flag" style="${flagStyle}">${r.flag || 'Normal'}</td>
       </tr>`;
     }).join('');
 

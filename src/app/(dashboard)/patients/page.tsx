@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { getPatients, searchPatients, getPatientCounter, todayStr, getVisitsByPatient, getBillsByPatient } from '@/lib/store';
+import { getPatients, searchPatients, getPatientCounter, todayStr, getVisitsByPatient, getBillsByPatient, getHospitalSettings } from '@/lib/store';
 import type { Patient, Visit, Bill } from '@/lib/types';
 
 export default function PatientsPage() {
@@ -18,6 +18,7 @@ export default function PatientsPage() {
   useEffect(() => { loadData(); }, [loadData]);
 
   const today = todayStr();
+  const currency = getHospitalSettings().currency;
   const totalPatients = patients.length;
   const activeCards = patients.filter(p => p.cardStatus === 'Active').length;
   const todayNew = patients.filter(p => p.regDate === today).length;
@@ -186,8 +187,8 @@ export default function PatientsPage() {
                       {patientBills.map(b => (
                         <tr key={b.id}>
                           <td>{b.date}</td>
-                          <td>Rs. {b.totalAmount.toLocaleString()}</td>
-                          <td className="text-emerald-600">Rs. {b.paidAmount.toLocaleString()}</td>
+                          <td>{currency} {b.totalAmount.toLocaleString()}</td>
+                          <td className="text-emerald-600">{currency} {b.paidAmount.toLocaleString()}</td>
                           <td><span className={`badge ${b.status === 'Paid' ? 'badge-green' : b.status === 'Unpaid' ? 'badge-red' : 'badge-amber'}`}>{b.status}</span></td>
                           <td>{b.paymentMethod}</td>
                         </tr>
