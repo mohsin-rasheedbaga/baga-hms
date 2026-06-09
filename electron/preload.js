@@ -58,6 +58,19 @@ contextBridge.exposeInMainWorld('bagaAPI', {
   dbSetKV: (key, value) => ipcRenderer.sendSync('db-set-kv', key, value),
   dbBackup: (filePath) => ipcRenderer.sendSync('db-backup', filePath),
   dbGetPath: () => ipcRenderer.sendSync('db-get-path'),
+
+  // LAN Network Sharing
+  discoverLAN: () => ipcRenderer.invoke('lan-discover'),
+  connectLAN: (ip, port) => ipcRenderer.invoke('lan-connect', ip, port),
+  lanLogin: (username, password) => ipcRenderer.invoke('lan-login', username, password),
+  getLANStatus: () => ipcRenderer.invoke('lan-get-status'),
+  disconnectLAN: () => ipcRenderer.invoke('lan-disconnect'),
+
+  // Device Tracking
+  registerDevice: () => ipcRenderer.invoke('device-register'),
+  sendHeartbeat: () => ipcRenderer.invoke('device-heartbeat'),
+  getDeviceInfo: () => ipcRenderer.invoke('device-get-info'),
+  getLocation: () => ipcRenderer.invoke('device-get-location'),
 });
 
 // Also expose for license.html window
@@ -69,6 +82,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getMachineId: () => ipcRenderer.invoke('get-machine-id'),
   openMainWindow: () => ipcRenderer.send('open-main-window'),
   
+  // LAN Network Sharing
+  discoverLAN: () => ipcRenderer.invoke('lan-discover'),
+  connectLAN: (ip, port) => ipcRenderer.invoke('lan-connect', ip, port),
+  lanLogin: (username, password) => ipcRenderer.invoke('lan-login', username, password),
+  getLANStatus: () => ipcRenderer.invoke('lan-get-status'),
+  disconnectLAN: () => ipcRenderer.invoke('lan-disconnect'),
+
   // Demo
   activateDemo: () => ipcRenderer.invoke('demo-activate'),
   getDemoStatus: () => ipcRenderer.invoke('demo-get-status'),

@@ -4,10 +4,11 @@ const https = require('https');
 const http = require('http');
 const fs = require('fs');
 const crypto = require('crypto');
+const dgram = require('dgram');
 // ============================================================
 // CONFIGURATION
 // ============================================================
-const APP_VERSION = '3.0.7';
+const APP_VERSION = '3.3.0';
 const API_BASE = 'https://baga-hospital-api.vercel.app';
 const SERVER_PORT = 18765;
 const STORE_PATH = path.join(app.getPath('userData'), 'baga-store.json');
@@ -192,6 +193,60 @@ function httpsGet(url, headers = {}) {
   });
 }
 
+// Helper: make HTTP GET request (for services that don't support HTTPS, e.g. ip-api.com free tier)
+function httpGet(url, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const options = {
+      hostname: urlObj.hostname,
+      port: 80,
+      path: urlObj.pathname + urlObj.search,
+      method: 'GET',
+      headers: { 'User-Agent': 'BAGA-HMS', ...headers },
+    };
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        resolve({ statusCode: res.statusCode, headers: res.headers, body: data });
+      });
+    });
+    req.on('error', (err) => reject(err));
+    req.setTimeout(15000, () => { req.destroy(); reject(new Error('HTTP request timeout')); });
+    req.end();
+  });
+}
+
+// Helper: make HTTP POST request (for LAN client requests)
+function httpPost(url, body) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const bodyStr = JSON.stringify(body);
+    const options = {
+      hostname: urlObj.hostname,
+      port: urlObj.port || 80,
+      path: urlObj.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(bodyStr),
+        'User-Agent': 'BAGA-HMS',
+      },
+    };
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        resolve({ statusCode: res.statusCode, body: data });
+      });
+    });
+    req.on('error', (err) => reject(err));
+    req.setTimeout(10000, () => { req.destroy(); reject(new Error('Request timeout')); });
+    req.write(bodyStr);
+    req.end();
+  });
+}
+
 // Helper: download file using Node.js https module (streams to disk — reliable)
 function httpsDownload(url, destPath, onProgress) {
   return new Promise((resolve, reject) => {
@@ -372,14 +427,9 @@ async function checkForUpdates() {
     updateLog('Stack: ' + (err.stack || 'N/A'));
     sendToAllWindows('update-status', { status: 'error', message: err.message });
 
-    // Show error notification to user
-    try {
-      new Notification({
-        title: 'BAGA HMS — Update Check Failed',
-        body: err.message,
-        silent: false,
-      }).show();
-    } catch (e) {}
+    // Silent failure — don't notify user about network errors (offline usage is normal)
+    // Only log to console and update log file
+    console.log('[AutoUpdate] Update check failed (likely no internet — this is normal):', err.message);
   }
 }
 
@@ -405,6 +455,93 @@ function startServer() {
     try {
       // Decode the URL to handle encoded characters
       const decodedUrl = decodeURIComponent(req.url.split('?')[0]);
+
+      // ── LAN Server API Routes ──────────────────────────────────
+      const reqUrl = decodedUrl;
+
+      // LAN client: Get server info (license + hospital info)
+      if (reqUrl === '/api/lan/info') {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        const store = getStore();
+        const license = store.license || null;
+        if (license && license.key) {
+          // Get users for LAN clients
+          let users = [];
+          if (db) {
+            try { users = db.getAll('users'); } catch(e) { users = []; }
+          }
+          res.end(JSON.stringify({
+            mode: 'server',
+            hospitalName: license.hospitalName,
+            licenseType: license.licenseType,
+            features: license.features,
+            expiryDate: license.expiryDate,
+            address: license.address,
+            phone: license.phone,
+            version: APP_VERSION,
+            users: users,
+          }));
+        } else {
+          res.end(JSON.stringify({ mode: 'no_license' }));
+        }
+        return;
+      }
+
+      // LAN client: Authenticate user
+      if (reqUrl === '/api/lan/login') {
+        // Handle POST body
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+          res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+          try {
+            const { username, password } = JSON.parse(body);
+            if (!db) {
+              res.end(JSON.stringify({ success: false, error: 'Database not available' }));
+              return;
+            }
+            const store = getStore();
+            if (!store.license) {
+              res.end(JSON.stringify({ success: false, error: 'No active license on server' }));
+              return;
+            }
+            // Find user by username
+            const users = db.getAll('users');
+            const user = users.find(u => {
+              const d = typeof u === 'string' ? JSON.parse(u) : u;
+              return d.email === username && d.password === password && d.active !== false;
+            });
+            if (user) {
+              const userData = typeof user === 'string' ? JSON.parse(user) : user;
+              res.end(JSON.stringify({
+                success: true,
+                user: { ...userData, password: undefined }
+              }));
+            } else {
+              res.end(JSON.stringify({ success: false, error: 'Invalid username or password' }));
+            }
+          } catch (e) {
+            res.end(JSON.stringify({ success: false, error: 'Invalid request' }));
+          }
+        });
+        return;
+      }
+
+      // LAN client: Discover server (responds to discovery ping)
+      if (reqUrl === '/api/lan/ping') {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        const store = getStore();
+        res.end(JSON.stringify({
+          pong: true,
+          service: 'baga-hms',
+          version: APP_VERSION,
+          hasLicense: !!(store.license && store.license.key),
+          hospitalName: store.license ? store.license.hospitalName : '',
+        }));
+        return;
+      }
+      // ── End LAN Server API Routes ─────────────────────────────
+
       let filePath = path.join(outDir, decodedUrl === '/' ? 'index.html' : decodedUrl);
 
       // Security: ensure we don't escape the out directory
@@ -633,11 +770,106 @@ ipcMain.handle('license-get-info', async () => {
   };
 });
 
+// ============================================================
+// DEVICE LOCK CHECK
+// ============================================================
+async function checkLicenseLock(licenseKey) {
+  try {
+    const machineId = getMachineId();
+    // Get our IP address first
+    const location = await detectLocation();
+    const ipAddress = location.ip_address || '';
+
+    const ADMIN_PANEL = 'https://baga-hospital-api.vercel.app'; // Change to actual admin panel URL later
+
+    const response = await fetch(`${ADMIN_PANEL}/api/license/check-lock`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        license_key: licenseKey,
+        device_id: machineId,
+        ip_address: ipAddress,
+      }),
+    });
+
+    const data = await response.json();
+    console.log('[License] Lock check:', JSON.stringify(data));
+    return data;
+  } catch (e) {
+    console.error('[License] Lock check failed:', e.message);
+    // If check fails (network error), allow activation (graceful degradation)
+    return { allowed: true, reason: 'check_failed' };
+  }
+}
+
+async function lockLicenseToServer(licenseKey, deviceId) {
+  try {
+    const location = await detectLocation();
+    const deviceInfo = getDeviceInfo();
+    const subnet = getNetworkSubnet(location.ip_address);
+    const ADMIN_PANEL = 'https://baga-hospital-api.vercel.app';
+
+    await fetch(`${ADMIN_PANEL}/api/license/lock`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        license_key: licenseKey,
+        device_id: deviceId,
+        device_name: deviceInfo.device_name,
+        ip_address: location.ip_address,
+        network: subnet,
+        enable_sharing: true, // Network sharing enabled by default
+        max_clients: 10,
+        server_port: SERVER_PORT,
+      }),
+    });
+    console.log('[License] Locked to device:', deviceId, 'Network:', subnet);
+  } catch (e) {
+    console.error('[License] Lock registration failed:', e.message);
+  }
+}
+
+function getNetworkSubnet(ip) {
+  if (!ip || ip === '') return 'unknown';
+  const parts = ip.split('.');
+  if (parts.length < 4) return ip;
+  return parts[0] + '.' + parts[1] + '.' + parts[2] + '.0/24';
+}
+
 ipcMain.handle('license-activate', async (event, licenseKey) => {
   try {
     const machineId = getMachineId();
     const store = getStore();
     console.log('[License] Activating:', licenseKey, 'Machine:', machineId);
+
+    // Step 1: Check device lock before activating
+    const lockCheck = await checkLicenseLock(licenseKey);
+    if (!lockCheck.allowed) {
+      console.log('[License] BLOCKED - locked to another device');
+      return { 
+        success: false, 
+        error: 'already_activated', 
+        locked_device_name: lockCheck.locked_device_name,
+        locked_network: lockCheck.locked_network,
+      };
+    }
+    
+    // Step 2: If allowed because of network sharing, store server info
+    if (lockCheck.reason === 'network_shared') {
+      const store = getStore();
+      store.networkClient = {
+        serverIp: lockCheck.server_ip,
+        serverPort: lockCheck.server_port || 18765,
+        hospitalName: lockCheck.hospital_name,
+        licenseType: lockCheck.license_type,
+        features: lockCheck.features,
+        expiryDate: lockCheck.expiry_date,
+        licenseKey: licenseKey,
+        connectedAt: new Date().toISOString(),
+      };
+      saveStore(store);
+      return { success: true, mode: 'network_client', server: lockCheck };
+    }
 
     const response = await fetch(`${API_BASE}/api/license/check`, {
       method: 'POST',
@@ -694,6 +926,16 @@ ipcMain.handle('license-activate', async (event, licenseKey) => {
         machineId: machineId,
       };
       saveStore(store);
+
+      // Start device tracking
+      startHeartbeat();
+
+      // Register device with location (fire-and-forget)
+      registerDeviceBackground(licenseKey);
+
+      // Lock license to this device
+      lockLicenseToServer(licenseKey, machineId);
+
       return { success: true, data: store.license };
     } else {
       return { success: false, error: data.error || 'Invalid license key' };
@@ -870,6 +1112,7 @@ ipcMain.handle('license-get-full-info', async () => {
       remaining: Math.ceil((new Date(demo.expiresAt) - new Date()) / (1000 * 60 * 60 * 24)),
       expiresAt: demo.expiresAt,
     } : null,
+    lastLocation: store.lastLocation || null,
   };
 });
 
@@ -1143,6 +1386,405 @@ ipcMain.handle('db-status', () => ({
 }));
 
 // ============================================================
+// DEVICE TRACKING - INFO, LOCATION & HEARTBEAT
+// ============================================================
+
+const os = require('os');
+
+function getDeviceInfo() {
+  return {
+    device_name: os.hostname(),
+    operating_system: `${os.type()} ${os.release()} (${os.arch()})`,
+    app_version: APP_VERSION,
+    device_id: getMachineId(),
+    platform: process.platform,
+    arch: os.arch(),
+    cpu_cores: os.cpus().length,
+    total_memory: os.totalmem(),
+  };
+}
+
+async function detectLocation() {
+  try {
+    const result = await httpGet('http://ip-api.com/json/?fields=status,country,regionName,city,timezone,query');
+    const data = JSON.parse(result.body);
+    if (data.status === 'success') {
+      return {
+        ip_address: data.query,
+        country: data.country,
+        region: data.regionName,
+        city: data.city,
+        timezone: data.timezone,
+      };
+    }
+  } catch (e) {
+    console.error('[Location] Detection failed:', e.message);
+  }
+  return { ip_address: '', country: '', region: '', city: '', timezone: '' };
+}
+
+async function registerDeviceBackground(licenseKey) {
+  try {
+    const deviceInfo = getDeviceInfo();
+    const location = await detectLocation();
+
+    await fetch(`${API_BASE}/api/device/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        license_key: licenseKey,
+        device_id: deviceInfo.device_id,
+        device_name: deviceInfo.device_name,
+        operating_system: deviceInfo.operating_system,
+        app_version: deviceInfo.app_version,
+        ip_address: location.ip_address,
+      }),
+    });
+
+    // Store location locally
+    const store = getStore();
+    store.lastLocation = { ...location, detectedAt: new Date().toISOString() };
+    saveStore(store);
+
+    console.log('[Device] Registered with location:', JSON.stringify(location));
+  } catch (e) {
+    console.error('[Device] Background registration failed:', e.message);
+  }
+}
+
+// --- Heartbeat ---
+let heartbeatTimer = null;
+
+function startHeartbeat() {
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+
+  // Send first heartbeat immediately
+  sendHeartbeatPing();
+
+  // Then every 5 minutes
+  heartbeatTimer = setInterval(() => {
+    sendHeartbeatPing();
+  }, 5 * 60 * 1000); // 5 minutes
+
+  console.log('[Heartbeat] Timer started (every 5 minutes)');
+}
+
+async function sendHeartbeatPing() {
+  try {
+    const store = getStore();
+    const licenseKey = store.license ? store.license.key : null;
+    if (!licenseKey) {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+      return;
+    }
+
+    const response = await fetch(`${API_BASE}/api/device/heartbeat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        license_key: licenseKey,
+        device_id: getMachineId(),
+        app_version: APP_VERSION,
+      }),
+    });
+
+    console.log('[Heartbeat] Ping sent:', new Date().toISOString());
+  } catch (error) {
+    console.error('[Heartbeat] Ping failed:', error.message);
+  }
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+    console.log('[Heartbeat] Timer stopped');
+  }
+}
+
+// --- Device IPC Handlers ---
+
+ipcMain.handle('device-register', async () => {
+  try {
+    const store = getStore();
+    const licenseKey = store.license ? store.license.key : null;
+    if (!licenseKey) return { success: false, error: 'No active license' };
+
+    const deviceInfo = getDeviceInfo();
+    const location = await detectLocation();
+
+    const response = await fetch(`${API_BASE}/api/device/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        license_key: licenseKey,
+        device_id: deviceInfo.device_id,
+        device_name: deviceInfo.device_name,
+        operating_system: deviceInfo.operating_system,
+        app_version: deviceInfo.app_version,
+        ip_address: location.ip_address,
+      }),
+    });
+
+    const data = await response.json();
+    console.log('[Device] Registration response:', data);
+
+    // Store last known location locally
+    store.lastLocation = {
+      ...location,
+      detectedAt: new Date().toISOString(),
+    };
+    saveStore(store);
+
+    return { success: true, location, data };
+  } catch (error) {
+    console.error('[Device] Registration error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('device-heartbeat', async () => {
+  try {
+    const store = getStore();
+    const licenseKey = store.license ? store.license.key : null;
+    if (!licenseKey) return { success: false, error: 'No active license' };
+
+    const response = await fetch(`${API_BASE}/api/device/heartbeat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        license_key: licenseKey,
+        device_id: getMachineId(),
+        app_version: APP_VERSION,
+      }),
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('[Heartbeat] Error:', error.message);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('device-get-info', async () => {
+  const store = getStore();
+  return {
+    device: getDeviceInfo(),
+    location: store.lastLocation || null,
+  };
+});
+
+ipcMain.handle('device-get-location', async () => {
+  try {
+    const location = await detectLocation();
+
+    // Update stored location
+    const store = getStore();
+    store.lastLocation = { ...location, detectedAt: new Date().toISOString() };
+    saveStore(store);
+
+    return { success: true, location };
+  } catch (error) {
+    console.error('[Location] Detection error:', error.message);
+    return { success: false, error: error.message };
+  }
+});
+
+// ============================================================
+// LAN DISCOVERY - UDP Broadcast for finding license servers
+// ============================================================
+const DISCOVERY_PORT = 18766;
+
+function startLANDiscovery() {
+  try {
+    const udpSocket = dgram.createSocket('udp4');
+    
+    udpSocket.on('message', (msg, rinfo) => {
+      try {
+        const data = JSON.parse(msg.toString());
+        if (data.type === 'baga-hms-discover') {
+          // A client is looking for a server — respond
+          const store = getStore();
+          const response = JSON.stringify({
+            type: 'baga-hms-announce',
+            service: 'baga-hms',
+            version: APP_VERSION,
+            port: SERVER_PORT,
+            hasLicense: !!(store.license && store.license.key),
+            hospitalName: store.license ? store.license.hospitalName : '',
+          });
+          udpSocket.send(response, rinfo.port, rinfo.address);
+          console.log('[LAN] Responded to discovery from', rinfo.address);
+        }
+      } catch (e) {}
+    });
+
+    udpSocket.on('error', (err) => {
+      console.log('[LAN] Discovery socket error:', err.message);
+    });
+
+    udpSocket.bind(DISCOVERY_PORT, () => {
+      udpSocket.setBroadcast(true);
+      console.log('[LAN] Discovery listening on UDP port', DISCOVERY_PORT);
+    });
+  } catch (e) {
+    console.log('[LAN] Discovery not available:', e.message);
+  }
+}
+
+async function discoverLANServer() {
+  return new Promise((resolve) => {
+    try {
+      const udpSocket = dgram.createSocket('udp4');
+      let found = false;
+      const timeout = setTimeout(() => {
+        if (!found) {
+          udpSocket.close();
+          resolve(null);
+        }
+      }, 3000); // 3 second timeout
+
+      udpSocket.on('message', (msg, rinfo) => {
+        try {
+          const data = JSON.parse(msg.toString());
+          if (data.type === 'baga-hms-announce' && data.hasLicense) {
+            found = true;
+            clearTimeout(timeout);
+            udpSocket.close();
+            resolve({
+              ip: rinfo.address,
+              port: data.port,
+              hospitalName: data.hospitalName,
+              version: data.version,
+            });
+          }
+        } catch (e) {}
+      });
+
+      udpSocket.on('error', () => {
+        clearTimeout(timeout);
+        resolve(null);
+      });
+
+      // Broadcast discovery message
+      const message = JSON.stringify({ type: 'baga-hms-discover', version: APP_VERSION });
+      udpSocket.send(message, 0, message.length, DISCOVERY_PORT, '255.255.255.255');
+      console.log('[LAN] Sent discovery broadcast');
+    } catch (e) {
+      console.log('[LAN] Discovery not available:', e.message);
+      resolve(null);
+    }
+  });
+}
+
+// ============================================================
+// IPC HANDLERS - LAN CLIENT
+// ============================================================
+
+ipcMain.handle('lan-discover', async () => {
+  try {
+    const server = await discoverLANServer();
+    if (server) {
+      return { success: true, server };
+    }
+    return { success: false, error: 'No server found on network' };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('lan-connect', async (event, serverIp, serverPort) => {
+  try {
+    const port = serverPort || 18765;
+    const url = `http://${serverIp}:${port}/api/lan/info`;
+    
+    const response = await httpGet(url);
+    const data = JSON.parse(response.body);
+    
+    if (data.mode === 'server') {
+      // Store server connection info
+      const store = getStore();
+      store.networkClient = {
+        serverIp: serverIp,
+        serverPort: port,
+        hospitalName: data.hospitalName,
+        licenseType: data.licenseType,
+        features: data.features,
+        expiryDate: data.expiryDate,
+        licenseKey: 'lan-shared',
+        connectedAt: new Date().toISOString(),
+        version: data.version,
+      };
+      // Store server users locally for offline login
+      if (data.users && data.users.length > 0) {
+        store.networkClientUsers = data.users;
+      }
+      saveStore(store);
+      
+      console.log('[LAN] Connected to server:', serverIp, '-', data.hospitalName);
+      return { success: true, data };
+    } else {
+      return { success: false, error: 'Server has no active license' };
+    }
+  } catch (e) {
+    console.error('[LAN] Connect error:', e.message);
+    return { success: false, error: 'Failed to connect to server' };
+  }
+});
+
+ipcMain.handle('lan-login', async (event, username, password) => {
+  try {
+    const store = getStore();
+    const client = store.networkClient;
+    if (!client || !client.serverIp) {
+      return { success: false, error: 'Not connected to a LAN server' };
+    }
+    
+    // Try online login via server first
+    try {
+      const port = client.serverPort || 18765;
+      const response = await httpPost(`http://${client.serverIp}:${port}/api/lan/login`, {
+        username, password,
+      });
+      const data = JSON.parse(response.body);
+      if (data.success) {
+        return { success: true, user: data.user, mode: 'lan_client' };
+      }
+      return { success: false, error: data.error };
+    } catch (e) {
+      // Fallback to cached users
+      console.log('[LAN] Server unreachable, trying cached users');
+      const cachedUsers = store.networkClientUsers || [];
+      const user = cachedUsers.find(u => {
+        const d = typeof u === 'string' ? JSON.parse(u) : u;
+        return d.email === username && d.password === password && d.active !== false;
+      });
+      if (user) {
+        const userData = typeof user === 'string' ? JSON.parse(user) : user;
+        return { success: true, user: { ...userData, password: undefined }, mode: 'lan_client_offline' };
+      }
+      return { success: false, error: 'Server unreachable and no cached users found' };
+    }
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('lan-get-status', () => {
+  const store = getStore();
+  return store.networkClient || null;
+});
+
+ipcMain.handle('lan-disconnect', () => {
+  const store = getStore();
+  store.networkClient = null;
+  store.networkClientUsers = null;
+  saveStore(store);
+  return { success: true };
+});
+
+// ============================================================
 // DATABASE IPC HANDLERS (safe wrappers)
 // ============================================================
 
@@ -1214,6 +1856,9 @@ app.whenReady().then(async () => {
     }
   }
 
+  // Start LAN discovery (for network sharing)
+  startLANDiscovery();
+
   // 3. Check license/demo and show appropriate window
   const store = getStore();
   
@@ -1282,6 +1927,11 @@ app.whenReady().then(async () => {
         
         saveStore(store);
         console.log('[BAGA HMS] License valid. Opening main window.');
+
+        // Start device tracking for validated license
+        startHeartbeat();
+        registerDeviceBackground(store.license.key);
+
         createMainWindow();
       } else {
         console.log('[BAGA HMS] License invalid/expired:', data.error);
@@ -1333,6 +1983,8 @@ app.on('before-quit', () => {
     if (serverInstance) serverInstance.close();
     if (db) db.close();
   } catch (e) {}
+  // Stop heartbeat timer on quit
+  stopHeartbeat();
   // Clear session data on quit — forces re-login on next launch
   try {
     if (mainWindow && !mainWindow.isDestroyed()) {

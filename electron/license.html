@@ -190,6 +190,60 @@
       color: #d1d5db;
       font-size: 12px;
     }
+    .status.device-locked {
+      display: block;
+      background: #fef2f2;
+      color: #dc2626;
+      border: 1px solid #fecaca;
+    }
+    .lan-section {
+      margin-top: 15px;
+      padding: 14px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 10px;
+      display: none;
+    }
+    .lan-section.visible { display: block; }
+    .btn-lan {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: white;
+      margin-top: 10px;
+      transition: all 0.2s;
+    }
+    .btn-lan:hover:not(:disabled) {
+      transform: translateY(-1px);
+    }
+    .btn-lan:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .lan-server-list {
+      margin-top: 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .lan-server-item {
+      padding: 10px 14px;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .lan-server-item:hover { background: #f3f4f6; }
+    .lan-server-item:last-child { border-bottom: none; }
+    .lan-server-name { font-size: 13px; font-weight: 600; color: #1f2937; }
+    .lan-server-ip { font-size: 11px; color: #6b7280; font-family: monospace; }
     .info-box {
       background: #f9fafb;
       border: 1px solid #e5e7eb;
@@ -270,6 +324,16 @@
       
       <div class="status" id="status"></div>
       
+      <div id="lockInfo" style="display:none; margin-top:10px; padding:10px 14px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; font-size:12px; color:#dc2626;"></div>
+      
+      <div class="lan-section" id="lanSection">
+        <div style="font-size:13px; font-weight:600; color:#16a34a; margin-bottom:8px;">
+          Network Server Found
+        </div>
+        <div id="lanServerList"></div>
+        <div id="lanStatus"></div>
+      </div>
+      
       <div class="info-box" id="licenseInfo">
         <div class="info-row">
           <span class="label">Hospital:</span>
@@ -287,6 +351,10 @@
     </div>
     
     <div class="divider">--- or ---</div>
+    
+    <button class="btn-lan" id="lanDiscoverBtn" onclick="discoverLANServer()">
+      Find Network Server
+    </button>
     
     <button class="btn btn-outline" id="changeBtn" onclick="changeLicense()" style="display:none;">
       Change License
@@ -450,6 +518,11 @@
         const result = await window.electronAPI.activateLicense(key);
         
         if (result.success) {
+          if (result.mode === 'network_client') {
+            showStatus(`Connected to network server! Hospital: ${result.server.hospital_name}`, 'success');
+            setTimeout(() => openMainWindow(), 1500);
+            return;
+          }
           showStatus('License activated successfully!', 'success');
           
           document.getElementById('infoHospital').textContent = result.data.hospitalName || '-';
@@ -458,6 +531,15 @@
           licenseInfoBox.classList.add('visible');
           
           setTimeout(() => openMainWindow(), 1500);
+        } else if (result.error === 'already_activated') {
+          const lockInfo = document.getElementById('lockInfo');
+          if (lockInfo) {
+            lockInfo.textContent = `This license is already activated on device "${result.locked_device_name}" on network ${result.locked_network}. Please contact support or activate on the original device.`;
+            lockInfo.style.display = 'block';
+          }
+          showStatus('This license is already activated on another device!', 'error');
+          activateBtn.disabled = false;
+          activateBtn.textContent = 'Activate';
         } else {
           showStatus(result.error || 'Invalid license key', 'error');
           activateBtn.disabled = false;
@@ -485,6 +567,60 @@
         statusDiv.innerHTML = message + '<span class="spinner"></span>';
       } else {
         statusDiv.textContent = message;
+      }
+    }
+    
+    async function discoverLANServer() {
+      const btn = document.getElementById('lanDiscoverBtn');
+      btn.disabled = true;
+      btn.textContent = 'Searching network...';
+      showStatus('Searching for BAGA HMS server on your network...', 'loading');
+      
+      try {
+        const result = await window.electronAPI.discoverLAN();
+        
+        if (result.success && result.server) {
+          const lanSection = document.getElementById('lanSection');
+          const list = document.getElementById('lanServerList');
+          
+          list.innerHTML = `
+            <div class="lan-server-item" onclick="connectToServer('${result.server.ip}', ${result.server.port})">
+              <div>
+                <div class="lan-server-name">${result.server.hospitalName || 'BAGA HMS Server'}</div>
+                <div class="lan-server-ip">${result.server.ip}:${result.server.port} — v${result.server.version}</div>
+              </div>
+              <div style="color:#16a34a; font-size:12px; font-weight:600;">Connect</div>
+            </div>
+          `;
+          
+          lanSection.classList.add('visible');
+          showStatus('Server found! Click Connect to join.', 'success');
+        } else {
+          showStatus('No BAGA HMS server found on your network.', 'error');
+        }
+        
+        btn.disabled = false;
+        btn.textContent = 'Find Network Server';
+      } catch (e) {
+        showStatus('Network discovery failed.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Find Network Server';
+      }
+    }
+    
+    async function connectToServer(ip, port) {
+      showStatus('Connecting to server...', 'loading');
+      try {
+        const result = await window.electronAPI.connectLAN(ip, port);
+        
+        if (result.success) {
+          showStatus(`Connected to ${result.data.hospitalName}! Starting...`, 'success');
+          setTimeout(() => openMainWindow(), 1500);
+        } else {
+          showStatus(result.error || 'Connection failed', 'error');
+        }
+      } catch (e) {
+        showStatus('Connection failed', 'error');
       }
     }
     

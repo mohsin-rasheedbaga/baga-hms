@@ -359,7 +359,7 @@ export default function PharmacyPage() {
       }
       // Fallback to hospital settings for address/phone
       try {
-        const hs = getHospitalSettings();
+        const hs = getHospitalSettings() as any;
         if (!hospitalAddress && hs.address) hospitalAddress = hs.address;
         if (!hospitalPhone && hs.phone) hospitalPhone = hs.phone;
         if (hs.receiptFooter) receiptFooter = hs.receiptFooter;

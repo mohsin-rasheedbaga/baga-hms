@@ -2,9 +2,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   getActivePrescriptions, updatePrescription, addDispense,
-  getMedicines, updateMedicine, triggerPrint, getHospitalSettings,
+  getMedicines, updateMedicine, getHospitalSettings,
   genId, todayStr, timeStr,
 } from '@/lib/store';
+import { triggerPrint } from '@/lib/print-utils';
 import type { Prescription } from '@/lib/types';
 
 export default function PrescriptionsPage() {
