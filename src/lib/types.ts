@@ -248,6 +248,19 @@ export interface MedicineItem {
   stock: number;         // current stock quantity
   expiryDate: string;   // YYYY-MM-DD format
   minStock: number;     // minimum stock level for alerts
+  // Extended fields
+  barcode?: string;
+  batchNumber?: string;
+  brandName?: string;
+  companyName?: string;
+  purchasePrice?: number;
+  wholesalePrice?: number;
+  mfgDate?: string;
+  rackLocation?: string;
+  supplierName?: string;
+  supplierContact?: string;
+  medicineType?: string;
+  packingType?: string;
 }
 
 export interface LabTestCatalog {

@@ -42,6 +42,21 @@ export default function InventoryPage() {
   const [fPrice, setFPrice] = useState('');
   const [fCategory, setFCategory] = useState('');
   const [fNewCategory, setFNewCategory] = useState('');
+  const [fBarcode, setFBarcode] = useState('');
+  const [fBatch, setFBatch] = useState('');
+  const [fBrand, setFBrand] = useState('');
+  const [fCompany, setFCompany] = useState('');
+  const [fPurchasePrice, setFPurchasePrice] = useState('');
+  const [fWholesalePrice, setFWholesalePrice] = useState('');
+  const [fExpiryDate, setFExpiryDate] = useState('');
+  const [fMfgDate, setFMfgDate] = useState('');
+  const [fStock, setFStock] = useState('0');
+  const [fMinStock, setFMinStock] = useState('10');
+  const [fRack, setFRack] = useState('');
+  const [fSupplier, setFSupplier] = useState('');
+  const [fSupplierContact, setFSupplierContact] = useState('');
+  const [fMedicineType, setFMedicineType] = useState('Tablet');
+  const [fPackingType, setFPackingType] = useState('Strip');
 
   const loadInventory = useCallback(() => {
     const meds = getMedicines();
@@ -65,6 +80,10 @@ export default function InventoryPage() {
     setEditingMed(null);
     setFName(''); setFGeneric(''); setFForm('Tablet'); setFStrength('');
     setFPacking(''); setFPrice(''); setFCategory(categories[0] || ''); setFNewCategory('');
+    setFBarcode(''); setFBatch(''); setFBrand(''); setFCompany('');
+    setFPurchasePrice(''); setFWholesalePrice(''); setFExpiryDate('');
+    setFMfgDate(''); setFStock('0'); setFMinStock('10'); setFRack('');
+    setFSupplier(''); setFSupplierContact(''); setFMedicineType('Tablet'); setFPackingType('Strip');
     setShowMedModal(true);
   };
 
@@ -72,25 +91,55 @@ export default function InventoryPage() {
     setEditingMed(m);
     setFName(m.name); setFGeneric(m.genericName); setFForm(m.form); setFStrength(m.strength);
     setFPacking(m.packing); setFPrice(String(m.price)); setFCategory(m.category); setFNewCategory('');
+    setFBarcode(m.barcode || '');
+    setFBatch(m.batchNumber || '');
+    setFBrand(m.brandName || '');
+    setFCompany(m.companyName || '');
+    setFPurchasePrice(String(m.purchasePrice || m.price));
+    setFWholesalePrice(String(m.wholesalePrice || m.price));
+    setFExpiryDate(m.expiryDate || '');
+    setFMfgDate(m.mfgDate || '');
+    setFStock(String(m.stock || 0));
+    setFMinStock(String(m.minStock || 10));
+    setFRack(m.rackLocation || '');
+    setFSupplier(m.supplierName || '');
+    setFSupplierContact(m.supplierContact || '');
+    setFMedicineType(m.medicineType || 'Tablet');
+    setFPackingType(m.packingType || 'Strip');
     setShowMedModal(true);
   };
 
   const saveMed = () => {
     const cat = fCategory === '__new__' ? fNewCategory.trim() : fCategory.trim();
     if (!fName.trim() || !fForm || !fStrength.trim() || !fPacking.trim() || !fPrice.trim() || !cat) {
-      showToast('All fields are required', 'error'); return;
+      showToast('All required fields are mandatory', 'error'); return;
     }
     if (editingMed) {
       updateMedicine(editingMed.id, {
         name: fName.trim(), genericName: fGeneric.trim(), form: fForm as MedicineItem['form'],
         strength: fStrength.trim(), packing: fPacking.trim(), price: Number(fPrice), category: cat,
+        barcode: fBarcode.trim(), batchNumber: fBatch.trim(), brandName: fBrand.trim(),
+        companyName: fCompany.trim(), purchasePrice: Number(fPurchasePrice) || Number(fPrice),
+        wholesalePrice: Number(fWholesalePrice) || Number(fPrice),
+        expiryDate: fExpiryDate, mfgDate: fMfgDate,
+        stock: Number(fStock), minStock: Number(fMinStock),
+        rackLocation: fRack.trim(), supplierName: fSupplier.trim(),
+        supplierContact: fSupplierContact.trim(),
+        medicineType: fMedicineType, packingType: fPackingType,
       });
       showToast('Medicine updated successfully', 'success');
     } else {
       addMedicine({
         id: genId(), name: fName.trim(), genericName: fGeneric.trim(), form: fForm as MedicineItem['form'],
         strength: fStrength.trim(), packing: fPacking.trim(), price: Number(fPrice), category: cat, active: true,
-        stock: 0, expiryDate: '', minStock: 10,
+        barcode: fBarcode.trim(), batchNumber: fBatch.trim(), brandName: fBrand.trim(),
+        companyName: fCompany.trim(), purchasePrice: Number(fPurchasePrice) || Number(fPrice),
+        wholesalePrice: Number(fWholesalePrice) || Number(fPrice),
+        expiryDate: fExpiryDate, mfgDate: fMfgDate,
+        stock: Number(fStock), minStock: Number(fMinStock),
+        rackLocation: fRack.trim(), supplierName: fSupplier.trim(),
+        supplierContact: fSupplierContact.trim(),
+        medicineType: fMedicineType, packingType: fPackingType,
       });
       showToast('New medicine added successfully', 'success');
     }
@@ -324,26 +373,50 @@ export default function InventoryPage() {
       {/* Add/Edit Medicine Modal */}
       {showMedModal && (
         <div className="modal-overlay" onClick={() => setShowMedModal(false)}>
-          <div className="modal-content" style={{ maxWidth: '550px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+          <div className="modal-content" style={{ maxWidth: '700px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold">{editingMed ? 'Edit Medicine' : 'Add New Medicine'}</h3>
               <button onClick={() => setShowMedModal(false)} className="btn btn-outline btn-sm">Close</button>
             </div>
             <div className="space-y-4">
+              {/* Row 1: Medicine Name, Generic Formula */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="form-label">Medicine Name *</label>
                   <input type="text" className="form-input" placeholder="e.g. Paracetamol" value={fName} onChange={e => setFName(e.target.value)} />
                 </div>
                 <div>
-                  <label className="form-label">Generic Name</label>
+                  <label className="form-label">Generic Formula</label>
                   <input type="text" className="form-input" placeholder="e.g. Acetaminophen" value={fGeneric} onChange={e => setFGeneric(e.target.value)} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {/* Row 2: Brand Name, Company Name */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="form-label">Form *</label>
-                  <select className="form-input" value={fForm} onChange={e => setFForm(e.target.value)}>
+                  <label className="form-label">Brand Name</label>
+                  <input type="text" className="form-input" placeholder="e.g. Panadol" value={fBrand} onChange={e => setFBrand(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label">Company Name</label>
+                  <input type="text" className="form-input" placeholder="e.g. GSK" value={fCompany} onChange={e => setFCompany(e.target.value)} />
+                </div>
+              </div>
+              {/* Row 3: Barcode, Batch Number */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="form-label">Barcode</label>
+                  <input type="text" className="form-input" placeholder="e.g. 8901234567890" value={fBarcode} onChange={e => setFBarcode(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label">Batch Number</label>
+                  <input type="text" className="form-input" placeholder="e.g. BN-2024-001" value={fBatch} onChange={e => setFBatch(e.target.value)} />
+                </div>
+              </div>
+              {/* Row 4: Medicine Type, Strength */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="form-label">Medicine Type</label>
+                  <select className="form-input" value={fMedicineType} onChange={e => setFMedicineType(e.target.value)}>
                     <option value="Tablet">Tablet</option>
                     <option value="Capsule">Capsule</option>
                     <option value="Syrup">Syrup</option>
@@ -355,18 +428,69 @@ export default function InventoryPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="form-label">Strength *</label>
+                  <label className="form-label">Strength</label>
                   <input type="text" className="form-input" placeholder="e.g. 500mg" value={fStrength} onChange={e => setFStrength(e.target.value)} />
                 </div>
+              </div>
+              {/* Row 5: Packing Type, Packing */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="form-label">Packing *</label>
+                  <label className="form-label">Packing Type</label>
+                  <select className="form-input" value={fPackingType} onChange={e => setFPackingType(e.target.value)}>
+                    <option value="Strip">Strip</option>
+                    <option value="Bottle">Bottle</option>
+                    <option value="Box">Box</option>
+                    <option value="Vial">Vial</option>
+                    <option value="Pack">Pack</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Packing</label>
                   <input type="text" className="form-input" placeholder="e.g. 10 tablets" value={fPacking} onChange={e => setFPacking(e.target.value)} />
                 </div>
               </div>
+              {/* Row 6: Purchase Price, Sale Price, Wholesale Price */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="form-label">Purchase Price ({currency}) *</label>
+                  <input type="number" className="form-input" placeholder="e.g. 35" value={fPurchasePrice} onChange={e => setFPurchasePrice(e.target.value)} min={0} />
+                </div>
+                <div>
+                  <label className="form-label">Sale Price ({currency}) *</label>
+                  <input type="number" className="form-input" placeholder="e.g. 50" value={fPrice} onChange={e => setFPrice(e.target.value)} min={0} />
+                </div>
+                <div>
+                  <label className="form-label">Wholesale Price ({currency})</label>
+                  <input type="number" className="form-input" placeholder="e.g. 42" value={fWholesalePrice} onChange={e => setFWholesalePrice(e.target.value)} min={0} />
+                </div>
+              </div>
+              {/* Row 7: Expiry Date, Manufacturing Date */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="form-label">Price ({currency}) *</label>
-                  <input type="number" className="form-input" placeholder="e.g. 50" value={fPrice} onChange={e => setFPrice(e.target.value)} min={0} />
+                  <label className="form-label">Expiry Date</label>
+                  <input type="date" className="form-input" value={fExpiryDate} onChange={e => setFExpiryDate(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label">Manufacturing Date</label>
+                  <input type="date" className="form-input" value={fMfgDate} onChange={e => setFMfgDate(e.target.value)} />
+                </div>
+              </div>
+              {/* Row 8: Stock Quantity, Min Stock Alert */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="form-label">Stock Quantity *</label>
+                  <input type="number" className="form-input" placeholder="e.g. 100" value={fStock} onChange={e => setFStock(e.target.value)} min={0} />
+                </div>
+                <div>
+                  <label className="form-label">Min Stock Alert</label>
+                  <input type="number" className="form-input" placeholder="e.g. 10" value={fMinStock} onChange={e => setFMinStock(e.target.value)} min={0} />
+                </div>
+              </div>
+              {/* Row 9: Rack Location, Category */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="form-label">Rack Location</label>
+                  <input type="text" className="form-input" placeholder="e.g. A-01" value={fRack} onChange={e => setFRack(e.target.value)} />
                 </div>
                 <div>
                   <label className="form-label">Category *</label>
@@ -381,6 +505,17 @@ export default function InventoryPage() {
                     ))}
                     <option value="__new__">+ New Category</option>
                   </select>
+                </div>
+              </div>
+              {/* Row 10: Supplier Name, Supplier Contact */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="form-label">Supplier Name</label>
+                  <input type="text" className="form-input" placeholder="e.g. MedPharm Dist." value={fSupplier} onChange={e => setFSupplier(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label">Supplier Contact</label>
+                  <input type="text" className="form-input" placeholder="e.g. 0300-1234567" value={fSupplierContact} onChange={e => setFSupplierContact(e.target.value)} />
                 </div>
               </div>
               {fCategory === '__new__' && (

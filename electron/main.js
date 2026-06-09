@@ -8,7 +8,7 @@ const dgram = require('dgram');
 // ============================================================
 // CONFIGURATION
 // ============================================================
-const APP_VERSION = '3.3.0';
+const APP_VERSION = '3.3.1';
 const API_BASE = 'https://baga-hospital-api.vercel.app';
 const SERVER_PORT = 18765;
 const STORE_PATH = path.join(app.getPath('userData'), 'baga-store.json');
