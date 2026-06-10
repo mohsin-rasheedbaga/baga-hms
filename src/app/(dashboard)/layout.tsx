@@ -242,7 +242,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [logoSrc, setLogoSrc] = useState<string>('');
   const [darkMode, setDarkMode] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<any>(null);
 
   useEffect(() => {
     setSearchStr(typeof window !== 'undefined' ? window.location.search : '');
@@ -257,28 +257,18 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Listen for update events from Electron via IPC (proper way)
   useEffect(() => {
-    // Check for updates via IPC
-    const checkUpdate = async () => {
-      try {
-        const isEl = typeof window !== 'undefined' && !!(window as any).bagaAPI;
-        if (isEl) {
-          const info = await (window as any).bagaAPI.getLicenseInfo();
-          // We'll listen for update events
+    const isEl = typeof window !== 'undefined' && !!(window as any).bagaAPI;
+    if (isEl) {
+      const unsub = (window as any).bagaAPI.onUpdateStatus((data: any) => {
+        setUpdateStatus(data);
+        if (data?.status === 'available' || data?.status === 'downloading' || data?.status === 'downloaded') {
+          setShowNotifications(true);
         }
-      } catch (e) {}
-    };
-    checkUpdate();
-
-    // Listen for update events from Electron
-    const handleUpdate = (e: any) => {
-      const data = e.detail || e.data;
-      if (data?.status === 'available') {
-        setUpdateAvailable(true);
-      }
-    };
-    window.addEventListener('update-status', handleUpdate as any);
-    return () => window.removeEventListener('update-status', handleUpdate as any);
+      });
+      return () => { if (unsub) unsub(); };
+    }
   }, []);
 
   const toggleDarkMode = () => {
@@ -568,7 +558,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 <svg className="w-5 h-5 text-slate-600 dark-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
-                {updateAvailable && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>}
+                {(updateStatus?.status === 'available' || updateStatus?.status === 'downloading' || updateStatus?.status === 'downloaded') && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>}
               </button>
               {showNotifications && (
                 <div data-notifications-panel className={`absolute right-0 top-12 w-80 rounded-xl shadow-2xl border z-50 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
@@ -576,10 +566,51 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                     Notifications
                   </div>
                   <div className="p-3">
-                    {updateAvailable ? (
+                    {updateStatus && updateStatus.status !== 'not-available' && updateStatus.status !== 'checking' ? (
                       <div className={`p-3 rounded-lg border ${darkMode ? 'bg-slate-700/50 border-slate-600' : 'bg-blue-50 border-blue-200'}`}>
-                        <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-slate-800'}`}>Update Available</p>
-                        <p className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>A new version of BAGA HMS is available. Check the settings page for details.</p>
+                        {updateStatus.status === 'available' && (
+                          <div>
+                            <p className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-slate-800'}`}>Update Available — v{updateStatus.version}</p>
+                            <p className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>A new version is available. Downloading will start automatically.</p>
+                            {updateStatus.isDevMode && <p className={`text-xs mt-1 ${darkMode ? 'text-amber-400' : 'text-amber-600'}`}>You are running in development mode. Update will apply on next build.</p>}
+                          </div>
+                        )}
+                        {updateStatus.status === 'downloading' && (
+                          <div>
+                            <p className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-slate-800'}`}>Downloading Update...</p>
+                            <div className={`mt-2 w-full bg-slate-200 ${darkMode ? '!bg-slate-600' : ''} rounded-full h-2 overflow-hidden`}>
+                              <div className="bg-blue-500 h-2 rounded-full transition-all duration-300" style={{ width: `${updateStatus.percent || 0}%` }} />
+                            </div>
+                            <p className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{updateStatus.percent}%{updateStatus.transferred ? ` (${updateStatus.transferred}MB / ${updateStatus.total}MB)` : ''}{updateStatus.bytesPerSecond ? ` — ${updateStatus.bytesPerSecond}KB/s` : ''}</p>
+                          </div>
+                        )}
+                        {updateStatus.status === 'downloaded' && (
+                          <div>
+                            <p className={`text-sm font-semibold ${darkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>Update Ready — v{updateStatus.version}</p>
+                            <p className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>The update has been downloaded. The app will install and restart automatically when you close it, or click the button below.</p>
+                            <button onClick={() => { try { (window as any).bagaAPI.installUpdate(); } catch(e) {} }} className="mt-2 w-full text-center text-xs font-semibold px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors">
+                              Restart & Install Now
+                            </button>
+                            {updateStatus.deferred && <p className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Will install on next close.</p>}
+                          </div>
+                        )}
+                        {updateStatus.status === 'installing' && (
+                          <div>
+                            <p className={`text-sm font-semibold ${darkMode ? 'text-blue-400' : 'text-blue-700'}`}>Installing Update...</p>
+                            <p className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>The app will restart automatically with the new version.</p>
+                          </div>
+                        )}
+                        {updateStatus.status === 'error' && (
+                          <div>
+                            <p className={`text-sm font-semibold ${darkMode ? 'text-red-400' : 'text-red-700'}`}>Update Error</p>
+                            <p className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{updateStatus.message || 'An error occurred while checking for updates.'}</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : updateStatus?.status === 'checking' ? (
+                      <div className="p-4 text-center">
+                        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                        <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Checking for updates...</p>
                       </div>
                     ) : (
                       <div className={`p-4 text-center ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>

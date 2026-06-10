@@ -1,6 +1,6 @@
 {
   "name": "baga-hms",
-  "version": "3.3.1",
+  "version": "3.3.2",
   "private": true,
   "description": "BAGA Hospital Management System - Desktop Edition",
   "main": "electron/main.js",
@@ -63,11 +63,15 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icon.ico",
@@ -84,7 +88,8 @@
       "shortcutName": "BAGA HMS",
       "perMachine": false,
       "allowElevation": true,
-      "artifactName": "BAGA-HMS-Setup-${version}.${ext}"
+      "artifactName": "BAGA-HMS-Setup-${version}.${ext}",
+      "differentialPackage": true
     },
     "portable": {
       "artifactName": "BAGA-HMS-Portable-${version}.${ext}"
