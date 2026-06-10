@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to build (e.g. 2.6.0)'
+        description: 'Version to build (e.g. 3.3.2)'
         required: false
 
 permissions:
@@ -36,12 +36,16 @@ jobs:
       - name: Build Electron app
         run: npx electron-builder --win --x64 --publish never
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
 
       - name: Get version from package.json
         id: pkg-version
         shell: bash
         run: echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: List build outputs
+        shell: bash
+        run: ls -la dist-electron/*.yml dist-electron/*.blockmap dist-electron/*.exe 2>/dev/null || echo "Listing all:"; ls -la dist-electron/
 
       - name: Upload Setup Installer
         uses: actions/upload-artifact@v4
@@ -58,23 +62,25 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
-        continue-on-error: true
         with:
           name: BAGA HMS v${{ steps.pkg-version.outputs.VERSION }}
           body: |
             ## BAGA Hospital Management System v${{ steps.pkg-version.outputs.VERSION }}
             ### Downloads:
-            - **Setup Installer (.exe)** — Standard installer
+            - **Setup Installer (.exe)** — Standard installer (recommended)
             - **Portable (.exe)** — No installation required
             ### Changes:
-            - Fixed CSS display — all Tailwind classes now working
-            - Navigation fix
-            - Hospital name fix
-            - Language set to English
+            - Auto-update system with electron-updater
+            - POS module redesign
+            - License guard system
+            - Pharmacy and lab improvements
+            - Various UI fixes
           files: |
             dist-electron/BAGA-HMS-Setup-*.exe
+            dist-electron/BAGA-HMS-Setup-*.exe.blockmap
+            dist-electron/BAGA-HMS-Setup-*.yml
             dist-electron/BAGA-HMS-Portable-*.exe
           draft: false
           prerelease: false
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
