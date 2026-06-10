@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
   const router = useRouter();
   
   // License info state
@@ -110,6 +111,7 @@ export default function LoginPage() {
     if (!loginId.trim() || !password.trim()) { setError('Enter Login ID and Password'); return; }
     setLoading(true);
     setError('');
+    setIsOfflineMode(false);
 
     let user = null;
     let isOfflineLogin = false;
@@ -139,6 +141,7 @@ export default function LoginPage() {
       } catch (e) {
         console.error('API login failed (no internet?), trying local cache:', e);
         isOfflineLogin = true;
+        setIsOfflineMode(true);
       }
     }
 
@@ -147,14 +150,12 @@ export default function LoginPage() {
       const users = getUsers();
       // First try exact match
       user = users.find(u => u.email === loginId.trim() && u.password === password.trim() && u.active);
-      // Also try cached API users (stored with special prefix)
       if (!user) {
-        user = users.find(u => u.email === loginId.trim() && u.password === password.trim() && u.active);
-      }
-      if (!user) {
-        setError(isOfflineLogin 
-          ? 'No cached login found. Connect to internet and login once to enable offline access.' 
-          : 'Invalid Login ID or Password');
+        if (isOfflineLogin) {
+          setError('Internet is not available. Please login with credentials you used while online.');
+        } else {
+          setError('Invalid Login ID or Password');
+        }
         setLoading(false);
         return;
       }
@@ -340,6 +341,12 @@ export default function LoginPage() {
               />
             </div>
 
+            {isOfflineMode && !error && (
+              <div className="bg-amber-500/20 border border-amber-400/30 text-amber-200 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-2.829 2.829L6 15" /></svg>
+                Checking offline login...
+              </div>
+            )}
             {error && <div className="bg-red-500/20 border border-red-400/30 text-red-200 px-3 py-2 rounded-lg text-sm">{error}</div>}
 
             <button onClick={handleLogin} disabled={loading} className="btn btn-primary w-full justify-center btn-lg">

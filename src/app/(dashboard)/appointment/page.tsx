@@ -7,6 +7,8 @@ import {
 } from '@/lib/store';
 import type { Patient, Appointment } from '@/lib/types';
 import { triggerPrint } from '@/lib/print-utils';
+import { getHospitalPrintInfoAsync } from '@/lib/hospital-print-info';
+import type { HospitalPrintInfo } from '@/lib/hospital-print-info';
 
 /* ========== DOCTORS DATA ========== */
 interface Doctor {
@@ -60,6 +62,7 @@ export default function AppointmentPage() {
   // UI State
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [printContent, setPrintContent] = useState<string | null>(null);
+  const [hospitalPrintInfo, setHospitalPrintInfo] = useState<HospitalPrintInfo | null>(null);
 
   // Patient search
   const [searchQuery, setSearchQuery] = useState('');
@@ -79,6 +82,7 @@ export default function AppointmentPage() {
   // Load data
   useEffect(() => {
     refreshData();
+    getHospitalPrintInfoAsync().then(setHospitalPrintInfo);
   }, []);
 
   const refreshData = () => {
@@ -183,6 +187,9 @@ export default function AppointmentPage() {
     const doc = DOCTORS.find(d => d.name === apt.doctor);
     const hospital = JSON.parse(localStorage.getItem('baga_hospital') || '{}');
     const curr = hospital.currency || 'Rs.';
+    const logoImg = hospitalPrintInfo?.hospitalLogo
+      ? `<img src="${hospitalPrintInfo.hospitalLogo}" style="max-height:60px;max-width:120px;object-fit:contain;margin:0 auto 8px auto;display:block" />`
+      : '';
     const slipHtml = `
       <html><head><title>Appointment Slip - ${apt.patientNo}</title>
       <style>
@@ -273,6 +280,7 @@ export default function AppointmentPage() {
       <body>
         <div class="slip">
           <div class="header">
+            ${logoImg}
             <h1>${hospital.name || 'BAGA Hospital'}</h1>
             <p>${hospital.address || 'Main Road, City'} | ${hospital.phone || ''}</p>
             <p>License: ${hospital.licenseNo || 'BAGA-LIC-0001'}</p>

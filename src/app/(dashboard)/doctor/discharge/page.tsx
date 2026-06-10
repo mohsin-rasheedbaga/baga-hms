@@ -9,6 +9,8 @@ import {
 } from '@/lib/store';
 import type { Patient, Visit, Admission, MedicineItem } from '@/lib/types';
 import { triggerPrint } from '@/lib/print-utils';
+import { getHospitalPrintInfoAsync } from '@/lib/hospital-print-info';
+import type { HospitalPrintInfo } from '@/lib/hospital-print-info';
 
 const LAB_TESTS = [
   'CBC', 'Blood Sugar (Fasting)', 'Blood Sugar (Random)',
@@ -69,6 +71,7 @@ export default function DoctorDischargePage() {
   const [showDischargeSlip, setShowDischargeSlip] = useState(false);
   const [dischargeSlipHtml, setDischargeSlipHtml] = useState('');
   const [discharged, setDischarged] = useState(false);
+  const [hospitalPrintInfo, setHospitalPrintInfo] = useState<HospitalPrintInfo | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'error') => {
     setToast({ msg, type });
@@ -80,6 +83,7 @@ export default function DoctorDischargePage() {
       const s = localStorage.getItem('baga_session');
       if (s) setSession(JSON.parse(s)); // eslint-disable-line
     } catch { /* empty */ }
+    getHospitalPrintInfoAsync().then(setHospitalPrintInfo);
   }, []);
 
   const doctorName = session?.name || 'Doctor';
@@ -263,6 +267,9 @@ export default function DoctorDischargePage() {
     if (!selectedPatient) return;
 
     const hospital = getHospitalSettings();
+    const logoImg = hospitalPrintInfo?.hospitalLogo
+      ? `<img src="${hospitalPrintInfo.hospitalLogo}" style="max-height:60px;max-width:120px;object-fit:contain;margin:0 auto 8px auto;display:block" />`
+      : '';
 
     const medRows = dischargeMeds.map((m, i) =>
       `<tr><td>${i + 1}</td><td>${m.name}</td><td>${m.strength} ${m.form}</td><td>${m.qtyPerDay}x daily</td><td>${m.timing || '-'}</td><td>${m.duration || '-'}</td>${m.instructions ? `<td>${m.instructions}</td>` : ''}</tr>`
@@ -308,7 +315,8 @@ export default function DoctorDischargePage() {
 </head>
 <body>
   <div class="header">
-    <h1>BAGA Hospital</h1>
+    ${logoImg}
+    <h1>${hospitalPrintInfo?.hospitalName || 'BAGA Hospital'}</h1>
     <p class="subtitle">Discharge Summary</p>
     <p class="tagline">${hospital.receiptFooter || 'Quality Healthcare for Everyone'}</p>
   </div>

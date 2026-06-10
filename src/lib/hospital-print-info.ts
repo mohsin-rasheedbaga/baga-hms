@@ -7,13 +7,28 @@
 
 const isElectron = typeof window !== 'undefined' && !!(window as any).bagaAPI;
 
-interface HospitalPrintInfo {
+export interface HospitalPrintInfo {
   hospitalName: string;
   hospitalAddress: string;
   hospitalPhone: string;
   hospitalMobile: string;
   hospitalEmail: string;
   hospitalLogo: string;
+}
+
+/** Generate a standard print header with logo and hospital info */
+export function generatePrintHeaderHtml(info: HospitalPrintInfo): string {
+  const logoHtml = info.hospitalLogo
+    ? `<img src="${info.hospitalLogo}" style="max-height:60px;max-width:120px;object-fit:contain;margin:0 auto 8px auto;display:block" />`
+    : '';
+  return `
+  <div style="text-align:center;border-bottom:2px solid #1e293b;padding-bottom:12px;margin-bottom:16px">
+    ${logoHtml}
+    <h1 style="font-size:20px;color:#1e293b;margin:0">${info.hospitalName}</h1>
+    ${info.hospitalAddress ? `<p style="font-size:11px;color:#64748b;margin:2px 0 0">${info.hospitalAddress}</p>` : ''}
+    ${(info.hospitalPhone || info.hospitalMobile) ? `<p style="font-size:11px;color:#64748b;margin:2px 0 0">${[info.hospitalPhone, info.hospitalMobile].filter(Boolean).join(' | ')}</p>` : ''}
+    ${info.hospitalEmail ? `<p style="font-size:11px;color:#64748b;margin:2px 0 0">${info.hospitalEmail}</p>` : ''}
+  </div>`;
 }
 
 /** Async version - gets fresh data from Electron APIs */

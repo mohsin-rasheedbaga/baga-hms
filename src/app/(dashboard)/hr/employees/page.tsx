@@ -3,6 +3,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { getEmployees, addEmployee, updateEmployee, deleteEmployee, searchEmployees, genId, todayStr, generateEmployeeCode, getAttendanceRecords, getHospital } from '@/lib/store';
 import type { Employee, EducationRecord, ExperienceRecord, DocumentRecord, EquipmentRecord, AttendanceRecord } from '@/lib/types';
 import { triggerPrint } from '@/lib/print-utils';
+import { getHospitalPrintInfoAsync } from '@/lib/hospital-print-info';
+import type { HospitalPrintInfo } from '@/lib/hospital-print-info';
 
 const DEPARTMENTS = ['Emergency', 'Cardiology', 'Gynecology', 'Orthopedic', 'Pediatrician', 'ENT', 'General Medicine', 'Skin Specialist', 'Eye Specialist', 'Dental', 'Physiotherapy', 'Surgery', 'Laboratory', 'Pharmacy', 'Radiology', 'Ultrasound', 'Reception', 'Management', 'Administration', 'General Ward', 'ICU', 'Accounts', 'IT', 'Security', 'Housekeeping'];
 const DOC_TYPES: DocumentRecord['type'][] = ['CNIC', 'CV', 'Degree', 'Certificate', 'Experience Letter', 'Photo', 'Other'];
@@ -39,9 +41,10 @@ export default function EmployeesPage() {
   const [empCode, setEmpCode] = useState('');
   const [empAttendance, setEmpAttendance] = useState<AttendanceRecord[]>([]);
   const [joiningLetter, setJoiningLetter] = useState<Employee | null>(null);
+  const [hospitalPrintInfo, setHospitalPrintInfo] = useState<HospitalPrintInfo | null>(null);
 
   const loadData = useCallback(() => { setEmployees(getEmployees()); }, []);
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { loadData(); getHospitalPrintInfoAsync().then(setHospitalPrintInfo); }, [loadData]);
 
   const filtered = search ? searchEmployees(search) : employees;
   const displayed = filtered
@@ -639,6 +642,7 @@ export default function EmployeesPage() {
               >
                 {/* Hospital Header */}
                 <div className="header" style={{ textAlign: 'center', borderBottom: '3px double #1a1a1a', paddingBottom: 15, marginBottom: 20 }}>
+                  {hospitalPrintInfo?.hospitalLogo && <img src={hospitalPrintInfo.hospitalLogo} style={{ maxHeight: 60, maxWidth: 120, objectFit: 'contain', margin: '0 auto 8px auto', display: 'block' }} />}
                   <div className="hospital-name" style={{ fontSize: 24, fontWeight: 'bold', color: '#1a1a1a' }}>{hospital.name}</div>
                   <div className="hospital-info" style={{ fontSize: 12, color: '#555', marginTop: 5 }}>{hospital.address}</div>
                   <div className="hospital-info" style={{ fontSize: 12, color: '#555' }}>Phone: {hospital.phone} | Email: {hospital.email}</div>

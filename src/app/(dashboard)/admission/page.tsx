@@ -7,6 +7,8 @@ import {
 } from '@/lib/store';
 import type { Admission, RoomType, Bill, BillItem } from '@/lib/types';
 import { triggerPrint } from '@/lib/print-utils';
+import { getHospitalPrintInfoAsync } from '@/lib/hospital-print-info';
+import type { HospitalPrintInfo } from '@/lib/hospital-print-info';
 
 /* ========== HELPERS ========== */
 function calcDays(admittedAt: string, dischargedAt?: string): number {
@@ -25,6 +27,7 @@ export default function AdmissionPage() {
   const [printContent, setPrintContent] = useState<string | null>(null);
   const [settings, setSettings] = useState({ currency: 'Rs.', admissionFee: 2000 });
   const [activeRoomTypes, setActiveRoomTypes] = useState<RoomType[]>([]);
+  const [hospitalPrintInfo, setHospitalPrintInfo] = useState<HospitalPrintInfo | null>(null);
 
   // Process Admission Modal
   const [processAdmission, setProcessAdmission] = useState<Admission | null>(null);
@@ -54,7 +57,7 @@ export default function AdmissionPage() {
     setActiveRoomTypes(getActiveRoomTypes());
   }, []);
 
-  useEffect(() => { refreshData(); }, [refreshData]);
+  useEffect(() => { refreshData(); getHospitalPrintInfoAsync().then(setHospitalPrintInfo); }, [refreshData]);
 
   /* ========= GET DOCTOR FEE FOR ADMISSION ========= */
   const getDoctorFee = (admission: Admission): number => {
@@ -198,6 +201,9 @@ export default function AdmissionPage() {
     const roomChargesTotal = (admission.roomChargesPerNight || 0) * totalDays;
     const roomType = admission.roomTypeId ? getRoomTypeById(admission.roomTypeId) : null;
     const st = getHospitalSettings();
+    const logoImg = hospitalPrintInfo?.hospitalLogo
+      ? `<img src="${hospitalPrintInfo.hospitalLogo}" style="max-height:60px;max-width:120px;object-fit:contain;margin:0 auto 8px auto;display:block" />`
+      : '';
 
     const slipHtml = `
       <html><head><title>Admission File - ${admission.patientNo}</title>
@@ -223,6 +229,7 @@ export default function AdmissionPage() {
       <body>
         <div class="file">
           <div class="header">
+            ${logoImg}
             <h1>${hospital.name}</h1>
             <p>${hospital.address} | ${hospital.phone}</p>
           </div>

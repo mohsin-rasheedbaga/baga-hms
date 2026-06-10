@@ -1189,10 +1189,9 @@ ipcMain.handle('get-machine-id', () => getMachineId());
 ipcMain.handle('get-api-base', () => API_BASE);
 ipcMain.handle('check-update', () => { checkForUpdates(); return { checking: true }; });
 ipcMain.handle('manual-check-update', async () => {
-  // For v3.0.0 users who don't have auto-update — open release page in browser
-  const releaseUrl = 'https://github.com/mohsin-rasheedbaga/baga-hms/releases/latest';
-  shell.openExternal(releaseUrl);
-  return { opened: true, url: releaseUrl };
+  // Trigger internal auto-update check (no browser redirect to source code)
+  checkForUpdates();
+  return { checking: true };
 });
 ipcMain.handle('quit-app', () => app.quit());
 
