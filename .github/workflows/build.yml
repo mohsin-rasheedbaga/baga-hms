@@ -82,7 +82,7 @@ jobs:
           files: |
             dist-electron/BAGA-HMS-Setup-*.exe
             dist-electron/BAGA-HMS-Setup-*.exe.blockmap
-            dist-electron/BAGA-HMS-Setup-*.yml
+            dist-electron/latest.yml
             dist-electron/BAGA-HMS-Portable-*.exe
           draft: false
           prerelease: false

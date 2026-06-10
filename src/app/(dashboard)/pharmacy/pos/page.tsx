@@ -315,7 +315,6 @@ export default function PharmacyPOSPage() {
       patientMobile = selectedPatient.mobile;
     } else {
       if (!outdoorName.trim()) { showToast('Enter patient name', 'error'); return; }
-      if (!outdoorMobile.trim()) { showToast('Enter patient mobile number', 'error'); return; }
       const counter = getOutdoorCounter();
       patientNo = `OUT-${String(counter).padStart(4, '0')}`;
       patientName = outdoorName.trim();
@@ -512,14 +511,31 @@ export default function PharmacyPOSPage() {
     }
   };
 
+  // Direct add to cart (for product grid)
+  const directAddToCart = (med: MedicineItem) => {
+    const existingInCart = cart.find(c => c.medicineId === med.id);
+    if (existingInCart) {
+      updateCartQty(med.id, existingInCart.quantity + 1);
+      showToast(`Added another ${med.name} to cart`, 'success');
+    } else {
+      setCart([...cart, {
+        medicineId: med.id, name: med.name, genericName: med.genericName,
+        form: med.form, strength: med.strength, packing: med.packing,
+        price: med.price, quantity: 1, total: med.price,
+        days: 7, dosage: '1 tablet', frequency: 'TID (3 times a day)',
+      }]);
+      showToast(`${med.name} added to cart`, 'success');
+    }
+  };
+
   /* ==================== RENDER ==================== */
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full"></div></div>;
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-4 border-emerald-600 border-t-transparent rounded-full"></div></div>;
 
   return (
-    <div className="space-y-5">
+    <div>
       {toast && <div className={`toast ${toast.type === 'success' ? 'toast-success' : 'toast-error'}`}>{toast.msg}</div>}
 
-      {/* Sale Bill Modal */}
+      {/* Sale Bill Modal - UNCHANGED */}
       {saleBill && (
         <div className="modal-overlay" onClick={closeBill}>
           <div className="modal-content" style={{ maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
@@ -654,535 +670,575 @@ export default function PharmacyPOSPage() {
         </div>
       )}
 
-      {/* Header */}
-      <div>
-        <h2 className="text-xl font-bold text-slate-800">Pharmacy POS</h2>
-        <p className="text-sm text-slate-500">Point of Sale - Medicine billing and sales</p>
-      </div>
+      {/* ==================== TWO-COLUMN LAYOUT ==================== */}
+      <div className="flex gap-5 min-h-[calc(100vh-120px)]">
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="stat-card card-hover border border-emerald-200 bg-emerald-50">
-          <p className="text-xs text-emerald-600 font-medium">Today&apos;s Sales</p>
-          <p className="text-2xl font-bold text-emerald-700">{currency} {todayTotal.toLocaleString()}</p>
-        </div>
-        <div className="stat-card card-hover border border-blue-200 bg-blue-50">
-          <p className="text-xs text-blue-600 font-medium">Total Sales Today</p>
-          <p className="text-2xl font-bold text-blue-700">{todaySales.length}</p>
-        </div>
-        <div className="stat-card card-hover border border-purple-200 bg-purple-50">
-          <p className="text-xs text-purple-600 font-medium">Indoor Patients</p>
-          <p className="text-2xl font-bold text-purple-700">{todayIndoor}</p>
-        </div>
-        <div className="stat-card card-hover border border-amber-200 bg-amber-50">
-          <p className="text-xs text-amber-600 font-medium">Outdoor Patients</p>
-          <p className="text-2xl font-bold text-amber-700">{todayOutdoor}</p>
-        </div>
-      </div>
+        {/* ==================== LEFT COLUMN ==================== */}
+        <div className="flex-1 min-w-0 space-y-4">
 
-      {/* Expiry & Low Stock Alerts */}
-      {showAlerts && alerts.medicines.length > 0 && (
-        <div className={`border rounded-lg p-3 ${alerts.type === 'expired' ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className={alerts.type === 'expired' ? 'text-red-600' : 'text-amber-600'}>
-                {alerts.type === 'expired' ? 'Expired' : 'Low Stock'} Alert
-              </span>
-              <span className="text-sm text-slate-600">{alerts.medicines.slice(0, 5).join(', ')}{alerts.medicines.length > 5 ? ` +${alerts.medicines.length - 5} more` : ''}</span>
-            </div>
-            <button onClick={() => setShowAlerts(false)} className="text-slate-400 hover:text-slate-600 text-sm">Dismiss</button>
-          </div>
-        </div>
-      )}
-
-      {/* Patient Mode Toggle + Selection */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
-        {/* Mode Toggle */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-            <span className="font-semibold text-slate-700">Patient</span>
-          </div>
-          <div className="flex bg-slate-100 rounded-lg p-1">
-            <button
-              onClick={() => { setPatientMode('Indoor'); clearPatient(); }}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${patientMode === 'Indoor' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-              Indoor Patient (Card Holder)
-            </button>
-            <button
-              onClick={() => { setPatientMode('Outdoor'); clearPatient(); }}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${patientMode === 'Outdoor' ? 'bg-white shadow-sm text-amber-700' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-              Outdoor Patient (Walk-in)
-            </button>
-          </div>
-        </div>
-
-        {/* Indoor Patient Search */}
-        {patientMode === 'Indoor' && (
-          <>
-            {!selectedPatient ? (
-              <div className="relative">
-                <div className="flex gap-2">
-                  <div className="flex-1 relative">
-                    <svg className="w-5 h-5 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    <input
-                      type="text"
-                      className="form-input pl-10"
-                      placeholder="Search by card number (BAGA-0001) or mobile number..."
-                      value={patientQuery}
-                      onChange={e => handlePatientSearch(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
-                </div>
-                {patientResults.length > 0 && (
-                  <div className="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg bg-white shadow-lg max-h-64 overflow-y-auto">
-                    {patientResults.map(p => (
-                      <button
-                        key={p.id}
-                        onClick={() => selectPatient(p)}
-                        className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-slate-100 last:border-0 transition-colors"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <span className="font-mono font-bold text-blue-600">{p.patientNo}</span>
-                            <span className="ml-3 font-medium text-slate-700">{p.name}</span>
-                            <span className="ml-2 text-xs text-slate-400">{p.gender} | {p.age} yrs</span>
-                          </div>
-                          <span className="text-sm text-slate-400">{p.mobile}</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {patientQuery.length >= 1 && patientResults.length === 0 && (
-                  <div className="mt-2 text-center py-4 text-sm text-slate-400 bg-slate-50 rounded-lg border border-slate-100">
-                    No patients found matching &ldquo;{patientQuery}&rdquo;
-                  </div>
-                )}
+          {/* TOP BAR: Stats + Toggle + Alerts */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            {/* Stats Cards */}
+            <div className="flex gap-3 flex-1">
+              <div className="stat-card card-hover border border-emerald-200 bg-emerald-50 rounded-xl px-4 py-3 min-w-0">
+                <p className="text-[10px] text-emerald-600 font-medium uppercase tracking-wide">Today&apos;s Sales</p>
+                <p className="text-lg font-bold text-emerald-700 truncate">{currency} {todayTotal.toLocaleString()}</p>
               </div>
-            ) : (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
-                      {selectedPatient.name.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-800">{selectedPatient.name}</p>
-                      <p className="text-sm text-slate-500">
-                        <span className="font-mono text-blue-600 font-semibold">{selectedPatient.patientNo}</span>
-                        <span className="mx-2 text-slate-300">|</span>
-                        {selectedPatient.gender}
-                        <span className="mx-2 text-slate-300">|</span>
-                        {selectedPatient.age} yrs
-                        <span className="mx-2 text-slate-300">|</span>
-                        {selectedPatient.mobile}
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        <span className={`badge ${selectedPatient.cardStatus === 'Active' ? 'badge-green' : 'badge-rose'} text-xs`}>{selectedPatient.cardStatus}</span>
-                        <span className="ml-2">Visits: {selectedPatient.totalVisits}</span>
-                      </p>
-                    </div>
-                  </div>
-                  <button onClick={clearPatient} className="btn btn-outline btn-sm">Change Patient</button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Outdoor Patient Form */}
-        {patientMode === 'Outdoor' && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                #
-              </div>
-              <div>
-                <p className="font-bold text-slate-800 text-sm">Walk-in Patient</p>
-                <p className="text-xs text-amber-600">Patient No: <span className="font-mono font-bold">{outdoorNo}</span> (auto-generated)</p>
+              <div className="stat-card card-hover border border-blue-200 bg-blue-50 rounded-xl px-4 py-3 min-w-0">
+                <p className="text-[10px] text-blue-600 font-medium uppercase tracking-wide">Total Sales</p>
+                <p className="text-lg font-bold text-blue-700">{todaySales.length}</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div>
-                <label className="form-label">Full Name *</label>
-                <input ref={outdoorNameRef} type="text" className="form-input" placeholder="Patient name" value={outdoorName} onChange={e => setOutdoorName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('name'); } }} />
-              </div>
-              <div>
-                <label className="form-label">Mobile Number *</label>
-                <input ref={outdoorMobileRef} type="text" className="form-input" maxLength={11} inputMode="numeric" placeholder="03XX-XXXXXXX" value={outdoorMobile.replace(/[^0-9]/g,'')} onChange={e => setOutdoorMobile(e.target.value.replace(/[^0-9]/g,''))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('mobile'); } }} />
-              </div>
-              <div>
-                <label className="form-label">Age</label>
-                <input ref={outdoorAgeRef} type="text" className="form-input" maxLength={2} inputMode="numeric" placeholder="e.g. 35" value={outdoorAge.replace(/[^0-9]/g,'')} onChange={e => setOutdoorAge(e.target.value.replace(/[^0-9]/g,''))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('age'); } }} />
-              </div>
-              <div>
-                <label className="form-label">Gender</label>
-                <select className="form-input" value={outdoorGender} onChange={e => setOutdoorGender(e.target.value)}>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
 
-      {/* Medicine Search */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-2">
-          <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
-            <span className="font-semibold text-slate-700">Add Medicine to Cart</span>
-          </div>
-          <span className="text-sm text-slate-400">Search by medicine name, generic name, or category</span>
-        </div>
-        <div className="relative">
-          <div className="flex gap-2">
-            <div className="flex-1 relative">
-              <svg className="w-5 h-5 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-              <input
-                ref={medSearchRef}
-                type="text"
-                className="form-input pl-10 text-base"
-                placeholder="Search medicine... e.g. Paracetamol, Amoxicillin, Vitamin C"
-                value={medQuery}
-                onChange={e => handleMedSearch(e.target.value)}
-                onFocus={() => { if (medResults.length > 0) setShowMedDropdown(true); }}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleMedSearchEnter(); } }}
-              />
+            {/* Indoor/Outdoor Toggle - Pill Buttons */}
+            <div className="flex bg-slate-100 rounded-xl p-1 shrink-0">
+              <button
+                onClick={() => { setPatientMode('Indoor'); clearPatient(); }}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${patientMode === 'Indoor' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:text-blue-600'}`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                Indoor
+              </button>
+              <button
+                onClick={() => { setPatientMode('Outdoor'); clearPatient(); }}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${patientMode === 'Outdoor' ? 'bg-amber-500 text-white shadow-md' : 'text-slate-500 hover:text-amber-600'}`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                Outdoor
+              </button>
             </div>
-            <button
-              onClick={handleBarcodeScan}
-              className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 text-sm font-medium transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-              </svg>
-              Scan
-            </button>
-            {showMedDropdown && (
-              <button onClick={() => { setShowMedDropdown(false); setMedResults([]); }} className="btn btn-outline btn-sm">
-                Close
+
+            {/* Alerts Badge */}
+            {showAlerts && alerts.medicines.length > 0 && (
+              <button
+                onClick={() => setShowAlerts(false)}
+                className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all hover:opacity-80 ${alerts.type === 'expired' ? 'bg-red-50 border-red-200 text-red-600' : 'bg-amber-50 border-amber-200 text-amber-600'}`}
+                title={alerts.medicines.join(', ')}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+                {alerts.type === 'expired' ? 'Expired' : 'Low Stock'} ({alerts.medicines.length})
               </button>
             )}
           </div>
-          {showMedDropdown && medResults.length > 0 && (
-            <div className="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg bg-white shadow-lg max-h-72 overflow-y-auto">
-              {medResults.map(m => (
-                <button
-                  key={m.id}
-                  onClick={() => addToCode(m)}
-                  className="w-full text-left px-4 py-3 hover:bg-emerald-50 border-b border-slate-100 last:border-0 transition-colors group"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="font-semibold text-slate-800 group-hover:text-emerald-700">{m.name}</span>
-                      <span className="text-xs text-slate-400 ml-2">({m.genericName})</span>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="badge badge-blue text-xs">{m.form}</span>
-                        <span className="text-xs text-slate-500">{m.strength}</span>
-                        <span className="text-xs text-slate-400">{m.packing}</span>
+
+          {/* PATIENT SELECTION AREA */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+            {patientMode === 'Indoor' && (
+              <>
+                {!selectedPatient ? (
+                  <div className="relative">
+                    <div className="relative">
+                      <svg className="w-5 h-5 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                      <input
+                        type="text"
+                        className="form-input pl-10"
+                        placeholder="Search by card number (BAGA-0001) or mobile number..."
+                        value={patientQuery}
+                        onChange={e => handlePatientSearch(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                    {patientResults.length > 0 && (
+                      <div className="absolute z-20 w-full mt-1 border border-slate-200 rounded-xl bg-white shadow-lg max-h-64 overflow-y-auto">
+                        {patientResults.map(p => (
+                          <button
+                            key={p.id}
+                            onClick={() => selectPatient(p)}
+                            className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-slate-100 last:border-0 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="font-mono font-bold text-blue-600">{p.patientNo}</span>
+                                <span className="ml-3 font-medium text-slate-700">{p.name}</span>
+                                <span className="ml-2 text-xs text-slate-400">{p.gender} | {p.age} yrs</span>
+                              </div>
+                              <span className="text-sm text-slate-400">{p.mobile}</span>
+                            </div>
+                          </button>
+                        ))}
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-emerald-700">{currency} {m.price.toLocaleString()}</p>
-                      <p className="text-xs text-slate-400">{m.category}</p>
-                      <p className="text-xs text-emerald-600 mt-1 font-medium">+ Add to Code</p>
+                    )}
+                    {patientQuery.length >= 1 && patientResults.length === 0 && (
+                      <div className="mt-2 text-center py-4 text-sm text-slate-400 bg-slate-50 rounded-xl border border-slate-100">
+                        No patients found matching &ldquo;{patientQuery}&rdquo;
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                          {selectedPatient.name.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-800">{selectedPatient.name}</p>
+                          <p className="text-sm text-slate-500">
+                            <span className="font-mono text-blue-600 font-semibold">{selectedPatient.patientNo}</span>
+                            <span className="mx-2 text-slate-300">|</span>
+                            {selectedPatient.gender}
+                            <span className="mx-2 text-slate-300">|</span>
+                            {selectedPatient.age} yrs
+                            <span className="mx-2 text-slate-300">|</span>
+                            {selectedPatient.mobile}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            <span className={`badge ${selectedPatient.cardStatus === 'Active' ? 'badge-green' : 'badge-rose'} text-xs`}>{selectedPatient.cardStatus}</span>
+                            <span className="ml-2">Visits: {selectedPatient.totalVisits}</span>
+                          </p>
+                        </div>
+                      </div>
+                      <button onClick={clearPatient} className="btn btn-outline btn-sm">Change Patient</button>
                     </div>
                   </div>
-                </button>
-              ))}
-            </div>
-          )}
-          {medQuery.length >= 1 && showMedDropdown && medResults.length === 0 && (
-            <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg p-4 text-center text-sm text-slate-400">
-              No medicines found matching &ldquo;{medQuery}&rdquo;
-            </div>
-          )}
-        </div>
-      </div>
+                )}
+              </>
+            )}
 
-      {/* ========= PRESCRIPTION CODE PANEL ========= */}
-      {codeItems.length > 0 && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-300 p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2zm-6 4h3m-3 4h3" /></svg>
-              <h3 className="font-bold text-blue-800">Prescription Code ({codeItems.length} medicine{codeItems.length > 1 ? 's' : ''})</h3>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-blue-700">{currency} {codeTotal.toLocaleString()}</span>
-              <button onClick={() => setCodeItems([])} className="btn btn-outline btn-sm text-red-500 border-red-200 hover:bg-red-50">Clear Code</button>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            {codeItems.map((ci, idx) => (
-              <div key={ci.medicineId} className="bg-white border border-blue-200 rounded-lg p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded">{idx + 1}</span>
-                      <span className="font-bold text-slate-800">{ci.name}</span>
-                      <span className="text-xs text-slate-400">({ci.genericName})</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <span className="badge badge-blue">{ci.form}</span>
-                      <span>{ci.strength}</span>
-                      <span className="text-slate-300">|</span>
-                      <span className="font-bold text-emerald-700">{currency} {ci.price.toLocaleString()}</span>
-                    </div>
+            {/* Outdoor Patient Form - Compact Horizontal */}
+            {patientMode === 'Outdoor' && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center text-white font-bold text-sm">#</div>
+                  <div>
+                    <p className="font-bold text-slate-800 text-sm">Walk-in Patient</p>
+                    <p className="text-xs text-amber-600">Patient No: <span className="font-mono font-bold">{outdoorNo}</span></p>
                   </div>
-                  <button onClick={() => removeFromCode(ci.medicineId)} className="w-7 h-7 rounded flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-600 shrink-0" title="Remove">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
                 </div>
-                <div className="grid grid-cols-3 gap-2 mt-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div>
-                    <label className="text-xs text-slate-500 font-medium">Days *</label>
-                    <select
-                      className="form-input h-8 text-xs"
-                      value={ci.days}
-                      onChange={e => updateCodeItemDays(ci.medicineId, Number(e.target.value))}
-                    >
-                      <option value={1}>1 day</option>
-                      <option value={3}>3 days</option>
-                      <option value={5}>5 days</option>
-                      <option value={7}>7 days</option>
-                      <option value={10}>10 days</option>
-                      <option value={14}>14 days</option>
-                      <option value={15}>15 days</option>
-                      <option value={21}>21 days</option>
-                      <option value={30}>30 days</option>
-                    </select>
+                    <label className="form-label">Full Name *</label>
+                    <input ref={outdoorNameRef} type="text" className="form-input" placeholder="Patient name" value={outdoorName} onChange={e => setOutdoorName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('name'); } }} />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-500 font-medium">Dosage</label>
-                    <select
-                      className="form-input h-8 text-xs"
-                      value={ci.dosage}
-                      onChange={e => updateCodeItemDosage(ci.medicineId, e.target.value)}
-                    >
-                      <option value="1 tablet">1 tablet</option>
-                      <option value="0.5 tablet">0.5 tablet</option>
-                      <option value="2 tablets">2 tablets</option>
-                      <option value="1 capsule">1 capsule</option>
-                      <option value="1 spoon">1 spoon (5ml)</option>
-                      <option value="2 spoons">2 spoons (10ml)</option>
-                      <option value="1 injection">1 injection</option>
-                      <option value="as prescribed">As prescribed</option>
-                    </select>
+                    <label className="form-label">Mobile Number</label>
+                    <input ref={outdoorMobileRef} type="text" className="form-input" maxLength={11} inputMode="numeric" placeholder="03XX-XXXXXXX" value={outdoorMobile.replace(/[^0-9]/g,'')} onChange={e => setOutdoorMobile(e.target.value.replace(/[^0-9]/g,''))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('mobile'); } }} />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-500 font-medium">Frequency</label>
-                    <select
-                      className="form-input h-8 text-xs"
-                      value={ci.frequency}
-                      onChange={e => updateCodeItemFrequency(ci.medicineId, e.target.value)}
-                    >
-                      <option value="OD (once a day)">OD (Once a day)</option>
-                      <option value="BID (twice a day)">BID (Twice a day)</option>
-                      <option value="TID (3 times a day)">TID (3 times a day)</option>
-                      <option value="QID (4 times a day)">QID (4 times a day)</option>
-                      <option value="SOS (as needed)">SOS (As needed)</option>
-                      <option value="At bedtime">At bedtime</option>
-                      <option value="Empty stomach">Empty stomach</option>
-                      <option value="After meal">After meal</option>
+                    <label className="form-label">Age</label>
+                    <input ref={outdoorAgeRef} type="text" className="form-input" maxLength={2} inputMode="numeric" placeholder="e.g. 35" value={outdoorAge.replace(/[^0-9]/g,'')} onChange={e => setOutdoorAge(e.target.value.replace(/[^0-9]/g,''))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('age'); } }} />
+                  </div>
+                  <div>
+                    <label className="form-label">Gender</label>
+                    <select className="form-input" value={outdoorGender} onChange={e => setOutdoorGender(e.target.value)}>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
                     </select>
                   </div>
                 </div>
               </div>
-            ))}
+            )}
           </div>
 
-          <button onClick={addAllToCart} className="btn btn-primary btn-lg w-full flex items-center justify-center gap-2">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-            Add {codeItems.length} Medicine{codeItems.length > 1 ? 's' : ''} to Cart
-          </button>
-        </div>
-      )}
-
-      {/* Cart / Sale Table */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
-            <h3 className="font-bold text-slate-800">
-              Medicine Cart
-              {cart.length > 0 && <span className="ml-2 badge badge-amber">{cart.length} item{cart.length > 1 ? 's' : ''}</span>}
-            </h3>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-slate-500">
-              Patient: {patientMode === 'Indoor'
-                ? (selectedPatient ? <span className="font-mono font-bold text-blue-600">{selectedPatient.patientNo} - {selectedPatient.name}</span> : <span className="text-red-400">Not selected</span>)
-                : (outdoorName ? <span className="font-mono font-bold text-amber-600">{outdoorNo} - {outdoorName}</span> : <span className="text-red-400">Not entered</span>)
-              }
-            </span>
-          </div>
-        </div>
-
-        {cart.length === 0 ? (
-          <div className="p-12 text-center">
-            <svg className="w-16 h-16 text-slate-200 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" /></svg>
-            <p className="text-slate-400 text-lg font-medium">Cart is empty</p>
-            <p className="text-slate-300 text-sm mt-1">Search medicines above and add them to the cart</p>
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th className="w-8">#</th>
-                    <th>Medicine</th>
-                    <th>Form</th>
-                    <th>Strength</th>
-                    <th>Packing</th>
-                    <th className="text-center">Days</th>
-                    <th className="text-right">Price</th>
-                    <th className="text-center w-32">Qty</th>
-                    <th className="text-right">Total</th>
-                    <th className="w-20">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cart.map((item, idx) => (
-                    <tr key={item.medicineId} className="hover:bg-slate-50">
-                      <td className="text-slate-400 text-sm font-medium">{idx + 1}</td>
-                      <td>
-                        <p className="font-semibold text-slate-800">{item.name}</p>
-                        <p className="text-xs text-slate-400">{item.genericName}</p>
-                      </td>
-                      <td><span className="badge badge-blue">{item.form}</span></td>
-                      <td className="text-sm text-slate-600">{item.strength}</td>
-                      <td className="text-sm text-slate-500">{item.packing}</td>
-                      <td className="text-center">
-                        <span className="badge badge-amber text-xs">{item.days} days</span>
-                      </td>
-                      <td className="text-right font-medium text-slate-700">{currency} {item.price.toLocaleString()}</td>
-                      <td className="text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => updateCartQty(item.medicineId, item.quantity - 1)}
-                            className="w-8 h-8 rounded-md border border-slate-300 flex items-center justify-center text-slate-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors font-bold"
-                          >-</button>
-                          <input
-                            type="number"
-                            min={1}
-                            value={item.quantity}
-                            onChange={e => {
-                              const v = parseInt(e.target.value) || 1;
-                              updateCartQty(item.medicineId, v > 0 ? v : 1);
-                            }}
-                            className="w-14 h-8 text-center border border-slate-300 rounded-md text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
-                          />
-                          <button
-                            onClick={() => updateCartQty(item.medicineId, item.quantity + 1)}
-                            className="w-8 h-8 rounded-md border border-slate-300 flex items-center justify-center text-slate-500 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 transition-colors font-bold"
-                          >+</button>
+          {/* MEDICINE SEARCH BAR */}
+          <div className="relative">
+            <div className="flex gap-2">
+              <div className="flex-1 relative">
+                <svg className="w-5 h-5 text-slate-400 absolute left-4 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                <input
+                  ref={medSearchRef}
+                  type="text"
+                  className="w-full h-12 pl-12 pr-4 rounded-2xl border-2 border-slate-200 text-base font-medium bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition-all shadow-sm"
+                  placeholder="Search medicine by name, generic, or category..."
+                  value={medQuery}
+                  onChange={e => handleMedSearch(e.target.value)}
+                  onFocus={() => { if (medResults.length > 0) setShowMedDropdown(true); }}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleMedSearchEnter(); } }}
+                />
+              </div>
+              <button
+                onClick={handleBarcodeScan}
+                className="h-12 px-5 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 flex items-center gap-2 text-sm font-semibold transition-all shadow-sm hover:shadow-md active:scale-[0.98]"
+                title="Scan Barcode"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                </svg>
+                Scan
+              </button>
+            </div>
+            {/* Search Results Dropdown */}
+            {showMedDropdown && medResults.length > 0 && (
+              <div className="absolute z-30 w-full mt-1 border border-slate-200 rounded-2xl bg-white shadow-xl max-h-72 overflow-y-auto">
+                {medResults.map(m => (
+                  <button
+                    key={m.id}
+                    onClick={() => addToCode(m)}
+                    className="w-full text-left px-4 py-3 hover:bg-emerald-50 border-b border-slate-100 last:border-0 transition-colors group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-semibold text-slate-800 group-hover:text-emerald-700">{m.name}</span>
+                        <span className="text-xs text-slate-400 ml-2">({m.genericName})</span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="badge badge-blue text-xs">{m.form}</span>
+                          <span className="text-xs text-slate-500">{m.strength}</span>
+                          <span className="text-xs text-slate-400">{m.packing}</span>
                         </div>
-                      </td>
-                      <td className="text-right font-bold text-emerald-700">{currency} {item.total.toLocaleString()}</td>
-                      <td>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-emerald-700">{currency} {m.price.toLocaleString()}</p>
+                        <p className="text-xs text-emerald-600 mt-1 font-medium">+ Add to Code</p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {medQuery.length >= 1 && showMedDropdown && medResults.length === 0 && (
+              <div className="absolute z-30 w-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl p-4 text-center text-sm text-slate-400">
+                No medicines found matching &ldquo;{medQuery}&rdquo;
+              </div>
+            )}
+          </div>
+
+          {/* PRESCRIPTION CODE BUILDER */}
+          {codeItems.length > 0 && (
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl border-2 border-emerald-300 p-4 space-y-3 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2zm-6 4h3m-3 4h3" /></svg>
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-emerald-800 text-sm">Prescription Code</h3>
+                    <p className="text-xs text-emerald-600">{codeItems.length} medicine{codeItems.length > 1 ? 's' : ''} &middot; {currency} {codeTotal.toLocaleString()}</p>
+                  </div>
+                </div>
+                <button onClick={() => setCodeItems([])} className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors">Clear All</button>
+              </div>
+
+              <div className="space-y-2">
+                {codeItems.map((ci, idx) => (
+                  <div key={ci.medicineId} className="bg-white border border-emerald-200 rounded-xl p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-[10px] bg-emerald-600 text-white font-bold px-1.5 py-0.5 rounded">{idx + 1}</span>
+                          <span className="font-bold text-slate-800 text-sm truncate">{ci.name}</span>
+                          <span className="text-xs text-slate-400 truncate">({ci.genericName})</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-slate-500 mb-2">
+                          <span className="badge badge-blue text-[10px]">{ci.form}</span>
+                          <span>{ci.strength}</span>
+                          <span className="font-bold text-emerald-700">{currency} {ci.price.toLocaleString()}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="text-[10px] text-slate-400 font-medium">Days</label>
+                            <select
+                              className="form-input h-7 text-xs py-0"
+                              value={ci.days}
+                              onChange={e => updateCodeItemDays(ci.medicineId, Number(e.target.value))}
+                            >
+                              <option value={1}>1 day</option>
+                              <option value={3}>3 days</option>
+                              <option value={5}>5 days</option>
+                              <option value={7}>7 days</option>
+                              <option value={10}>10 days</option>
+                              <option value={14}>14 days</option>
+                              <option value={15}>15 days</option>
+                              <option value={21}>21 days</option>
+                              <option value={30}>30 days</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-400 font-medium">Dosage</label>
+                            <select
+                              className="form-input h-7 text-xs py-0"
+                              value={ci.dosage}
+                              onChange={e => updateCodeItemDosage(ci.medicineId, e.target.value)}
+                            >
+                              <option value="1 tablet">1 tablet</option>
+                              <option value="0.5 tablet">0.5 tablet</option>
+                              <option value="2 tablets">2 tablets</option>
+                              <option value="1 capsule">1 capsule</option>
+                              <option value="1 spoon">1 spoon (5ml)</option>
+                              <option value="2 spoons">2 spoons (10ml)</option>
+                              <option value="1 injection">1 injection</option>
+                              <option value="as prescribed">As prescribed</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-400 font-medium">Frequency</label>
+                            <select
+                              className="form-input h-7 text-xs py-0"
+                              value={ci.frequency}
+                              onChange={e => updateCodeItemFrequency(ci.medicineId, e.target.value)}
+                            >
+                              <option value="OD (once a day)">OD</option>
+                              <option value="BID (twice a day)">BID</option>
+                              <option value="TID (3 times a day)">TID</option>
+                              <option value="QID (4 times a day)">QID</option>
+                              <option value="SOS (as needed)">SOS</option>
+                              <option value="At bedtime">Bedtime</option>
+                              <option value="Empty stomach">Empty stomach</option>
+                              <option value="After meal">After meal</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                      <button onClick={() => removeFromCode(ci.medicineId)} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-600 shrink-0 transition-colors" title="Remove">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button onClick={addAllToCart} className="w-full h-11 bg-emerald-600 text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all shadow-sm hover:shadow-md active:scale-[0.99]">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                Add {codeItems.length} Medicine{codeItems.length > 1 ? 's' : ''} to Cart
+              </button>
+            </div>
+          )}
+
+          {/* PRODUCT GRID - All Medicines */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-slate-700 text-sm flex items-center gap-2">
+                <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                All Medicines
+                <span className="text-xs text-slate-400 font-normal">({medicines.length})</span>
+              </h3>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {medicines.map(med => {
+                const inCart = cart.find(c => c.medicineId === med.id);
+                const inCode = codeItems.find(c => c.medicineId === med.id);
+                return (
+                  <div
+                    key={med.id}
+                    className={`relative bg-white rounded-2xl border border-slate-200 p-3 shadow-sm hover:shadow-md transition-all group ${med.stock === 0 ? 'opacity-60' : 'hover:border-emerald-200 cursor-pointer'}`}
+                  >
+                    {med.stock === 0 && (
+                      <div className="absolute inset-0 bg-white/80 rounded-2xl z-10 flex items-center justify-center">
+                        <span className="text-xs font-bold text-red-500 bg-red-50 px-3 py-1.5 rounded-lg border border-red-200">Out of Stock</span>
+                      </div>
+                    )}
+                    <div className="mb-2">
+                      <p className="font-bold text-slate-800 text-sm leading-tight truncate">{med.name}</p>
+                      <p className="text-[11px] text-slate-400 truncate mt-0.5">{med.genericName} &middot; {med.strength}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <span className="badge badge-blue text-[10px]">{med.form}</span>
+                      <span className="text-[10px] text-slate-400">Stock: {med.stock}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-emerald-600 text-sm">{currency} {med.price.toLocaleString()}</span>
+                      {med.stock > 0 && (
+                        <button
+                          onClick={() => inCode ? addToCode(med) : directAddToCart(med)}
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all active:scale-90 ${
+                            inCart
+                              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                              : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm'
+                          }`}
+                          title={inCart ? 'Add more' : 'Add to cart'}
+                        >
+                          {inCart ? (
+                            <span className="text-xs font-bold">+{inCart.quantity}</span>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+        </div>
+
+        {/* ==================== RIGHT COLUMN - CART SIDEBAR ==================== */}
+        <div className="w-[380px] shrink-0 sticky top-0 self-start max-h-[calc(100vh-80px)] flex flex-col">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-md overflow-hidden flex flex-col max-h-[calc(100vh-80px)]">
+
+            {/* Cart Header - Green Gradient */}
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-4 shrink-0">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" /></svg>
+                  </div>
+                  <div>
+                    <h2 className="text-white font-bold text-lg leading-tight">Cart</h2>
+                    {cart.length > 0 && (
+                      <span className="text-emerald-100 text-xs">{cart.length} item{cart.length > 1 ? 's' : ''}</span>
+                    )}
+                  </div>
+                </div>
+                {cart.length > 0 && (
+                  <span className="bg-white/20 text-white text-xs font-bold px-2.5 py-1 rounded-lg">{cart.length}</span>
+                )}
+              </div>
+            </div>
+
+            {/* Patient Quick Info */}
+            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 shrink-0">
+              <div className="flex items-center gap-2">
+                <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                {patientMode === 'Indoor'
+                  ? (selectedPatient
+                    ? <span className="text-sm font-medium text-slate-700 truncate">{selectedPatient.patientNo} &middot; {selectedPatient.name}</span>
+                    : <span className="text-sm text-slate-400">No patient selected</span>)
+                  : (outdoorName
+                    ? <span className="text-sm font-medium text-slate-700 truncate">{outdoorNo} &middot; {outdoorName}</span>
+                    : <span className="text-sm text-slate-400">No patient selected</span>)
+                }
+              </div>
+            </div>
+
+            {/* Discount Section */}
+            <div className="px-4 py-3 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="flex bg-slate-100 rounded-lg p-0.5">
+                  <button
+                    onClick={() => setDiscountMode('percentage')}
+                    className={`px-2 py-1 rounded-md text-[10px] font-semibold transition-all ${discountMode === 'percentage' ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-400'}`}
+                  >%</button>
+                  <button
+                    onClick={() => setDiscountMode('amount')}
+                    className={`px-2 py-1 rounded-md text-[10px] font-semibold transition-all ${discountMode === 'amount' ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-400'}`}
+                  >Flat</button>
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  value={billDiscount}
+                  onChange={e => {
+                    const v = Number(e.target.value) || 0;
+                    if (discountMode === 'percentage') {
+                      setBillDiscount(Math.min(100, Math.max(0, v)));
+                    } else {
+                      setBillDiscount(Math.max(0, v));
+                    }
+                  }}
+                  className="flex-1 h-8 text-right text-sm font-semibold border border-slate-200 rounded-lg px-2 focus:outline-none focus:ring-1 focus:ring-emerald-300 focus:border-emerald-400"
+                  placeholder={discountMode === 'percentage' ? '0%' : '0'}
+                />
+                <span className="text-[10px] text-slate-400 uppercase font-medium w-16 text-right">Discount</span>
+              </div>
+            </div>
+
+            {/* Payment Method */}
+            <div className="px-4 py-3 border-b border-slate-100 shrink-0">
+              <div className="flex gap-1.5">
+                {(['Cash', 'Card', 'Online'] as const).map(method => (
+                  <button
+                    key={method}
+                    onClick={() => setPaymentMethod(method)}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      paymentMethod === method
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}
+                  >
+                    {method}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Cart Items List - Scrollable */}
+            <div className="flex-1 overflow-y-auto min-h-0">
+              {cart.length === 0 ? (
+                <div className="p-8 text-center">
+                  <svg className="w-14 h-14 text-slate-200 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" /></svg>
+                  <p className="text-slate-400 text-sm font-medium">Cart is empty</p>
+                  <p className="text-slate-300 text-xs mt-1">Search or click medicines to add</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {cart.map(item => (
+                    <div key={item.medicineId} className="px-4 py-3 group hover:bg-slate-50 transition-colors">
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-800 text-sm leading-tight truncate">{item.name}</p>
+                          <p className="text-[10px] text-slate-400 truncate">{item.genericName}</p>
+                        </div>
                         <button
                           onClick={() => removeFromCart(item.medicineId)}
-                          className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-                          title="Remove from cart"
+                          className="w-6 h-6 rounded-md flex items-center justify-center text-slate-300 hover:bg-red-50 hover:text-red-500 transition-colors shrink-0 opacity-0 group-hover:opacity-100"
+                          title="Remove"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Cart Footer - Total + Actions */}
-            <div className="border-t-2 border-slate-200 bg-slate-50 px-5 py-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="bg-white border border-slate-200 rounded-lg px-4 py-3">
-                    <p className="text-xs text-slate-400">Items</p>
-                    <p className="text-lg font-bold text-slate-700">{cart.length}</p>
-                  </div>
-                  <div className="bg-white border border-2 border-emerald-200 rounded-lg px-6 py-3">
-                    <p className="text-xs text-emerald-500 font-medium">Grand Total</p>
-                    <p className="text-2xl font-bold text-emerald-700">{currency} {cartTotal.toLocaleString()}</p>
-                  </div>
-                </div>
-                <div className="flex gap-2 w-full sm:w-auto">
-                  <button onClick={clearCart} className="btn btn-outline flex-1 sm:flex-none">
-                    Clear Cart
-                  </button>
-                  <button onClick={completeSale} className="btn btn-success btn-lg flex-1 sm:flex-none px-8">
-                    <svg className="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                    Complete Sale
-                  </button>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Recent Sales */}
-      {todaySales.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              <h3 className="font-bold text-slate-800">Today&apos;s Sales ({todaySales.length})</h3>
-            </div>
-          </div>
-          <div className="overflow-x-auto max-h-64 overflow-y-auto">
-            <table className="data-table">
-              <thead className="sticky top-0 bg-white">
-                <tr>
-                  <th>Time</th>
-                  <th>Patient No</th>
-                  <th>Patient Name</th>
-                  <th>Type</th>
-                  <th>Medicines</th>
-                  <th className="text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {todaySales.sort((a, b) => b.time.localeCompare(a.time)).map(s => (
-                  <tr key={s.id}>
-                    <td className="text-sm text-slate-500 whitespace-nowrap">{s.time}</td>
-                    <td className="font-mono font-bold text-blue-600 text-sm">{s.patientNo}</td>
-                    <td className="font-medium text-sm">{s.patientName}</td>
-                    <td>
-                      <span className={`badge ${s.type === 'Indoor' ? 'badge-blue' : 'badge-amber'}`}>
-                        {s.type}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="flex flex-wrap gap-1">
-                        {s.items.slice(0, 3).map((it, i) => (
-                          <span key={i} className="badge text-xs">{it.name} x{it.quantity}</span>
-                        ))}
-                        {s.items.length > 3 && (
-                          <span className="badge text-xs badge-amber">+{s.items.length - 3} more</span>
-                        )}
                       </div>
-                    </td>
-                    <td className="text-right font-bold text-emerald-700">{currency} {s.totalAmount.toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      {/* Qty Controls + Price - inline */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            onClick={() => updateCartQty(item.medicineId, item.quantity - 1)}
+                            className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-red-50 hover:border-red-200 hover:text-red-500 transition-colors text-sm font-bold"
+                          >-</button>
+                          <span className="w-8 h-7 flex items-center justify-center text-sm font-bold text-slate-800 border-y border-slate-200">{item.quantity}</span>
+                          <button
+                            onClick={() => updateCartQty(item.medicineId, item.quantity + 1)}
+                            className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 transition-colors text-sm font-bold"
+                          >+</button>
+                          <span className="text-[10px] text-slate-400 ml-1.5">@ {currency} {item.price.toLocaleString()}</span>
+                        </div>
+                        <span className="font-bold text-emerald-700 text-sm">{currency} {item.total.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Cart Footer - Always Visible */}
+            <div className="border-t-2 border-slate-200 bg-white p-4 space-y-3 shrink-0">
+              {/* Subtotal */}
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">Subtotal</span>
+                <span className="font-semibold text-slate-700">{currency} {cartTotal.toLocaleString()}</span>
+              </div>
+              {/* Discount */}
+              {billDiscount > 0 && cartTotal > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-red-500">
+                    Discount {discountMode === 'percentage' ? `(${billDiscount}%)` : ''}
+                  </span>
+                  <span className="font-semibold text-red-500">
+                    -{currency} {(discountMode === 'percentage' ? Math.round(cartTotal * billDiscount / 100) : Math.min(billDiscount, cartTotal)).toLocaleString()}
+                  </span>
+                </div>
+              )}
+              {/* Grand Total */}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                <span className="text-base font-bold text-slate-800">Grand Total</span>
+                <span className="text-xl font-black text-emerald-600">
+                  {currency} {(cartTotal - (billDiscount > 0 && cartTotal > 0 ? (discountMode === 'percentage' ? Math.round(cartTotal * billDiscount / 100) : Math.min(billDiscount, cartTotal)) : 0)).toLocaleString()}
+                </span>
+              </div>
+              {/* Complete Sale Button */}
+              <button
+                onClick={completeSale}
+                className={`w-full h-12 rounded-xl font-bold text-base flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${
+                  cart.length === 0
+                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg hover:shadow-xl hover:from-emerald-700 hover:to-teal-700'
+                }`}
+                disabled={cart.length === 0}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                Complete Sale
+              </button>
+              {/* Clear Cart */}
+              {cart.length > 0 && (
+                <button onClick={clearCart} className="w-full text-center text-xs text-slate-400 hover:text-red-500 font-medium transition-colors py-1">
+                  Clear Cart
+                </button>
+              )}
+            </div>
+
           </div>
         </div>
-      )}
+
+      </div>
     </div>
   );
 }
