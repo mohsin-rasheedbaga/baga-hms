@@ -33,6 +33,10 @@ jobs:
       - name: Build Next.js (static export)
         run: npm run build
 
+      - name: Inject GH token into electron/config.json
+        shell: bash
+        run: echo '{"gh_token":"${{ secrets.GH_PAT }}"}' > electron/config.json
+
       - name: Build Electron app
         run: npx electron-builder --win --x64 --publish never
         env:
