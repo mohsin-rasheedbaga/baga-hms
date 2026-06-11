@@ -59,13 +59,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: latest-yml
-        path: dist-electron/latest.yml
+          path: dist-electron/latest.yml
 
       - name: Upload blockmap
         uses: actions/upload-artifact@v4
         with:
           name: setup-blockmap
-        path: dist-electron/BAGA-HMS-Setup-*.exe.blockmap
+          path: dist-electron/BAGA-HMS-Setup-*.exe.blockmap
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
