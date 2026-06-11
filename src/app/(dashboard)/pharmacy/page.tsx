@@ -10,6 +10,18 @@ import type { Patient, Prescription, MedicineItem } from '@/lib/types';
 import { triggerPrint } from '@/lib/print-utils';
 
 /* ==================== LOCAL TYPES ==================== */
+interface MedicineReturn {
+  id: string;
+  medicineId: string;
+  medicineName: string;
+  quantity: number;
+  returnPrice: number;
+  reason: string;
+  returnedBy: string;
+  date: string;
+  time: string;
+}
+
 interface CodeItem {
   medicineId: string;
   name: string;
@@ -65,15 +77,52 @@ function lsSet<T>(key: string, data: T): void {
 
 const SALES_KEY = 'baga_pharmacy_sales';
 const OUTDOOR_COUNTER_KEY = 'baga_outdoor_counter';
+const RETURNS_KEY = 'baga_pharmacy_returns';
 
 function getPharmacySales(): PharmacySale[] { return lsGet<PharmacySale[]>(SALES_KEY, []); }
 function addPharmacySale(s: PharmacySale): void { const all = getPharmacySales(); all.push(s); lsSet(SALES_KEY, all); }
 function getOutdoorCounter(): number { return lsGet<number>(OUTDOOR_COUNTER_KEY, 1); }
 function setOutdoorCounter(n: number): void { lsSet(OUTDOOR_COUNTER_KEY, n); }
+function getPharmacyReturns(): MedicineReturn[] { return lsGet<MedicineReturn[]>(RETURNS_KEY, []); }
+function addPharmacyReturn(r: MedicineReturn): void { const all = getPharmacyReturns(); all.push(r); lsSet(RETURNS_KEY, all); }
+
+async function getPrintHeader(): Promise<{ hospitalName: string; hospitalLogo: string; hospitalAddress: string; hospitalPhone: string }> {
+  let hospitalName = 'BAGA HOSPITAL';
+  let hospitalLogo = '';
+  let hospitalAddress = '';
+  let hospitalPhone = '';
+  const isEl = typeof window !== 'undefined' && !!(window as any).bagaAPI;
+  if (isEl) {
+    try {
+      const li = await (window as any).bagaAPI.getFullLicenseInfo();
+      if (li) {
+        if (li.hospitalName) hospitalName = li.hospitalName;
+        if (li.hospitalAddress) hospitalAddress = li.hospitalAddress;
+        if (li.phone || li.hospitalPhone) hospitalPhone = li.phone || li.hospitalPhone;
+      }
+    } catch (e) {}
+    try {
+      const logoResult = await (window as any).bagaAPI.getLogoBase64();
+      if (logoResult.success) hospitalLogo = logoResult.data;
+    } catch (e) {}
+  }
+  return { hospitalName, hospitalLogo, hospitalAddress, hospitalPhone };
+}
 
 export default function PharmacyPage() {
   const [initialTab, setInitialTab] = useState<'pos' | 'prescriptions' | 'inventory' | 'reports'>('pos');
   const [mainTab, setMainTab] = useState<'pos' | 'prescriptions' | 'inventory' | 'reports'>('pos');
+  const [licenseType, setLicenseType] = useState<string>('');
+
+  useEffect(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem('baga_session') || '{}');
+      setLicenseType(s.licenseType || '');
+      if (s.licenseType === 'pharmacy') {
+        setPatientMode('Outdoor');
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -132,6 +181,62 @@ export default function PharmacyPage() {
 
   // Cart
   const [cart, setCart] = useState<CartItem[]>([]);
+
+  // Return medicine state
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [returnMedId, setReturnMedId] = useState('');
+  const [returnMedName, setReturnMedName] = useState('');
+  const [returnQty, setReturnQty] = useState(1);
+  const [returnReason, setReturnReason] = useState('');
+  const [returnMedResults, setReturnMedResults] = useState<MedicineItem[]>([]);
+  const [showReturnMedDropdown, setShowReturnMedDropdown] = useState(false);
+  const [returnMedQuery, setReturnMedQuery] = useState('');
+
+  const handleReturnMedSearch = (q: string) => {
+    setReturnMedQuery(q);
+    if (q.length < 1) { setReturnMedResults([]); setShowReturnMedDropdown(false); return; }
+    setReturnMedResults(searchMedicines(q));
+    setShowReturnMedDropdown(true);
+  };
+
+  const selectReturnMed = (m: MedicineItem) => {
+    setReturnMedId(m.id);
+    setReturnMedName(m.name);
+    setReturnMedQuery(m.name);
+    setReturnMedResults([]);
+    setShowReturnMedDropdown(false);
+  };
+
+  const processReturn = () => {
+    if (!returnMedId || !returnReason.trim()) { showToast('Select medicine and enter reason', 'error'); return; }
+    if (returnQty < 1) { showToast('Enter valid quantity', 'error'); return; }
+    const meds = getMedicines();
+    const med = meds.find(m => m.id === returnMedId);
+    if (!med) { showToast('Medicine not found', 'error'); return; }
+    // Add stock back
+    updateMedicine(med.id, { stock: med.stock + returnQty });
+    // Save return record
+    const sessionData = JSON.parse(localStorage.getItem('baga_session') || '{}');
+    addPharmacyReturn({
+      id: genId(),
+      medicineId: returnMedId,
+      medicineName: returnMedName,
+      quantity: returnQty,
+      returnPrice: med.price * returnQty,
+      reason: returnReason.trim(),
+      returnedBy: sessionData.name || 'Pharmacist',
+      date: todayStr(),
+      time: timeStr(),
+    });
+    loadInventory();
+    showToast(`Returned ${returnQty} x ${returnMedName} to stock`, 'success');
+    setShowReturnModal(false);
+    setReturnMedId('');
+    setReturnMedName('');
+    setReturnQty(1);
+    setReturnReason('');
+    setReturnMedQuery('');
+  };
 
   // Sale history (for stats)
   const [sales, setSales] = useState<PharmacySale[]>([]);
@@ -278,7 +383,6 @@ export default function PharmacyPage() {
       patientMobile = selectedPatient.mobile;
     } else {
       if (!outdoorName.trim()) { showToast('Enter patient name', 'error'); return; }
-      if (!outdoorMobile.trim()) { showToast('Enter patient mobile number', 'error'); return; }
       const counter = getOutdoorCounter();
       patientNo = `OUT-${String(counter).padStart(4, '0')}`;
       patientName = outdoorName.trim();
@@ -348,19 +452,7 @@ export default function PharmacyPage() {
     try {
       const discountAmt = Math.round(saleBill.totalAmount * billDiscount / 100);
       const grandTotal = saleBill.totalAmount - discountAmt;
-      let hospitalName = 'BAGA HOSPITAL';
-      let hospitalLogo = '';
-      const isEl = typeof window !== 'undefined' && !!(window as any).bagaAPI;
-      if (isEl) {
-        try {
-          const licenseInfo = await (window as any).bagaAPI.getFullLicenseInfo();
-          if (licenseInfo && licenseInfo.hospitalName) hospitalName = licenseInfo.hospitalName;
-        } catch (e) {}
-        try {
-          const logoResult = await (window as any).bagaAPI.getLogoBase64();
-          if (logoResult.success) hospitalLogo = logoResult.data;
-        } catch (e) {}
-      }
+      const { hospitalName, hospitalLogo, hospitalAddress, hospitalPhone } = await getPrintHeader();
       const cur = currency;
       const itemRows = saleBill.items.map((it, i) => {
         const alt = i % 2 === 0 ? '#fff' : '#f8fafc';
@@ -370,8 +462,6 @@ export default function PharmacyPage() {
           <td style="padding:3px 6px;font-size:9px;border-bottom:1px solid #e2e8f0;">${it.form}</td>
           <td style="padding:3px 6px;font-size:9px;border-bottom:1px solid #e2e8f0;">${it.strength}</td>
           <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:right;">${cur} ${it.price.toLocaleString()}</td>
-          <td style="padding:3px 6px;font-size:9px;border-bottom:1px solid #e2e8f0;text-align:center;">${it.days || '-'}</td>
-          <td style="padding:3px 6px;font-size:9px;border-bottom:1px solid #e2e8f0;text-align:center;">${it.dosage || '-'}</td>
           <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:center;">${it.quantity}</td>
           <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:700;">${cur} ${it.total.toLocaleString()}</td>
         </tr>`;
@@ -381,9 +471,11 @@ export default function PharmacyPage() {
         *{margin:0;padding:0;box-sizing:border-box;}
         body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;background:#fff;font-size:11px;width:80mm;margin:0 auto;}
         .header{text-align:center;padding:6px 0;border-bottom:2px dashed #cbd5e1;}
-        .logo{width:32px;height:32px;object-fit:contain;}
+        .logo{width:48px;height:48px;object-fit:contain;}
         .hname{font-size:14px;font-weight:800;color:#0c2340;letter-spacing:1px;}
         .hsub{font-size:8px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;}
+        .haddr{font-size:8px;color:#64748b;margin-top:1px;}
+        .hphone{font-size:8px;color:#64748b;}
         .info{padding:4px 0;border-bottom:1px dashed #e2e8f0;}
         .info-row{display:flex;justify-content:space-between;font-size:10px;padding:1px 0;}
         .info-row .label{color:#64748b;font-weight:600;}
@@ -405,21 +497,22 @@ export default function PharmacyPage() {
         <div class="header">
           ${hospitalLogo ? `<img class="logo" src="${hospitalLogo}" alt="" />` : ''}
           <div class="hname">${hospitalName}</div>
+          ${hospitalAddress ? `<div class="haddr">${hospitalAddress}</div>` : ''}
+          ${hospitalPhone ? `<div class="hphone">${hospitalPhone}</div>` : ''}
           <div class="hsub">Pharmacy Department</div>
         </div>
         <div class="info">
           <div class="info-row"><span class="label">Bill No:</span><span class="value">${saleBill.id.slice(-6).toUpperCase()}</span></div>
           <div class="info-row"><span class="label">Patient:</span><span class="value">${saleBill.patientName}</span></div>
           <div class="info-row"><span class="label">ID:</span><span class="value">${saleBill.patientNo}</span></div>
-          <div class="info-row"><span class="label">Mobile:</span><span class="value">${saleBill.patientMobile}</span></div>
-          <div class="info-row"><span class="label">Type:</span><span class="value">${saleBill.type}</span></div>
+          <div class="info-row"><span class="label">Mobile:</span><span class="value">${saleBill.patientMobile || '-'}</span></div>
           <div class="info-row"><span class="label">Date:</span><span class="value">${saleBill.date} ${saleBill.time}</span></div>
           <div class="info-row"><span class="label">Served By:</span><span class="value">${saleBill.servedBy}</span></div>
           <div class="info-row"><span class="label">Payment:</span><span class="value">${saleBill.paymentMethod}</span></div>
         </div>
         <div class="title-bar"><h3>Medicine Bill / Slip</h3></div>
         <table>
-          <thead><tr><th>#</th><th>Medicine</th><th>Form</th><th>Str</th><th>Price</th><th>Days</th><th>Dosage</th><th>Qty</th><th>Total</th></tr></thead>
+          <thead><tr><th>#</th><th>Medicine</th><th>Form</th><th>Str</th><th>Price</th><th>Qty</th><th>Total</th></tr></thead>
           <tbody>${itemRows}</tbody>
         </table>
         <div class="totals">
@@ -597,7 +690,6 @@ export default function PharmacyPage() {
                 <div><span className="text-slate-500">Patient ID:</span> <span className="font-mono font-bold text-blue-600">{saleBill.patientNo}</span></div>
                 <div><span className="text-slate-500">Name:</span> <span className="font-semibold">{saleBill.patientName}</span></div>
                 <div><span className="text-slate-500">Mobile:</span> <span>{saleBill.patientMobile}</span></div>
-                <div><span className="text-slate-500">Type:</span> <span className={`badge ${saleBill.type === 'Indoor' ? 'badge-blue' : 'badge-amber'}`}>{saleBill.type}</span></div>
                 <div><span className="text-slate-500">Date:</span> <span>{saleBill.date} {saleBill.time}</span></div>
                 <div><span className="text-slate-500">Served By:</span> <span>{saleBill.servedBy}</span></div>
               </div>
@@ -614,10 +706,6 @@ export default function PharmacyPage() {
                       <td><span className="badge badge-blue text-xs">{it.form}</span></td>
                       <td className="text-sm">{it.strength}</td>
                       <td className="text-right text-sm">{currency} {it.price.toLocaleString()}</td>
-                      <td className="text-center">
-                        <span className="badge badge-amber text-xs">{it.days || '-'}</span>
-                        <p className="text-xs text-slate-400">{it.dosage || '-'}</p>
-                      </td>
                       <td className="text-center text-sm font-semibold">{it.quantity}</td>
                       <td className="text-right text-sm font-bold">{currency} {it.total.toLocaleString()}</td>
                     </tr>
@@ -650,17 +738,7 @@ export default function PharmacyPage() {
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm text-slate-600">Payment Method</span>
-                <div className="flex bg-slate-100 rounded-lg p-0.5">
-                  {(['Cash', 'Card', 'Online'] as const).map(method => (
-                    <button
-                      key={method}
-                      onClick={() => setPaymentMethod(method)}
-                      className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${paymentMethod === method ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                      {method}
-                    </button>
-                  ))}
-                </div>
+                <span className="font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg text-sm">{saleBill.paymentMethod}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm text-slate-600">Discount (%)</span>
@@ -707,7 +785,7 @@ export default function PharmacyPage() {
       {mainTab === 'pos' && (
         <>
           {/* Stats Row */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className={`grid gap-3 ${licenseType === 'pharmacy' ? 'grid-cols-2' : 'grid-cols-2 lg:grid-cols-4'}`}>
             <div className="stat-card card-hover border border-emerald-200 bg-emerald-50">
               <p className="text-xs text-emerald-600 font-medium">Today&apos;s Sales</p>
               <p className="text-2xl font-bold text-emerald-700">{currency} {todayTotal.toLocaleString()}</p>
@@ -716,19 +794,24 @@ export default function PharmacyPage() {
               <p className="text-xs text-blue-600 font-medium">Total Sales Today</p>
               <p className="text-2xl font-bold text-blue-700">{todaySales.length}</p>
             </div>
-            <div className="stat-card card-hover border border-purple-200 bg-purple-50">
-              <p className="text-xs text-purple-600 font-medium">Indoor Patients</p>
-              <p className="text-2xl font-bold text-purple-700">{todayIndoor}</p>
-            </div>
-            <div className="stat-card card-hover border border-amber-200 bg-amber-50">
-              <p className="text-xs text-amber-600 font-medium">Outdoor Patients</p>
-              <p className="text-2xl font-bold text-amber-700">{todayOutdoor}</p>
-            </div>
+            {licenseType !== 'pharmacy' && (
+              <>
+                <div className="stat-card card-hover border border-purple-200 bg-purple-50">
+                  <p className="text-xs text-purple-600 font-medium">Indoor Patients</p>
+                  <p className="text-2xl font-bold text-purple-700">{todayIndoor}</p>
+                </div>
+                <div className="stat-card card-hover border border-amber-200 bg-amber-50">
+                  <p className="text-xs text-amber-600 font-medium">Outdoor Patients</p>
+                  <p className="text-2xl font-bold text-amber-700">{todayOutdoor}</p>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Patient Mode Toggle + Selection */}
           <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
-            {/* Mode Toggle */}
+            {/* Mode Toggle - hidden for pharmacy license */}
+            {licenseType !== 'pharmacy' && (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
@@ -751,6 +834,7 @@ export default function PharmacyPage() {
                 </button>
               </div>
             </div>
+            )}
 
             {/* Indoor Patient Search */}
             {patientMode === 'Indoor' && (
@@ -835,8 +919,7 @@ export default function PharmacyPage() {
                     #
                   </div>
                   <div>
-                    <p className="font-bold text-slate-800 text-sm">Walk-in Patient</p>
-                    <p className="text-xs text-amber-600">Patient No: <span className="font-mono font-bold">{outdoorNo}</span> (auto-generated)</p>
+                    <p className="font-bold text-slate-800 text-sm">Walk-in Patient — <span className="font-mono font-bold text-amber-700">{outdoorNo}</span></p>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -845,7 +928,7 @@ export default function PharmacyPage() {
                     <input ref={outdoorNameRef} type="text" className="form-input" placeholder="Patient name" value={outdoorName} onChange={e => setOutdoorName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('name'); } }} />
                   </div>
                   <div>
-                    <label className="form-label">Mobile Number *</label>
+                    <label className="form-label">Mobile Number</label>
                     <input ref={outdoorMobileRef} type="text" className="form-input" maxLength={11} inputMode="numeric" placeholder="03XX-XXXXXXX" value={outdoorMobile.replace(/[^0-9]/g,'')} onChange={e => setOutdoorMobile(e.target.value.replace(/[^0-9]/g,''))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('mobile'); } }} />
                   </div>
                   <div>
@@ -1202,6 +1285,60 @@ export default function PharmacyPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {/* Return Medicine Button */}
+          <div className="flex items-center gap-3">
+            <button onClick={() => setShowReturnModal(true)} className="btn btn-outline border-amber-300 text-amber-700 hover:bg-amber-50 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+              Return Medicine
+            </button>
+          </div>
+
+          {/* Return Medicine Modal */}
+          {showReturnModal && (
+            <div className="modal-overlay" onClick={() => setShowReturnModal(false)}>
+              <div className="modal-content" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-slate-800">Return Medicine to Stock</h3>
+                  <button onClick={() => setShowReturnModal(false)} className="btn btn-outline btn-sm">Close</button>
+                </div>
+                <div className="space-y-4">
+                  <div className="relative">
+                    <label className="form-label">Medicine *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Search medicine..."
+                      value={returnMedQuery}
+                      onChange={e => handleReturnMedSearch(e.target.value)}
+                    />
+                    {showReturnMedDropdown && returnMedResults.length > 0 && (
+                      <div className="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg bg-white shadow-lg max-h-48 overflow-y-auto">
+                        {returnMedResults.map(m => (
+                          <button key={m.id} onClick={() => selectReturnMed(m)} className="w-full text-left px-4 py-2 hover:bg-emerald-50 border-b border-slate-100 last:border-0 text-sm">
+                            <span className="font-semibold">{m.name}</span>
+                            <span className="text-xs text-slate-400 ml-2">({m.form}, {m.strength})</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="form-label">Quantity *</label>
+                    <input type="number" className="form-input" min={1} value={returnQty} onChange={e => setReturnQty(Math.max(1, Number(e.target.value) || 1))} />
+                  </div>
+                  <div>
+                    <label className="form-label">Return Reason *</label>
+                    <textarea className="form-input" rows={2} value={returnReason} onChange={e => setReturnReason(e.target.value)} placeholder="e.g. Wrong purchase, damaged, expired..." />
+                  </div>
+                  <div className="flex gap-3">
+                    <button onClick={() => setShowReturnModal(false)} className="btn btn-outline flex-1">Cancel</button>
+                    <button onClick={processReturn} className="btn btn-primary flex-1">Process Return</button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -1601,9 +1738,21 @@ export default function PharmacyPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Expired Medicines */}
             <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
-                <h3 className="font-bold text-red-800">Expired Medicines ({expiredMeds.length})</h3>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+                  <h3 className="font-bold text-red-800">Expired Medicines ({expiredMeds.length})</h3>
+                </div>
+                {expiredMeds.length > 0 && (
+                  <button onClick={async () => {
+                    const { hospitalName, hospitalLogo, hospitalAddress, hospitalPhone } = await getPrintHeader();
+                    const rows = expiredMeds.map((m, i) => `<tr style="background:${i%2===0?'#fff':'#fef2f2'}"><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #fecaca;">${i+1}</td><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #fecaca;font-weight:600;">${m.name}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fecaca;">${m.genericName}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fecaca;">${m.form}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fecaca;">${m.strength}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fecaca;">${m.packing||'-'}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fecaca;">${m.expiryDate}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fecaca;">${m.stock}</td></tr>`).join('');
+                    triggerPrint(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Expired Medicines</title><style>@page{size:A4;margin:10mm;}*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;font-size:11px;}.header{text-align:center;padding:10px 0;border-bottom:2px solid #dc2626;}.logo{width:48px;height:48px;object-fit:contain;}.hname{font-size:18px;font-weight:800;color:#991b1b;}.haddr,.hphone{font-size:10px;color:#64748b;}.title{text-align:center;padding:8px;font-size:14px;font-weight:700;color:#991b1b;}table{width:100%;border-collapse:collapse;margin-top:8px;}th{padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;color:#fff;background:#dc2626;border-bottom:2px solid #991b1b;text-align:left;}td{padding:4px 8px;font-size:10px;border-bottom:1px solid #fecaca;}.footer{text-align:center;padding:10px;font-size:9px;color:#94a3b8;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body><div class="header">${hospitalLogo?`<img class="logo" src="${hospitalLogo}" />`:''}<div class="hname">${hospitalName}</div>${hospitalAddress?`<div class="haddr">${hospitalAddress}</div>`:''}${hospitalPhone?`<div class="hphone">${hospitalPhone}</div>`:''}</div><div class="title">Expired Medicines Report — ${todayStr()}</div><table><thead><tr><th>#</th><th>Medicine Name</th><th>Generic</th><th>Form</th><th>Strength</th><th>Batch/Packing</th><th>Expiry Date</th><th>Stock</th></tr></thead><tbody>${rows}</tbody></table><div class="footer">Total Expired: ${expiredMeds.length} | Generated: ${todayStr()} ${timeStr()}</div></body></html>`);
+                  }} className="btn btn-outline btn-sm border-red-300 text-red-700 hover:bg-red-50">
+                    <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                    Print
+                  </button>
+                )}
               </div>
               {expiredMeds.length === 0 ? (
                 <p className="text-red-400 text-sm text-center py-3">No expired medicines</p>
@@ -1627,9 +1776,40 @@ export default function PharmacyPage() {
 
             {/* Low Stock Medicines */}
             <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-                <h3 className="font-bold text-amber-800">Low Stock ({lowStockMeds.length})</h3>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                  <h3 className="font-bold text-amber-800">Low Stock ({lowStockMeds.filter(m => !expiredMeds.find(em => em.id === m.id)).length})</h3>
+                </div>
+                {lowStockMeds.filter(m => !expiredMeds.find(em => em.id === m.id)).length > 0 && (
+                  <div className="flex gap-2">
+                    <button onClick={async () => {
+                      const { hospitalName, hospitalLogo, hospitalAddress, hospitalPhone } = await getPrintHeader();
+                      const filtered = lowStockMeds.filter(m => !expiredMeds.find(em => em.id === m.id));
+                      const rows = filtered.map((m, i) => `<tr style="background:${i%2===0?'#fff':'#fffbeb'}"><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #fde68a;">${i+1}</td><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #fde68a;font-weight:600;">${m.name}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fde68a;">${m.category}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fde68a;">${m.stock}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fde68a;">${m.minStock}</td></tr>`).join('');
+                      triggerPrint(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Low Stock</title><style>@page{size:A4;margin:10mm;}*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;font-size:11px;}.header{text-align:center;padding:10px 0;border-bottom:2px solid #d97706;}.logo{width:48px;height:48px;object-fit:contain;}.hname{font-size:18px;font-weight:800;color:#92400e;}.haddr,.hphone{font-size:10px;color:#64748b;}.title{text-align:center;padding:8px;font-size:14px;font-weight:700;color:#92400e;}table{width:100%;border-collapse:collapse;margin-top:8px;}th{padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;color:#fff;background:#d97706;border-bottom:2px solid #92400e;text-align:left;}td{padding:4px 8px;font-size:10px;border-bottom:1px solid #fde68a;}.footer{text-align:center;padding:10px;font-size:9px;color:#94a3b8;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body><div class="header">${hospitalLogo?`<img class="logo" src="${hospitalLogo}" />`:''}<div class="hname">${hospitalName}</div>${hospitalAddress?`<div class="haddr">${hospitalAddress}</div>`:''}${hospitalPhone?`<div class="hphone">${hospitalPhone}</div>`:''}</div><div class="title">Low Stock Report — ${todayStr()}</div><table><thead><tr><th>#</th><th>Medicine Name</th><th>Category</th><th>Current Stock</th><th>Min Stock</th></tr></thead><tbody>${rows}</tbody></table><div class="footer">Total Low Stock: ${filtered.length} | Generated: ${todayStr()} ${timeStr()}</div></body></html>`);
+                    }} className="btn btn-outline btn-sm border-amber-300 text-amber-700 hover:bg-amber-50">
+                      <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                      Print
+                    </button>
+                    <button onClick={async () => {
+                      const { hospitalName, hospitalLogo, hospitalAddress, hospitalPhone } = await getPrintHeader();
+                      const filtered = lowStockMeds.filter(m => !expiredMeds.find(em => em.id === m.id));
+                      const rows = filtered.map((m, i) => `<tr style="background:${i%2===0?'#fff':'#fffbeb'}"><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #fde68a;">${i+1}</td><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #fde68a;font-weight:600;">${m.name}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fde68a;">${m.category}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fde68a;">${m.stock}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fde68a;">${m.minStock}</td></tr>`).join('');
+                      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Low Stock</title><style>@page{size:A4;margin:10mm;}*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;font-size:11px;}.header{text-align:center;padding:10px 0;border-bottom:2px solid #d97706;}.logo{width:48px;height:48px;object-fit:contain;}.hname{font-size:18px;font-weight:800;color:#92400e;}.haddr,.hphone{font-size:10px;color:#64748b;}.title{text-align:center;padding:8px;font-size:14px;font-weight:700;color:#92400e;}table{width:100%;border-collapse:collapse;margin-top:8px;}th{padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;color:#fff;background:#d97706;border-bottom:2px solid #92400e;text-align:left;}td{padding:4px 8px;font-size:10px;border-bottom:1px solid #fde68a;}.footer{text-align:center;padding:10px;font-size:9px;color:#94a3b8;}</style></head><body><div class="header">${hospitalLogo?`<img class="logo" src="${hospitalLogo}" />`:''}<div class="hname">${hospitalName}</div>${hospitalAddress?`<div class="haddr">${hospitalAddress}</div>`:''}${hospitalPhone?`<div class="hphone">${hospitalPhone}</div>`:''}</div><div class="title">Low Stock Report — ${todayStr()}</div><table><thead><tr><th>#</th><th>Medicine Name</th><th>Category</th><th>Current Stock</th><th>Min Stock</th></tr></thead><tbody>${rows}</tbody></table><div class="footer">Total Low Stock: ${filtered.length} | Generated: ${todayStr()} ${timeStr()}</div></body></html>`;
+                      const blob = new Blob([html], { type: 'text/html' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `low-stock-report-${todayStr()}.html`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }} className="btn btn-outline btn-sm border-amber-300 text-amber-700 hover:bg-amber-50">
+                      <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                      Share
+                    </button>
+                  </div>
+                )}
               </div>
               {lowStockMeds.length === 0 ? (
                 <p className="text-amber-400 text-sm text-center py-3">All medicines are well stocked</p>

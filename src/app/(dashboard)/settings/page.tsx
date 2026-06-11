@@ -866,6 +866,57 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* ==================== SECTION: Profit Report Password ==================== */}
+      <div className="bg-white rounded-xl border-2 border-emerald-200 p-6">
+        <h3 className="text-lg font-semibold text-slate-800 mb-2 flex items-center gap-2">
+          <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+          Profit Report Password
+        </h3>
+        <p className="text-sm text-slate-500 mb-4">Set a password to protect the Net Profit report. Users must enter this password to view the profit calculation in the pharmacy statement.</p>
+        <div className="space-y-4 max-w-md">
+          <div>
+            <label className="form-label">New Password</label>
+            <input
+              type="password"
+              className="form-input"
+              placeholder="Enter profit report password"
+              id="profitPwdNew"
+            />
+          </div>
+          <div>
+            <label className="form-label">Confirm Password</label>
+            <input
+              type="password"
+              className="form-input"
+              placeholder="Confirm password"
+              id="profitPwdConfirm"
+            />
+          </div>
+          <button
+            onClick={() => {
+              const newPwd = (document.getElementById('profitPwdNew') as HTMLInputElement).value;
+              const confirmPwd = (document.getElementById('profitPwdConfirm') as HTMLInputElement).value;
+              if (!newPwd.trim()) { alert('Please enter a password'); return; }
+              if (newPwd !== confirmPwd) { alert('Passwords do not match'); return; }
+              if (newPwd.length < 3) { alert('Password must be at least 3 characters'); return; }
+              localStorage.setItem('baga_profit_password', newPwd.trim());
+              (document.getElementById('profitPwdNew') as HTMLInputElement).value = '';
+              (document.getElementById('profitPwdConfirm') as HTMLInputElement).value = '';
+              showToast('Profit password saved successfully!');
+            }}
+            className="btn btn-primary"
+          >
+            Save Profit Password
+          </button>
+          {localStorage.getItem('baga_profit_password') && (
+            <p className="text-xs text-emerald-600 mt-2 flex items-center gap-1">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              A profit password is currently set
+            </p>
+          )}
+        </div>
+      </div>
+
       {/* ==================== SECTION: Active Modules ==================== */}
       {visibility.showActiveModules && (
         <div className="bg-white rounded-xl border border-slate-200 p-6">

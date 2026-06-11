@@ -61,6 +61,63 @@ export default function PharmacyStatementPage() {
   const [toastMsg, setToastMsg] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
 
+  // Net Profit
+  const [showProfitModal, setShowProfitModal] = useState(false);
+  const [profitPwd, setProfitPwd] = useState('');
+  const [profitData, setProfitData] = useState<{ totalSales: number; totalExpenses: number; purchaseCost: number; netProfit: number; purchaseCostBreakdown: any } | null>(null);
+  const [profitPwdError, setProfitPwdError] = useState('');
+
+  const handleNetProfit = () => {
+    const stored = localStorage.getItem('baga_profit_password');
+    if (stored && stored !== profitPwd) {
+      setProfitPwdError('Incorrect password');
+      return;
+    }
+    if (!stored && !profitPwd) {
+      setProfitPwdError('No password set. Set one in Settings first.');
+      return;
+    }
+    if (!stored && profitPwd) {
+      // First time setting - just allow access
+    }
+    setProfitPwdError('');
+
+    // Calculate net profit
+    const filtered = allSales.filter(s => dateInRange(s.date, startDate, endDate));
+    const filteredExp = pharmacyExpenses.filter((e: any) => dateInRange(e.date, startDate, endDate));
+
+    const totalSalesAmount = filtered.reduce((sum, s) => sum + s.totalAmount, 0);
+    const totalExpensesAmount = filteredExp.reduce((sum: number, e: any) => sum + e.amount, 0);
+
+    // Calculate purchase cost from expense category "Medicine Purchase"
+    const purchaseCost = filteredExp
+      .filter((e: any) => e.category === 'Medicine Purchase')
+      .reduce((sum: number, e: any) => sum + e.amount, 0);
+
+    // Other expenses (non-purchase)
+    const otherExpenses = totalExpensesAmount - purchaseCost;
+
+    const netProfit = totalSalesAmount - totalExpensesAmount;
+
+    // Purchase cost breakdown
+    const purchaseBreakdown: Record<string, number> = {};
+    filteredExp
+      .filter((e: any) => e.category === 'Medicine Purchase')
+      .forEach((e: any) => {
+        const key = e.description || 'Other';
+        purchaseBreakdown[key] = (purchaseBreakdown[key] || 0) + e.amount;
+      });
+
+    setProfitData({
+      totalSales: totalSalesAmount,
+      totalExpenses: totalExpensesAmount,
+      purchaseCost,
+      netProfit,
+      purchaseCostBreakdown: purchaseBreakdown,
+    });
+    setProfitPwd('');
+  };
+
   useEffect(() => {
     try {
       const s = localStorage.getItem('baga_session');
@@ -191,6 +248,10 @@ export default function PharmacyStatementPage() {
         </div>
         <button onClick={() => { setShowExpenseModal(true); setExpDate(todayStr()); }} className="btn btn-primary">
           + Add Expense
+        </button>
+        <button onClick={() => { setShowProfitModal(true); setProfitPwdError(''); }} className="btn btn-outline border-emerald-300 text-emerald-700 hover:bg-emerald-50 flex items-center gap-2">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+          Net Profit
         </button>
       </div>
 
@@ -432,6 +493,84 @@ export default function PharmacyStatementPage() {
                 </tr>
               </tfoot>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Net Profit Modal */}
+      {showProfitModal && (
+        <div className="modal-overlay" onClick={() => { setShowProfitModal(false); setProfitData(null); setProfitPwd(''); setProfitPwdError(''); }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg text-slate-800">Net Profit Calculation</h3>
+              <button onClick={() => { setShowProfitModal(false); setProfitData(null); setProfitPwd(''); setProfitPwdError(''); }} className="text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+            </div>
+            {!profitData ? (
+              <div className="space-y-4">
+                <p className="text-sm text-slate-500">Enter the profit report password to view net profit calculation.</p>
+                <div>
+                  <label className="form-label">Password</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    value={profitPwd}
+                    onChange={e => setProfitPwd(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleNetProfit(); }}
+                    placeholder="Enter profit password"
+                    autoFocus
+                  />
+                  {profitPwdError && <p className="text-red-500 text-xs mt-1">{profitPwdError}</p>}
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <button onClick={() => { setShowProfitModal(false); setProfitData(null); setProfitPwd(''); setProfitPwdError(''); }} className="btn btn-outline">Cancel</button>
+                  <button onClick={handleNetProfit} className="btn btn-primary">Show Profit</button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center">
+                    <p className="text-xs text-emerald-600 font-medium">Total Sales Revenue</p>
+                    <p className="text-xl font-extrabold text-emerald-700">{currency} {profitData.totalSales.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
+                    <p className="text-xs text-amber-600 font-medium">Total Expenses</p>
+                    <p className="text-xl font-extrabold text-amber-700">{currency} {profitData.totalExpenses.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                    <p className="text-xs text-blue-600 font-medium">Medicine Purchase Cost</p>
+                    <p className="text-xl font-extrabold text-blue-700">{currency} {profitData.purchaseCost.toLocaleString()}</p>
+                  </div>
+                  <div className={`border-2 rounded-lg p-4 text-center ${profitData.netProfit >= 0 ? 'bg-emerald-50 border-emerald-300' : 'bg-red-50 border-red-300'}`}>
+                    <p className="text-xs font-medium" style={{ color: profitData.netProfit >= 0 ? '#047857' : '#b91c1c' }}>Net Profit</p>
+                    <p className={`text-2xl font-black ${profitData.netProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                      {profitData.netProfit >= 0 ? '' : '-'}{currency} {Math.abs(profitData.netProfit).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">Revenue - All Expenses</p>
+                  </div>
+                </div>
+                {Object.keys(profitData.purchaseCostBreakdown).length > 0 && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                    <p className="text-sm font-semibold text-slate-700 mb-2">Purchase Cost Breakdown</p>
+                    <div className="space-y-1">
+                      {Object.entries(profitData.purchaseCostBreakdown).map(([desc, amt]) => (
+                        <div key={desc} className="flex justify-between text-sm">
+                          <span className="text-slate-600">{desc}</span>
+                          <span className="font-mono font-semibold text-slate-800">{currency} {amt.toLocaleString()}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between text-sm font-bold border-t border-slate-300 pt-1 mt-1">
+                        <span className="text-slate-700">Total Purchase Cost</span>
+                        <span className="text-emerald-700">{currency} {profitData.purchaseCost.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="flex gap-3 justify-end">
+                  <button onClick={() => { setShowProfitModal(false); setProfitData(null); setProfitPwd(''); setProfitPwdError(''); }} className="btn btn-outline">Close</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
