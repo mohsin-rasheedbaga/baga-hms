@@ -184,6 +184,9 @@ export default function PharmacyPage() {
 
   // Return medicine state
   const [showReturnModal, setShowReturnModal] = useState(false);
+  const [showReturnPwdModal, setShowReturnPwdModal] = useState(false);
+  const [returnPwd, setReturnPwd] = useState('');
+  const [returnPwdError, setReturnPwdError] = useState('');
   const [returnMedId, setReturnMedId] = useState('');
   const [returnMedName, setReturnMedName] = useState('');
   const [returnQty, setReturnQty] = useState(1);
@@ -1291,11 +1294,65 @@ export default function PharmacyPage() {
 
           {/* Return Medicine Button */}
           <div className="flex items-center gap-3">
-            <button onClick={() => setShowReturnModal(true)} className="btn btn-outline border-amber-300 text-amber-700 hover:bg-amber-50 flex items-center gap-2">
+            <button onClick={() => { setReturnPwd(''); setReturnPwdError(''); setShowReturnPwdModal(true); }} className="btn btn-outline border-amber-300 text-amber-700 hover:bg-amber-50 flex items-center gap-2">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
               Return Medicine
             </button>
           </div>
+
+          {/* Return Medicine Password Modal */}
+          {showReturnPwdModal && (
+            <div className="modal-overlay" onClick={() => { setShowReturnPwdModal(false); setReturnPwd(''); setReturnPwdError(''); }}>
+              <div className="modal-content" style={{ maxWidth: '420px' }} onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-slate-800">Return Medicine — Verify</h3>
+                  <button onClick={() => { setShowReturnPwdModal(false); setReturnPwd(''); setReturnPwdError(''); }} className="btn btn-outline btn-sm">Close</button>
+                </div>
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-500">Enter the password to access medicine return. This password is set by the admin in Settings.</p>
+                  <div>
+                    <label className="form-label">Password</label>
+                    <input
+                      type="password"
+                      className="form-input"
+                      value={returnPwd}
+                      onChange={e => setReturnPwd(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          const stored = localStorage.getItem('baga_profit_password');
+                          if (returnPwd === stored) {
+                            setShowReturnPwdModal(false);
+                            setShowReturnModal(true);
+                            setReturnPwd('');
+                            setReturnPwdError('');
+                          } else {
+                            setReturnPwdError('Incorrect password');
+                          }
+                        }
+                      }}
+                      placeholder="Enter password"
+                      autoFocus
+                    />
+                    {returnPwdError && <p className="text-red-500 text-xs mt-1">{returnPwdError}</p>}
+                  </div>
+                  <div className="flex gap-3 justify-end">
+                    <button onClick={() => { setShowReturnPwdModal(false); setReturnPwd(''); setReturnPwdError(''); }} className="btn btn-outline">Cancel</button>
+                    <button onClick={() => {
+                      const stored = localStorage.getItem('baga_profit_password');
+                      if (returnPwd === stored) {
+                        setShowReturnPwdModal(false);
+                        setShowReturnModal(true);
+                        setReturnPwd('');
+                        setReturnPwdError('');
+                      } else {
+                        setReturnPwdError('Incorrect password');
+                      }
+                    }} className="btn btn-primary">Verify & Continue</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Return Medicine Modal */}
           {showReturnModal && (
@@ -1650,7 +1707,7 @@ export default function PharmacyPage() {
 
           {/* Medicine Table */}
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+            <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: 'calc(100vh - 340px)' }}>
               <table className="data-table">
                 <thead className="sticky top-0 bg-white z-10">
                   <tr>
