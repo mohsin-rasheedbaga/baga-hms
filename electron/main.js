@@ -287,10 +287,19 @@ async function checkForUpdates() {
     const latestVersion = release.tag_name.replace(/^v/, '');
     updateLog('Latest release: ' + latestVersion + ' | Current: ' + APP_VERSION);
 
+    // Version guard: NEVER download older or equal version
     if (compareVersions(APP_VERSION, latestVersion) >= 0) {
-      updateLog('Already up to date.');
-      sendToAllWindows('update-status', { status: 'not-available' });
+      updateLog('Already up to date (or newer). Installed: ' + APP_VERSION + ', Latest: ' + latestVersion);
+      sendToAllWindows('update-status', { status: 'not-available', lastChecked: new Date().toISOString(), version: latestVersion });
       return;
+    }
+
+    // Also check latest.yml in assets for accurate version info
+    const latestYmlAsset = release.assets.find(a => a.name === 'latest.yml');
+    if (latestYmlAsset) {
+      updateLog('Found latest.yml in release — version should be: ' + latestVersion);
+    } else {
+      updateLog('WARNING: No latest.yml in release assets! Auto-update may not work correctly.');
     }
 
     // Step 2: Find Setup exe for auto-update
