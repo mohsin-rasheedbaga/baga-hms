@@ -7,7 +7,7 @@ const crypto = require('crypto');
 // ============================================================
 // CONFIGURATION
 // ============================================================
-const APP_VERSION = '3.0.7';
+const APP_VERSION = require('../package.json').version;
 const API_BASE = 'https://baga-hospital-api.vercel.app';
 const SERVER_PORT = 18765;
 const STORE_PATH = path.join(app.getPath('userData'), 'baga-store.json');
@@ -259,7 +259,8 @@ function httpsDownload(url, destPath, onProgress) {
 async function checkForUpdates() {
   updateLog('=== UPDATE CHECK START ===');
   updateLog('Token: ' + (GH_TOKEN ? 'SET' : 'EMPTY') + ' | Version: ' + APP_VERSION);
-  sendToAllWindows('update-status', { status: 'checking' });
+  const now = new Date().toISOString();
+  sendToAllWindows('update-status', { status: 'checking', lastChecked: now });
 
   try {
     // Step 1: Fetch latest release info from GitHub API
@@ -605,7 +606,13 @@ function createMainWindow() {
   });
 
   mainWindow.webContents.on('did-finish-load', () => {
-    setTimeout(checkForUpdates, 3000);
+    updateLog('MAIN WINDOW DID FINISH LOAD — scheduling auto-update check in 3s');
+    sendToAllWindows('update-status', { status: 'idle', lastChecked: null });
+    setTimeout(() => {
+      updateLog('AUTO UPDATE CHECK TRIGGERED (3s after load)');
+      sendToAllWindows('update-status', { status: 'checking', lastChecked: new Date().toISOString() });
+      checkForUpdates();
+    }, 3000);
   });
 
   mainWindow.webContents.on('render-process-gone', (event, details) => {
@@ -944,12 +951,31 @@ ipcMain.handle('api-login', async (event, { username, password }) => {
 ipcMain.handle('get-app-version', () => APP_VERSION);
 ipcMain.handle('get-machine-id', () => getMachineId());
 ipcMain.handle('get-api-base', () => API_BASE);
-ipcMain.handle('check-update', () => { checkForUpdates(); return { checking: true }; });
+ipcMain.handle('check-update', () => {
+  updateLog('CHECK-UPDATE IPC INVOKED');
+  checkForUpdates();
+  return { checking: true };
+});
 ipcMain.handle('manual-check-update', async () => {
-  // For v3.0.0 users who don't have auto-update — open release page in browser
-  const releaseUrl = 'https://github.com/mohsin-rasheedbaga/baga-hms/releases/latest';
-  shell.openExternal(releaseUrl);
-  return { opened: true, url: releaseUrl };
+  updateLog('MANUAL UPDATE CHECK STARTED');
+  // Send immediate status update so UI shows "checking" right away
+  sendToAllWindows('update-status', { status: 'checking', lastChecked: new Date().toISOString() });
+  try {
+    await checkForUpdates();
+    updateLog('MANUAL UPDATE CHECK FINISHED');
+  } catch (err) {
+    updateLog('MANUAL UPDATE CHECK FAILED: ' + (err && err.message ? err.message : String(err)));
+    updateLog('Error code: ' + (err && err.code ? err.code : 'N/A'));
+    updateLog('Error stack: ' + (err && err.stack ? err.stack : 'N/A'));
+    sendToAllWindows('update-status', {
+      status: 'error',
+      message: err.message,
+      code: err.code,
+      stack: err.stack,
+      lastChecked: new Date().toISOString(),
+    });
+  }
+  return { checking: true };
 });
 ipcMain.handle('quit-app', () => app.quit());
 

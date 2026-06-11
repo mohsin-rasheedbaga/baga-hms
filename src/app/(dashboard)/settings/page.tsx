@@ -183,6 +183,15 @@ export default function SettingsPage() {
   const [changeLicenseSuccess, setChangeLicenseSuccess] = useState('');
   const [appVersion, setAppVersion] = useState('...');
 
+  // Update Diagnostics
+  const [updateDiag, setUpdateDiag] = useState<{
+    status: string;
+    lastChecked: string | null;
+    latestVersion: string | null;
+    error: string | null;
+    checking: boolean;
+  }>({ status: 'idle', lastChecked: null, latestVersion: null, error: null, checking: false });
+
   // Room type modal
   const [roomModal, setRoomModal] = useState(false);
   const [roomEditId, setRoomEditId] = useState<string | null>(null);
@@ -224,6 +233,22 @@ export default function SettingsPage() {
           setLogoIsCustom(false);
         }
       }).catch(() => {});
+    }
+    // Listen for update-status IPC events
+    if (isElectron) {
+      try {
+        (window as any).bagaAPI.onUpdateStatus((data: any) => {
+          console.log('[Settings] update-status received:', data);
+          setUpdateDiag(prev => ({
+            ...prev,
+            status: data.status || prev.status,
+            lastChecked: data.lastChecked || prev.lastChecked,
+            latestVersion: data.version || prev.latestVersion,
+            error: data.message || data.error || null,
+            checking: data.status === 'checking' || data.status === 'downloading',
+          }));
+        });
+      } catch (e) {}
     }
   }, []);
 
@@ -734,7 +759,7 @@ export default function SettingsPage() {
         </>
       )}
 
-      {/* ==================== SECTION: System Info ==================== */}
+      {/* ==================== SECTION: System Info & Update Diagnostics ==================== */}
       {visibility.showSystemInfo && (
         <div className="bg-white rounded-xl border border-slate-200 p-6">
           <h3 className="text-lg font-semibold text-slate-800 mb-4">System Information</h3>
@@ -759,23 +784,77 @@ export default function SettingsPage() {
               <span className="text-slate-500">Last Updated</span>
               <span className="font-medium">{todayStr()}</span>
             </div>
-            <div className="pt-3">
-              <button
-                onClick={() => {
-                  if (isElectron) {
-                    try { (window as any).bagaAPI.manualCheckUpdate(); } catch (e) {}
-                  } else {
-                    window.open('https://github.com/mohsin-rasheedbaga/baga-hms/releases/latest', '_blank');
-                  }
-                }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition font-medium"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                Check for Updates
-              </button>
-              <p className="text-xs text-slate-400 mt-1 text-center">Opens the download page in your browser. Download the latest Setup file to update.</p>
-            </div>
           </div>
+
+          {/* Update Diagnostics */}
+          {isElectron && (
+            <div className="mt-6 border-t border-slate-200 pt-5">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  Update Diagnostics
+                </h4>
+                <button
+                  onClick={() => {
+                    setUpdateDiag(prev => ({ ...prev, checking: true, error: null }));
+                    try { (window as any).bagaAPI.manualCheckUpdate(); } catch (e: any) {
+                      setUpdateDiag(prev => ({ ...prev, checking: false, error: e.message }));
+                    }
+                  }}
+                  disabled={updateDiag.checking}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white rounded-lg transition font-medium text-sm"
+                >
+                  {updateDiag.checking ? (
+                    <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Checking...</>
+                  ) : (
+                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg> Check Now</>
+                  )}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div className="flex justify-between py-2 px-3 bg-slate-50 rounded-lg">
+                  <span className="text-slate-500">Last Check</span>
+                  <span className="font-mono text-xs font-medium">
+                    {updateDiag.lastChecked ? new Date(updateDiag.lastChecked).toLocaleTimeString() : 'Never'}
+                  </span>
+                </div>
+                <div className="flex justify-between py-2 px-3 bg-slate-50 rounded-lg">
+                  <span className="text-slate-500">Status</span>
+                  <span className={`font-semibold text-xs uppercase ${
+                    updateDiag.status === 'checking' ? 'text-amber-600' :
+                    updateDiag.status === 'available' || updateDiag.status === 'downloaded' ? 'text-emerald-600' :
+                    updateDiag.status === 'error' ? 'text-red-600' :
+                    updateDiag.status === 'not-available' ? 'text-blue-600' :
+                    'text-slate-500'
+                  }`}>
+                    {updateDiag.status === 'checking' ? '⏳ Checking...' :
+                     updateDiag.status === 'available' ? '✅ Update Found' :
+                     updateDiag.status === 'downloading' ? '⬇️ Downloading...' :
+                     updateDiag.status === 'downloaded' ? '✅ Ready to Install' :
+                     updateDiag.status === 'error' ? '❌ Error' :
+                     updateDiag.status === 'not-available' ? '✅ Up to Date' :
+                     '● Idle'}
+                  </span>
+                </div>
+                <div className="flex justify-between py-2 px-3 bg-slate-50 rounded-lg">
+                  <span className="text-slate-500">Latest Found</span>
+                  <span className="font-mono font-medium">{updateDiag.latestVersion || '-'}</span>
+                </div>
+                <div className="flex justify-between py-2 px-3 bg-slate-50 rounded-lg">
+                  <span className="text-slate-500">Installed</span>
+                  <span className="font-mono font-medium">{appVersion}</span>
+                </div>
+              </div>
+
+              {updateDiag.error && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-xs font-semibold text-red-700 mb-1">Error Details:</p>
+                  <p className="text-xs text-red-600 font-mono break-all">{updateDiag.error}</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
