@@ -556,7 +556,7 @@ export default function PharmacyStatementPage() {
                       {Object.entries(profitData.purchaseCostBreakdown).map(([desc, amt]) => (
                         <div key={desc} className="flex justify-between text-sm">
                           <span className="text-slate-600">{desc}</span>
-                          <span className="font-mono font-semibold text-slate-800">{currency} {amt.toLocaleString()}</span>
+                          <span className="font-mono font-semibold text-slate-800">{currency} {Number(amt).toLocaleString()}</span>
                         </div>
                       ))}
                       <div className="flex justify-between text-sm font-bold border-t border-slate-300 pt-1 mt-1">
