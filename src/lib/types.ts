@@ -252,6 +252,9 @@ export interface MedicineItem {
   minStock: number;     // minimum stock level for alerts (reorder level)
   company?: string;      // manufacturer/company name
   location?: string;     // shelf/storage location
+  manufacturingDate?: string; // YYYY-MM-DD format
+  batchNo?: string;      // batch number
+  costPrice?: number;    // alias for purchasePrice
 }
 
 export interface LabTestCatalog {

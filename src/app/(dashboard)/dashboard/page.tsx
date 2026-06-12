@@ -17,6 +17,7 @@ interface Session {
   name: string;
   role: string;
   department: string;
+  licenseType?: string;
 }
 
 export default function DashboardPage() {
@@ -764,7 +765,16 @@ export default function DashboardPage() {
     );
   }
 
-  /* Fallback */
+  /* Fallback - redirect based on license type */
+  const lt = session.licenseType || licenseInfo?.licenseType;
+  if (lt === 'pharmacy') {
+    router.push('/pharmacy?tab=dashboard');
+    return <p className="text-slate-400">Redirecting to Pharmacy Dashboard...</p>;
+  }
+  if (lt === 'lab') {
+    router.push('/lab');
+    return <p className="text-slate-400">Redirecting to Lab Dashboard...</p>;
+  }
   return <p className="text-slate-400">Dashboard loading...</p>;
 }
 

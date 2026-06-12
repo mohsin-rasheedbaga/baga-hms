@@ -27,6 +27,14 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Inject GH_TOKEN for auto-updater (private repo)
+        shell: bash
+        run: |
+          # Create config.json with the PAT so the packaged app can access private repo releases
+          mkdir -p electron
+          echo '{"gh_token":"${{ secrets.GH_PAT }}"}' > electron/config.json
+          echo "config.json created with token for auto-update"
+
       - name: Install dependencies
         run: npm ci
 
@@ -79,10 +87,9 @@ jobs:
             - **Setup Installer (.exe)** — Standard installer
             - **Portable (.exe)** — No installation required
             ### Changes:
-            - Fixed CSS display — all Tailwind classes now working
-            - Navigation fix
-            - Hospital name fix
-            - Language set to English
+            - Auto-update now works automatically on private repo (GH_TOKEN injected at build time)
+            - Version numbering fixed and disciplined (bump-version.sh added)
+            - Various bug fixes
           files: |
             dist-electron/BAGA-HMS-Setup-*.exe
             dist-electron/BAGA-HMS-Setup-*.exe.blockmap

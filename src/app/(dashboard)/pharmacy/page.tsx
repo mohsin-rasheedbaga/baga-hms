@@ -23,20 +23,6 @@ interface MedicineReturn {
   time: string;
 }
 
-interface CodeItem {
-  medicineId: string;
-  name: string;
-  genericName: string;
-  form: string;
-  strength: string;
-  packing: string;
-  price: number;
- days: number;
- dosage: string;
- frequency: string;
- instructions: string;
-}
-
 interface CartItem {
   medicineId: string;
   name: string;
@@ -113,7 +99,12 @@ async function getPrintHeader(): Promise<{ hospitalName: string; hospitalLogo: s
 export default function PharmacyPage() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const [mainTab, setMainTab] = useState<'dashboard' | 'pos' | 'prescriptions' | 'inventory' | 'reports'>('pos');
+  const [mainTab, setMainTab] = useState<'dashboard' | 'pos' | 'prescriptions' | 'inventory' | 'reports'>(
+    tabParam === 'dashboard' ? 'dashboard' : 
+    tabParam === 'inventory' ? 'inventory' : 
+    tabParam === 'reports' ? 'reports' : 
+    tabParam === 'prescriptions' ? 'prescriptions' : 'pos'
+  );
   const [licenseType, setLicenseType] = useState<string>('');
 
   // React to URL param changes for tab switching
@@ -159,6 +150,8 @@ export default function PharmacyPage() {
   const [outdoorAge, setOutdoorAge] = useState('');
   const [outdoorGender, setOutdoorGender] = useState('Male');
   const [outdoorNo, setOutdoorNo] = useState('');
+  const [slipId, setSlipId] = useState('');
+  const [pharmacyId, setPharmacyId] = useState('');
 
   // Medicine search
   const [medQuery, setMedQuery] = useState('');
@@ -174,9 +167,6 @@ export default function PharmacyPage() {
   const [billDiscount, setBillDiscount] = useState(0);
   const [discountType, setDiscountType] = useState<'patient' | 'prescriber'>('patient');
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'Online'>('Cash');
-
-  // Code (Prescription Builder)
-  const [codeItems, setCodeItems] = useState<CodeItem[]>([]);
 
   // Cart
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -246,6 +236,10 @@ export default function PharmacyPage() {
 
   useEffect(() => { loadSales(); }, [loadSales]);
   useEffect(() => { setOutdoorNo(`OUT-${String(getOutdoorCounter()).padStart(4, '0')}`); }, []);
+  useEffect(() => {
+    setSlipId(`SLP-${String(Date.now()).slice(-6)}`);
+    setPharmacyId(`PHM-${String(Date.now()).slice(-6)}`);
+  }, []);
 
   // Stats
   const todaySales = sales.filter(s => s.date === todayStr());
@@ -280,67 +274,6 @@ export default function PharmacyPage() {
     setShowMedDropdown(true);
   };
 
-  const addToCode = (med: MedicineItem) => {
-    const existing = codeItems.find(c => c.medicineId === med.id);
-    if (existing) {
-      // Already in code - show toast
-      showToast('Medicine already in code. Use +/- quantity or change days.', 'error');
-    } else {
-      setCodeItems([...codeItems, {
-        medicineId: med.id, name: med.name, genericName: med.genericName,
-        form: med.form, strength: med.strength, packing: med.packing,
-        price: med.price, days: 7, dosage: '1 tablet', frequency: 'TID (3 times a day)', instructions: '',
-      }]);
-    }
-    setMedQuery('');
-    setMedResults([]);
-    setShowMedDropdown(false);
-    setTimeout(() => medSearchRef.current?.focus(), 50);
-  };
-
-  const updateCodeItemDays = (medId: string, days: number) => {
-    setCodeItems(codeItems.map(c => c.medicineId === medId ? { ...c, days: Math.max(1, days) } : c));
-  };
-  const updateCodeItemDosage = (medId: string, dosage: string) => {
-    setCodeItems(codeItems.map(c => c.medicineId === medId ? { ...c, dosage } : c));
-  };
-  const updateCodeItemFrequency = (medId: string, frequency: string) => {
-    setCodeItems(codeItems.map(c => c.medicineId === medId ? { ...c, frequency } : c));
-  };
-  const removeFromCode = (medId: string) => {
-    setCodeItems(codeItems.filter(c => c.medicineId !== medId));
-  };
-
-  const addAllToCart = () => {
-    if (codeItems.length === 0) return;
-    const count = codeItems.length;
-    setCart(prevCart => {
-      let newCart = [...prevCart];
-      for (const ci of codeItems) {
-        const existing = newCart.find(c => c.medicineId === ci.medicineId);
-        if (existing) {
-          newCart = newCart.map(c =>
-            c.medicineId === ci.medicineId
-              ? { ...c, days: ci.days, dosage: ci.dosage, frequency: ci.frequency, quantity: c.quantity + 1, total: (c.quantity + 1) * c.price }
-              : c
-          );
-        } else {
-          newCart.push({
-            medicineId: ci.medicineId, name: ci.name, genericName: ci.genericName,
-            form: ci.form, strength: ci.strength, packing: ci.packing,
-            price: ci.price, quantity: 1, total: ci.price,
-            days: ci.days, dosage: ci.dosage, frequency: ci.frequency,
-          });
-        }
-      }
-      return newCart;
-    });
-    setCodeItems([]);
-    showToast(`${count} medicine(s) added to cart`, 'success');
-  };
-
-  const codeTotal = codeItems.reduce((a, c) => a + c.price, 0);
-
   const updateCartQty = (medId: string, qty: number) => {
     if (qty < 1) {
       setCart(cart.filter(c => c.medicineId !== medId));
@@ -361,7 +294,6 @@ export default function PharmacyPage() {
 
   const resetSale = () => {
     clearCart();
-    setCodeItems([]);
     setSelectedPatient(null);
     setPatientQuery('');
     setPatientResults([]);
@@ -369,6 +301,8 @@ export default function PharmacyPage() {
     setOutdoorMobile('');
     setOutdoorAge('');
     setOutdoorGender('Male');
+    setSlipId(`SLP-${String(Date.now()).slice(-6)}`);
+    setPharmacyId(`PHM-${String(Date.now()).slice(-6)}`);
   };
 
   const completeSale = () => {
@@ -439,6 +373,8 @@ export default function PharmacyPage() {
     setBillDiscount(0);
     setDiscountType('patient');
     loadSales();
+    setSlipId(`SLP-${String(Date.now()).slice(-6)}`);
+    setPharmacyId(`PHM-${String(Date.now()).slice(-6)}`);
   };
 
   const closeBill = () => {
@@ -535,7 +471,22 @@ export default function PharmacyPage() {
 
   const handleMedSearchEnter = () => {
     if (medResults.length >= 1) {
-      addToCode(medResults[0]);
+      const m = medResults[0];
+      const existing = cart.find(c => c.medicineId === m.id);
+      if (existing) {
+        setCart(cart.map(c => c.medicineId === m.id ? { ...c, quantity: c.quantity + 1, total: (c.quantity + 1) * c.price } : c));
+      } else {
+        setCart([...cart, {
+          medicineId: m.id, name: m.name, genericName: m.genericName,
+          form: m.form, strength: m.strength, packing: m.packing,
+          price: m.price, quantity: 1, total: m.price,
+          days: 0, dosage: '', frequency: '',
+        }]);
+      }
+      showToast(`${m.name} added to cart`, 'success');
+      setMedQuery('');
+      setMedResults([]);
+      setShowMedDropdown(false);
       setTimeout(() => medSearchRef.current?.focus(), 50);
     }
   };
@@ -598,6 +549,12 @@ export default function PharmacyPage() {
   const [fPrice, setFPrice] = useState('');
   const [fCategory, setFCategory] = useState('');
   const [fNewCategory, setFNewCategory] = useState('');
+  const [fMfgDate, setFMfgDate] = useState('');
+  const [fBatchNo, setFBatchNo] = useState('');
+  const [fExpiryDate, setFExpiryDate] = useState('');
+  const [fCostPrice, setFCostPrice] = useState('');
+  const [fWholesalePrice, setFWholesalePrice] = useState('');
+  const [fStock, setFStock] = useState('0');
 
   const loadInventory = useCallback(() => {
     setMedicines(getMedicines());
@@ -618,6 +575,7 @@ export default function PharmacyPage() {
     setEditingMed(null);
     setFName(''); setFGeneric(''); setFForm('Tablet'); setFStrength('');
     setFPacking(''); setFPrice(''); setFCategory(categories[0] || ''); setFNewCategory('');
+    setFMfgDate(''); setFBatchNo(''); setFExpiryDate(''); setFCostPrice(''); setFWholesalePrice(''); setFStock('0');
     setShowMedModal(true);
   };
 
@@ -625,6 +583,12 @@ export default function PharmacyPage() {
     setEditingMed(m);
     setFName(m.name); setFGeneric(m.genericName); setFForm(m.form); setFStrength(m.strength);
     setFPacking(m.packing); setFPrice(String(m.price)); setFCategory(m.category); setFNewCategory('');
+    setFMfgDate(m.manufacturingDate || '');
+    setFBatchNo(m.batchNo || '');
+    setFExpiryDate(m.expiryDate || '');
+    setFCostPrice(String(m.purchasePrice || m.costPrice || 0));
+    setFWholesalePrice(String(m.wholesalePrice || 0));
+    setFStock(String(m.stock || 0));
     setShowMedModal(true);
   };
 
@@ -637,13 +601,14 @@ export default function PharmacyPage() {
       updateMedicine(editingMed.id, {
         name: fName.trim(), genericName: fGeneric.trim(), form: fForm as MedicineItem['form'],
         strength: fStrength.trim(), packing: fPacking.trim(), price: Number(fPrice), category: cat,
+        manufacturingDate: fMfgDate, batchNo: fBatchNo, expiryDate: fExpiryDate, purchasePrice: Number(fCostPrice) || 0, wholesalePrice: Number(fWholesalePrice) || 0, stock: Number(fStock) || 0,
       });
       showToast('Medicine updated successfully', 'success');
     } else {
       addMedicine({
         id: genId(), name: fName.trim(), genericName: fGeneric.trim(), form: fForm as MedicineItem['form'],
         strength: fStrength.trim(), packing: fPacking.trim(), price: Number(fPrice), category: cat, active: true,
-        stock: 0, expiryDate: '', minStock: 10, purchasePrice: 0, wholesalePrice: 0, company: '', location: '',
+        stock: Number(fStock) || 0, expiryDate: fExpiryDate, minStock: 10, purchasePrice: Number(fCostPrice) || 0, wholesalePrice: Number(fWholesalePrice) || 0, manufacturingDate: fMfgDate, batchNo: fBatchNo, company: '', location: '',
       });
       showToast('New medicine added successfully', 'success');
     }
@@ -1127,7 +1092,20 @@ export default function PharmacyPage() {
                           <p className="text-xs text-slate-400">Stock: {m.stock || 0}</p>
                         </div>
                         <button
-                          onClick={() => addToCode(m)}
+                          onClick={() => {
+                            const existing = cart.find(c => c.medicineId === m.id);
+                            if (existing) {
+                              setCart(cart.map(c => c.medicineId === m.id ? { ...c, quantity: c.quantity + 1, total: (c.quantity + 1) * c.price } : c));
+                            } else {
+                              setCart([...cart, {
+                                medicineId: m.id, name: m.name, genericName: m.genericName,
+                                form: m.form, strength: m.strength, packing: m.packing,
+                                price: m.price, quantity: 1, total: m.price,
+                                days: 0, dosage: '', frequency: '',
+                              }]);
+                            }
+                            showToast(`${m.name} added to cart`, 'success');
+                          }}
                           className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm hover:shadow-md"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
@@ -1160,7 +1138,7 @@ export default function PharmacyPage() {
             </div>
 
             {/* ========== RIGHT COLUMN: Patient + Cart (Sticky) ========== */}
-            <div className="w-full lg:w-[400px] shrink-0 lg:sticky lg:top-4 lg:self-start space-y-4">
+            <div className="w-full lg:w-[420px] shrink-0 lg:sticky lg:top-4 lg:self-start space-y-4 lg:max-h-[calc(100vh-100px)] lg:overflow-y-auto lg:pr-1">
 
               {/* Patient Section */}
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -1247,6 +1225,16 @@ export default function PharmacyPage() {
                   {/* Outdoor Patient Form - Compact */}
                   {patientMode === 'Outdoor' && (
                     <div className="space-y-2">
+                      <div className="flex gap-3 mb-1">
+                        <div className="flex-1 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                          <span className="text-[10px] text-blue-500 font-medium block">Slip ID</span>
+                          <span className="text-xs font-mono font-bold text-blue-700">{slipId}</span>
+                        </div>
+                        <div className="flex-1 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                          <span className="text-[10px] text-emerald-500 font-medium block">Pharmacy ID</span>
+                          <span className="text-xs font-mono font-bold text-emerald-700">{pharmacyId}</span>
+                        </div>
+                      </div>
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs font-mono font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">{outdoorNo}</span>
                         <span className="text-xs text-slate-400">Walk-in Patient</span>
@@ -1296,86 +1284,6 @@ export default function PharmacyPage() {
                   )}
                 </div>
               </div>
-
-              {/* Prescription Code Panel */}
-              {codeItems.length > 0 && (
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200 p-4 space-y-3 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2zm-6 4h3m-3 4h3" /></svg>
-                      <h3 className="text-sm font-bold text-blue-800">Prescription Code ({codeItems.length})</h3>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-blue-700">{currency} {codeTotal.toLocaleString()}</span>
-                      <button onClick={() => setCodeItems([])} className="text-xs text-red-500 hover:text-red-700 font-medium">Clear</button>
-                    </div>
-                  </div>
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {codeItems.map((ci, idx) => (
-                      <div key={ci.medicineId} className="bg-white border border-blue-200 rounded-lg p-2.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs bg-blue-100 text-blue-700 font-bold w-5 h-5 rounded flex items-center justify-center">{idx + 1}</span>
-                              <span className="font-bold text-slate-800 text-sm truncate">{ci.name}</span>
-                            </div>
-                            <p className="text-xs text-slate-400 mt-0.5">{ci.form} &middot; {ci.strength} &middot; {currency} {ci.price.toLocaleString()}</p>
-                          </div>
-                          <button onClick={() => removeFromCode(ci.medicineId)} className="text-slate-300 hover:text-red-500 shrink-0">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 mt-2">
-                          <div>
-                            <label className="text-[10px] text-slate-400 font-medium">Days</label>
-                            <select className="w-full h-7 text-xs border border-slate-200 rounded px-1.5 focus:outline-none focus:ring-1 focus:ring-blue-200" value={ci.days} onChange={e => updateCodeItemDays(ci.medicineId, Number(e.target.value))}>
-                              <option value={1}>1 day</option>
-                              <option value={3}>3 days</option>
-                              <option value={5}>5 days</option>
-                              <option value={7}>7 days</option>
-                              <option value={10}>10 days</option>
-                              <option value={14}>14 days</option>
-                              <option value={15}>15 days</option>
-                              <option value={21}>21 days</option>
-                              <option value={30}>30 days</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[10px] text-slate-400 font-medium">Dosage</label>
-                            <select className="w-full h-7 text-xs border border-slate-200 rounded px-1.5 focus:outline-none focus:ring-1 focus:ring-blue-200" value={ci.dosage} onChange={e => updateCodeItemDosage(ci.medicineId, e.target.value)}>
-                              <option value="1 tablet">1 tablet</option>
-                              <option value="0.5 tablet">0.5 tablet</option>
-                              <option value="2 tablets">2 tablets</option>
-                              <option value="1 capsule">1 capsule</option>
-                              <option value="1 spoon">1 spoon (5ml)</option>
-                              <option value="2 spoons">2 spoons (10ml)</option>
-                              <option value="1 injection">1 injection</option>
-                              <option value="as prescribed">As prescribed</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[10px] text-slate-400 font-medium">Frequency</label>
-                            <select className="w-full h-7 text-xs border border-slate-200 rounded px-1.5 focus:outline-none focus:ring-1 focus:ring-blue-200" value={ci.frequency} onChange={e => updateCodeItemFrequency(ci.medicineId, e.target.value)}>
-                              <option value="OD (once a day)">OD</option>
-                              <option value="BID (twice a day)">BID</option>
-                              <option value="TID (3 times a day)">TID</option>
-                              <option value="QID (4 times a day)">QID</option>
-                              <option value="SOS (as needed)">SOS</option>
-                              <option value="At bedtime">Bedtime</option>
-                              <option value="Empty stomach">Empty stomach</option>
-                              <option value="After meal">After meal</option>
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <button onClick={addAllToCart} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-colors shadow-sm flex items-center justify-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                    Add {codeItems.length} Medicine{codeItems.length > 1 ? 's' : ''} to Cart
-                  </button>
-                </div>
-              )}
 
               {/* Cart Section */}
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
@@ -1463,6 +1371,20 @@ export default function PharmacyPage() {
                       <div className="flex items-center justify-between pt-3 border-t-2 border-slate-300">
                         <span className="text-base font-bold text-slate-800">Grand Total</span>
                         <span className="text-xl font-black text-emerald-700">{currency} {(cartTotal - Math.round(cartTotal * billDiscount / 100)).toLocaleString()}</span>
+                      </div>
+
+                      {/* Payment Method */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm text-slate-500">Payment</span>
+                        <select
+                          value={paymentMethod}
+                          onChange={e => setPaymentMethod(e.target.value as 'Cash' | 'Card' | 'Online')}
+                          className="h-8 text-sm border border-slate-200 rounded-lg px-2 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 bg-white"
+                        >
+                          <option value="Cash">Cash</option>
+                          <option value="Card">Card</option>
+                          <option value="Online">Online</option>
+                        </select>
                       </div>
 
                       {/* Checkout Button */}
@@ -1787,7 +1709,7 @@ export default function PharmacyPage() {
 
           {/* Medicine Table */}
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: 'calc(100vh - 340px)' }}>
+            <div className="overflow-x-auto">
               <table className="data-table">
                 <thead className="sticky top-0 bg-white z-10">
                   <tr>
@@ -1798,6 +1720,8 @@ export default function PharmacyPage() {
                     <th>Packing</th>
                     <th>Category</th>
                     <th className="text-right">Price</th>
+                    <th className="text-right">Cost</th>
+                    <th className="text-right">Wholesale</th>
                     <th>Stock</th>
                     <th>Expiry</th>
                     <th>Status</th>
@@ -1823,6 +1747,8 @@ export default function PharmacyPage() {
                           <svg className="w-3 h-3 inline ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                         </button>
                       </td>
+                      <td className="text-right text-sm text-slate-500">{m.purchasePrice ? `${currency} ${m.purchasePrice.toLocaleString()}` : '-'}</td>
+                      <td className="text-right text-sm text-slate-500">{m.wholesalePrice ? `${currency} ${m.wholesalePrice.toLocaleString()}` : '-'}</td>
                       <td>
                         <span className={`font-semibold ${m.stock <= 0 ? 'text-red-600' : m.stock <= (m.minStock || 10) ? 'text-amber-600' : 'text-emerald-600'}`}>
                           {m.stock}
@@ -1846,14 +1772,8 @@ export default function PharmacyPage() {
                         </span>
                       </td>
                       <td>
-                        <div className="flex gap-1 flex-wrap">
+                        <div className="flex gap-1">
                           <button onClick={() => openEditMed(m)} className="btn btn-outline btn-sm">Edit</button>
-                          <button
-                            onClick={() => toggleMedStatus(m)}
-                            className={`btn btn-sm ${m.active ? 'btn-danger' : 'btn-success'}`}
-                          >
-                            {m.active ? 'Disable' : 'Enable'}
-                          </button>
                           <button onClick={() => setDeleteConfirm(m)} className="btn btn-sm btn-danger">Delete</button>
                         </div>
                       </td>
@@ -1861,7 +1781,7 @@ export default function PharmacyPage() {
                   ))}
                   {filteredMedicines.length === 0 && (
                     <tr>
-                      <td colSpan={11} className="text-center py-12 text-slate-400">
+                      <td colSpan={13} className="text-center py-12 text-slate-400">
                         No medicines found matching your search criteria.
                       </td>
                     </tr>
@@ -2037,6 +1957,34 @@ export default function PharmacyPage() {
                       <input type="text" className="form-input" placeholder="Enter new category name" value={fNewCategory} onChange={e => setFNewCategory(e.target.value)} />
                     </div>
                   )}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="form-label">Mfg. Date</label>
+                      <input type="date" className="form-input" value={fMfgDate} onChange={e => setFMfgDate(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="form-label">Batch No.</label>
+                      <input type="text" className="form-input" placeholder="e.g. B12345" value={fBatchNo} onChange={e => setFBatchNo(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="form-label">Expiry Date</label>
+                      <input type="date" className="form-input" value={fExpiryDate} onChange={e => setFExpiryDate(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="form-label">Cost Price ({currency})</label>
+                      <input type="number" className="form-input" placeholder="0" value={fCostPrice} onChange={e => setFCostPrice(e.target.value)} min={0} />
+                    </div>
+                    <div>
+                      <label className="form-label">Wholesale ({currency})</label>
+                      <input type="number" className="form-input" placeholder="0" value={fWholesalePrice} onChange={e => setFWholesalePrice(e.target.value)} min={0} />
+                    </div>
+                    <div>
+                      <label className="form-label">Stock (Strips)</label>
+                      <input type="number" className="form-input" placeholder="0" value={fStock} onChange={e => setFStock(e.target.value)} min={0} />
+                    </div>
+                  </div>
                   <button onClick={saveMed} className="btn btn-success btn-lg w-full">
                     {editingMed ? 'Update Medicine' : 'Add Medicine'}
                   </button>

@@ -74,14 +74,17 @@ export default function LoginPage() {
               name: 'Demo Admin', 
               role: 'super_admin', 
               department: 'Management',
-              licenseType: 'hospital',
+              licenseType: info.licenseType || 'hospital',
               mode: 'demo',
             };
             localStorage.setItem('baga_session', JSON.stringify(sessionData));
             if (isElectron) {
               try { (window as any).bagaAPI.dbSetKV('baga_session', JSON.stringify(sessionData)); } catch (e) {}
             }
-            router.push('/dashboard');
+            const lt = info.licenseType || 'hospital';
+            if (lt === 'pharmacy') router.push('/pharmacy?tab=dashboard');
+            else if (lt === 'lab') router.push('/lab');
+            else router.push('/dashboard');
             return;
           }
         } catch (e) {
@@ -174,7 +177,10 @@ export default function LoginPage() {
       try { (window as any).bagaAPI.dbSetKV('baga_session', JSON.stringify(sessionData)); } catch (e) {}
     }
 
-    router.push('/dashboard');
+    const lt = licenseType || 'hospital';
+    if (lt === 'pharmacy') router.push('/pharmacy?tab=dashboard');
+    else if (lt === 'lab') router.push('/lab');
+    else router.push('/dashboard');
     setLoading(false);
   };
 
@@ -287,7 +293,7 @@ export default function LoginPage() {
           <div className="bg-white/5 rounded-lg p-3 mb-4">
             <div className="flex items-center justify-between text-sm">
               <span className="text-blue-300/70">System:</span>
-              <span className="text-white text-xs">BAGA HMS v3.0</span>
+              <span className="text-white text-xs">BAGA HMS v3.4.2</span>
             </div>
             <div className="flex items-center justify-between text-sm mt-1">
               <span className="text-blue-300/70">License Type:</span>
