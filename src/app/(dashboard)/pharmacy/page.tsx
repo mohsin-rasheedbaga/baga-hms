@@ -110,8 +110,8 @@ async function getPrintHeader(): Promise<{ hospitalName: string; hospitalLogo: s
 }
 
 export default function PharmacyPage() {
-  const [initialTab, setInitialTab] = useState<'pos' | 'prescriptions' | 'inventory' | 'reports'>('pos');
-  const [mainTab, setMainTab] = useState<'pos' | 'prescriptions' | 'inventory' | 'reports'>('pos');
+  const [initialTab, setInitialTab] = useState<'dashboard' | 'pos' | 'prescriptions' | 'inventory' | 'reports'>('pos');
+  const [mainTab, setMainTab] = useState<'dashboard' | 'pos' | 'prescriptions' | 'inventory' | 'reports'>('pos');
   const [licenseType, setLicenseType] = useState<string>('');
 
   useEffect(() => {
@@ -128,7 +128,8 @@ export default function PharmacyPage() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const tab = params.get('tab');
-      if (tab === 'inventory') setInitialTab('inventory');
+      if (tab === 'dashboard') setInitialTab('dashboard');
+      else if (tab === 'inventory') setInitialTab('inventory');
       else if (tab === 'reports') setInitialTab('reports');
       else if (tab === 'prescriptions') setInitialTab('prescriptions');
       else setInitialTab('pos');
@@ -784,33 +785,296 @@ export default function PharmacyPage() {
         <p className="text-sm text-slate-500">Medicine sales, prescriptions, and inventory management</p>
       </div>
 
+      {/* ==================== DASHBOARD TAB ==================== */}
+      {mainTab === 'dashboard' && (
+        <>
+          {/* Welcome Banner */}
+          <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 rounded-2xl p-6 text-white relative overflow-hidden">
+            <div className="absolute right-0 top-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/4"></div>
+            <div className="absolute right-20 bottom-0 w-32 h-32 bg-white/5 rounded-full translate-y-1/2"></div>
+            <div className="relative z-10">
+              <h2 className="text-2xl font-bold mb-1">Pharmacy Dashboard</h2>
+              <p className="text-emerald-100 text-sm">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            </div>
+          </div>
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                </div>
+                <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">Today</span>
+              </div>
+              <p className="text-2xl font-bold text-slate-800">{currency} {todayTotal.toLocaleString()}</p>
+              <p className="text-xs text-slate-500 mt-1">Today&apos;s Sales</p>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                </div>
+                <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded-full">Count</span>
+              </div>
+              <p className="text-2xl font-bold text-slate-800">{todaySales.length}</p>
+              <p className="text-xs text-slate-500 mt-1">Total Transactions</p>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+                </div>
+                <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-full">Alert</span>
+              </div>
+              <p className="text-2xl font-bold text-slate-800">{medicines.filter((m: any) => m.stock <= (m.reorderLevel || 10) && m.stock > 0).length}</p>
+              <p className="text-xs text-slate-500 mt-1">Low Stock Items</p>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-slate-800">{medicines.length}</p>
+              <p className="text-xs text-slate-500 mt-1">Total Medicines</p>
+            </div>
+          </div>
+
+          {/* Two Column: Recent Sales + Low Stock */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Recent Sales - 2 cols */}
+            <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                  <h3 className="font-bold text-slate-800">Recent Sales</h3>
+                  <span className="badge badge-emerald">{todaySales.length} today</span>
+                </div>
+              </div>
+              {todaySales.length === 0 ? (
+                <div className="p-12 text-center">
+                  <svg className="w-16 h-16 text-slate-200 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                  <p className="text-slate-400 font-medium">No sales today</p>
+                  <p className="text-slate-300 text-xs mt-1">Start selling from Point of Sale</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto max-h-80 overflow-y-auto">
+                  <table className="data-table">
+                    <thead className="sticky top-0 bg-white">
+                      <tr>
+                        <th>Time</th>
+                        <th>Patient</th>
+                        <th>Type</th>
+                        <th>Items</th>
+                        <th className="text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {todaySales.sort((a: any, b: any) => b.time.localeCompare(a.time)).slice(0, 15).map((s: any) => (
+                        <tr key={s.id} className="hover:bg-slate-50">
+                          <td className="text-sm text-slate-500 whitespace-nowrap">{s.time}</td>
+                          <td>
+                            <p className="font-medium text-sm">{s.patientName}</p>
+                            <p className="text-xs text-slate-400 font-mono">{s.patientNo}</p>
+                          </td>
+                          <td><span className={`badge text-xs ${s.type === 'Indoor' ? 'badge-blue' : 'badge-amber'}`}>{s.type}</span></td>
+                          <td className="text-sm">{s.items.length} items</td>
+                          <td className="text-right font-bold text-emerald-700">{currency} {s.totalAmount.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Low Stock Alerts - 1 col */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-200 flex items-center gap-2">
+                <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+                <h3 className="font-bold text-slate-800">Low Stock</h3>
+              </div>
+              {(() => {
+                const lowStock = medicines.filter((m: any) => m.stock <= (m.reorderLevel || 10) && m.stock > 0).sort((a: any, b: any) => a.stock - b.stock).slice(0, 10);
+                const outOfStock = medicines.filter((m: any) => m.stock === 0);
+                return lowStock.length === 0 && outOfStock.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <svg className="w-12 h-12 text-emerald-200 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <p className="text-slate-400 text-sm font-medium">All medicines in stock</p>
+                  </div>
+                ) : (
+                  <div className="p-3 space-y-2 max-h-80 overflow-y-auto">
+                    {outOfStock.slice(0, 5).map((m: any) => (
+                      <div key={m.id} className="flex items-center justify-between p-2.5 bg-red-50 border border-red-200 rounded-lg">
+                        <div>
+                          <p className="font-semibold text-sm text-red-800">{m.name}</p>
+                          <p className="text-xs text-red-500">{m.form} | {m.strength}</p>
+                        </div>
+                        <span className="text-xs font-bold text-red-600 bg-red-100 px-2 py-1 rounded-full">Out of Stock</span>
+                      </div>
+                    ))}
+                    {lowStock.map((m: any) => (
+                      <div key={m.id} className="flex items-center justify-between p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+                        <div>
+                          <p className="font-semibold text-sm text-slate-800">{m.name}</p>
+                          <p className="text-xs text-slate-400">{m.form} | {m.strength}</p>
+                        </div>
+                        <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-1 rounded-full">{m.stock} left</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
+          {/* Top Selling Medicines */}
+          {todaySales.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-200 flex items-center gap-2">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                <h3 className="font-bold text-slate-800">Top Selling Medicines (Today)</h3>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 p-4">
+                {(() => {
+                  const medMap: Record<string, { name: string; qty: number; total: number }> = {};
+                  todaySales.forEach((s: any) => s.items.forEach((it: any) => {
+                    if (!medMap[it.medicineId]) medMap[it.medicineId] = { name: it.name, qty: 0, total: 0 };
+                    medMap[it.medicineId].qty += it.quantity;
+                    medMap[it.medicineId].total += it.total;
+                  }));
+                  return Object.values(medMap).sort((a, b) => b.qty - a.qty).slice(0, 5).map((m, i) => (
+                    <div key={i} className="text-center p-3 bg-gradient-to-b from-blue-50 to-white border border-blue-100 rounded-xl">
+                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                        <span className="text-blue-700 font-bold text-sm">#{i + 1}</span>
+                      </div>
+                      <p className="font-semibold text-sm text-slate-800 truncate">{m.name}</p>
+                      <p className="text-xs text-slate-500">{m.qty} sold</p>
+                      <p className="text-sm font-bold text-emerald-700 mt-1">{currency} {m.total.toLocaleString()}</p>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
+
+          {/* Return Medicine Button */}
+          <div className="flex items-center gap-3">
+            <button onClick={() => { setReturnPwd(''); setReturnPwdError(''); setShowReturnPwdModal(true); }} className="btn btn-outline border-amber-300 text-amber-700 hover:bg-amber-50 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+              Return Medicine
+            </button>
+          </div>
+
+          {/* Return Medicine Password Modal */}
+          {showReturnPwdModal && (
+            <div className="modal-overlay" onClick={() => { setShowReturnPwdModal(false); setReturnPwd(''); setReturnPwdError(''); }}>
+              <div className="modal-content" style={{ maxWidth: '420px' }} onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-slate-800">Return Medicine — Verify</h3>
+                  <button onClick={() => { setShowReturnPwdModal(false); setReturnPwd(''); setReturnPwdError(''); }} className="btn btn-outline btn-sm">Close</button>
+                </div>
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-500">Enter the password to access medicine return. This password is set by the admin in Settings.</p>
+                  <div>
+                    <label className="form-label">Password</label>
+                    <input
+                      type="password"
+                      className="form-input"
+                      value={returnPwd}
+                      onChange={e => setReturnPwd(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          const stored = localStorage.getItem('baga_profit_password');
+                          if (!stored || returnPwd === stored) {
+                            setShowReturnPwdModal(false);
+                            setShowReturnModal(true);
+                            setReturnPwd('');
+                            setReturnPwdError('');
+                          } else {
+                            setReturnPwdError('Incorrect password');
+                          }
+                        }
+                      }}
+                      placeholder="Enter password"
+                      autoFocus
+                    />
+                    {returnPwdError && <p className="text-red-500 text-xs mt-1">{returnPwdError}</p>}
+                  </div>
+                  <div className="flex gap-3 justify-end">
+                    <button onClick={() => { setShowReturnPwdModal(false); setReturnPwd(''); setReturnPwdError(''); }} className="btn btn-outline">Cancel</button>
+                    <button onClick={() => {
+                      const stored = localStorage.getItem('baga_profit_password');
+                      if (!stored || returnPwd === stored) {
+                        setShowReturnPwdModal(false);
+                        setShowReturnModal(true);
+                        setReturnPwd('');
+                        setReturnPwdError('');
+                      } else {
+                        setReturnPwdError('Incorrect password');
+                      }
+                    }} className="btn btn-primary">Verify &amp; Continue</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Return Medicine Modal */}
+          {showReturnModal && (
+            <div className="modal-overlay" onClick={() => setShowReturnModal(false)}>
+              <div className="modal-content" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-slate-800">Return Medicine to Stock</h3>
+                  <button onClick={() => setShowReturnModal(false)} className="btn btn-outline btn-sm">Close</button>
+                </div>
+                <div className="space-y-4">
+                  <div className="relative">
+                    <label className="form-label">Medicine *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Search medicine..."
+                      value={returnMedQuery}
+                      onChange={e => handleReturnMedSearch(e.target.value)}
+                    />
+                    {showReturnMedDropdown && returnMedResults.length > 0 && (
+                      <div className="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg bg-white shadow-lg max-h-48 overflow-y-auto">
+                        {returnMedResults.map(m => (
+                          <button key={m.id} onClick={() => selectReturnMed(m)} className="w-full text-left px-4 py-2 hover:bg-emerald-50 border-b border-slate-100 last:border-0 text-sm">
+                            <span className="font-semibold">{m.name}</span>
+                            <span className="text-xs text-slate-400 ml-2">({m.form}, {m.strength})</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="form-label">Quantity *</label>
+                    <input type="number" className="form-input" min={1} value={returnQty} onChange={e => setReturnQty(Math.max(1, Number(e.target.value) || 1))} />
+                  </div>
+                  <div>
+                    <label className="form-label">Return Reason *</label>
+                    <textarea className="form-input" rows={2} value={returnReason} onChange={e => setReturnReason(e.target.value)} placeholder="e.g. Wrong purchase, damaged, expired..." />
+                  </div>
+                  <div className="flex gap-3">
+                    <button onClick={() => setShowReturnModal(false)} className="btn btn-outline flex-1">Cancel</button>
+                    <button onClick={processReturn} className="btn btn-primary flex-1">Process Return</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
       {/* ==================== POINT OF SALE TAB ==================== */}
       {mainTab === 'pos' && (
         <>
-          {/* Stats Row */}
-          <div className={`grid gap-3 ${licenseType === 'pharmacy' ? 'grid-cols-2' : 'grid-cols-2 lg:grid-cols-4'}`}>
-            <div className="stat-card card-hover border border-emerald-200 bg-emerald-50">
-              <p className="text-xs text-emerald-600 font-medium">Today&apos;s Sales</p>
-              <p className="text-2xl font-bold text-emerald-700">{currency} {todayTotal.toLocaleString()}</p>
-            </div>
-            <div className="stat-card card-hover border border-blue-200 bg-blue-50">
-              <p className="text-xs text-blue-600 font-medium">Total Sales Today</p>
-              <p className="text-2xl font-bold text-blue-700">{todaySales.length}</p>
-            </div>
-            {licenseType !== 'pharmacy' && (
-              <>
-                <div className="stat-card card-hover border border-purple-200 bg-purple-50">
-                  <p className="text-xs text-purple-600 font-medium">Indoor Patients</p>
-                  <p className="text-2xl font-bold text-purple-700">{todayIndoor}</p>
-                </div>
-                <div className="stat-card card-hover border border-amber-200 bg-amber-50">
-                  <p className="text-xs text-amber-600 font-medium">Outdoor Patients</p>
-                  <p className="text-2xl font-bold text-amber-700">{todayOutdoor}</p>
-                </div>
-              </>
-            )}
-          </div>
-
           {/* Patient Mode Toggle + Selection */}
           <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
             {/* Mode Toggle - hidden for pharmacy license */}
@@ -1240,165 +1504,6 @@ export default function PharmacyPage() {
               </>
             )}
           </div>
-
-          {/* Recent Sales */}
-          {todaySales.length > 0 && (
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  <h3 className="font-bold text-slate-800">Today&apos;s Sales ({todaySales.length})</h3>
-                </div>
-              </div>
-              <div className="overflow-x-auto max-h-64 overflow-y-auto">
-                <table className="data-table">
-                  <thead className="sticky top-0 bg-white">
-                    <tr>
-                      <th>Time</th>
-                      <th>Patient No</th>
-                      <th>Patient Name</th>
-                      <th>Type</th>
-                      <th>Medicines</th>
-                      <th className="text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {todaySales.sort((a, b) => b.time.localeCompare(a.time)).map(s => (
-                      <tr key={s.id}>
-                        <td className="text-sm text-slate-500 whitespace-nowrap">{s.time}</td>
-                        <td className="font-mono font-bold text-blue-600 text-sm">{s.patientNo}</td>
-                        <td className="font-medium text-sm">{s.patientName}</td>
-                        <td>
-                          <span className={`badge ${s.type === 'Indoor' ? 'badge-blue' : 'badge-amber'}`}>
-                            {s.type}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="flex flex-wrap gap-1">
-                            {s.items.slice(0, 3).map((it, i) => (
-                              <span key={i} className="badge text-xs">{it.name} x{it.quantity}</span>
-                            ))}
-                            {s.items.length > 3 && (
-                              <span className="badge text-xs badge-amber">+{s.items.length - 3} more</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="text-right font-bold text-emerald-700">{currency} {s.totalAmount.toLocaleString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Return Medicine Button */}
-          <div className="flex items-center gap-3">
-            <button onClick={() => { setReturnPwd(''); setReturnPwdError(''); setShowReturnPwdModal(true); }} className="btn btn-outline border-amber-300 text-amber-700 hover:bg-amber-50 flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
-              Return Medicine
-            </button>
-          </div>
-
-          {/* Return Medicine Password Modal */}
-          {showReturnPwdModal && (
-            <div className="modal-overlay" onClick={() => { setShowReturnPwdModal(false); setReturnPwd(''); setReturnPwdError(''); }}>
-              <div className="modal-content" style={{ maxWidth: '420px' }} onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-slate-800">Return Medicine — Verify</h3>
-                  <button onClick={() => { setShowReturnPwdModal(false); setReturnPwd(''); setReturnPwdError(''); }} className="btn btn-outline btn-sm">Close</button>
-                </div>
-                <div className="space-y-4">
-                  <p className="text-sm text-slate-500">Enter the password to access medicine return. This password is set by the admin in Settings.</p>
-                  <div>
-                    <label className="form-label">Password</label>
-                    <input
-                      type="password"
-                      className="form-input"
-                      value={returnPwd}
-                      onChange={e => setReturnPwd(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          const stored = localStorage.getItem('baga_profit_password');
-                          if (!stored || returnPwd === stored) {
-                            setShowReturnPwdModal(false);
-                            setShowReturnModal(true);
-                            setReturnPwd('');
-                            setReturnPwdError('');
-                          } else {
-                            setReturnPwdError('Incorrect password');
-                          }
-                        }
-                      }}
-                      placeholder="Enter password"
-                      autoFocus
-                    />
-                    {returnPwdError && <p className="text-red-500 text-xs mt-1">{returnPwdError}</p>}
-                  </div>
-                  <div className="flex gap-3 justify-end">
-                    <button onClick={() => { setShowReturnPwdModal(false); setReturnPwd(''); setReturnPwdError(''); }} className="btn btn-outline">Cancel</button>
-                    <button onClick={() => {
-                      const stored = localStorage.getItem('baga_profit_password');
-                      if (!stored || returnPwd === stored) {
-                        setShowReturnPwdModal(false);
-                        setShowReturnModal(true);
-                        setReturnPwd('');
-                        setReturnPwdError('');
-                      } else {
-                        setReturnPwdError('Incorrect password');
-                      }
-                    }} className="btn btn-primary">Verify & Continue</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Return Medicine Modal */}
-          {showReturnModal && (
-            <div className="modal-overlay" onClick={() => setShowReturnModal(false)}>
-              <div className="modal-content" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-slate-800">Return Medicine to Stock</h3>
-                  <button onClick={() => setShowReturnModal(false)} className="btn btn-outline btn-sm">Close</button>
-                </div>
-                <div className="space-y-4">
-                  <div className="relative">
-                    <label className="form-label">Medicine *</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Search medicine..."
-                      value={returnMedQuery}
-                      onChange={e => handleReturnMedSearch(e.target.value)}
-                    />
-                    {showReturnMedDropdown && returnMedResults.length > 0 && (
-                      <div className="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg bg-white shadow-lg max-h-48 overflow-y-auto">
-                        {returnMedResults.map(m => (
-                          <button key={m.id} onClick={() => selectReturnMed(m)} className="w-full text-left px-4 py-2 hover:bg-emerald-50 border-b border-slate-100 last:border-0 text-sm">
-                            <span className="font-semibold">{m.name}</span>
-                            <span className="text-xs text-slate-400 ml-2">({m.form}, {m.strength})</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label className="form-label">Quantity *</label>
-                    <input type="number" className="form-input" min={1} value={returnQty} onChange={e => setReturnQty(Math.max(1, Number(e.target.value) || 1))} />
-                  </div>
-                  <div>
-                    <label className="form-label">Return Reason *</label>
-                    <textarea className="form-input" rows={2} value={returnReason} onChange={e => setReturnReason(e.target.value)} placeholder="e.g. Wrong purchase, damaged, expired..." />
-                  </div>
-                  <div className="flex gap-3">
-                    <button onClick={() => setShowReturnModal(false)} className="btn btn-outline flex-1">Cancel</button>
-                    <button onClick={processReturn} className="btn btn-primary flex-1">Process Return</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </>
       )}
 
