@@ -643,7 +643,7 @@ export default function PharmacyPage() {
       addMedicine({
         id: genId(), name: fName.trim(), genericName: fGeneric.trim(), form: fForm as MedicineItem['form'],
         strength: fStrength.trim(), packing: fPacking.trim(), price: Number(fPrice), category: cat, active: true,
-        stock: 0, expiryDate: '', minStock: 10,
+        stock: 0, expiryDate: '', minStock: 10, purchasePrice: 0, wholesalePrice: 0, company: '', location: '',
       });
       showToast('New medicine added successfully', 'success');
     }
