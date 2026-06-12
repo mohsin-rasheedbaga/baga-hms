@@ -223,7 +223,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
-  const [session, setSession] = useState<{ userId: string; name: string; role: string; department: string; licenseType?: string; mode?: string } | null>(null);
+  const [session, setSession] = useState<{ userId: string; name: string; role: string; department: string; licenseType?: string; mode?: string } | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try { return getSession(); } catch { return null; }
+  });
   const [hospitalName, setHospitalName] = useState('BAGA Hospital');
   const [searchStr, setSearchStr] = useState('');
   const [licenseInfo, setLicenseInfo] = useState<any>(null);

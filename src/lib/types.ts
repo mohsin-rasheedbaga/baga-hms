@@ -242,12 +242,16 @@ export interface MedicineItem {
   form: 'Tablet' | 'Capsule' | 'Syrup' | 'Injection' | 'Cream' | 'Drops' | 'Inhaler' | 'Powder';
   strength: string; // e.g. "500mg", "250mg/5ml"
   packing: string;  // e.g. "10 tablets", "100ml bottle"
-  price: number;
+  price: number;           // sale price
+  purchasePrice: number;   // cost/purchase price
+  wholesalePrice: number;  // bulk/wholesale price
   category: string; // e.g. "Pain Relief", "Antibiotic"
   active: boolean;
   stock: number;         // current stock quantity
   expiryDate: string;   // YYYY-MM-DD format
-  minStock: number;     // minimum stock level for alerts
+  minStock: number;     // minimum stock level for alerts (reorder level)
+  company: string;      // manufacturer/company name
+  location: string;     // shelf/storage location
 }
 
 export interface LabTestCatalog {
