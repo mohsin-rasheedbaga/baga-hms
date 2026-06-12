@@ -1320,7 +1320,7 @@ export default function PharmacyPage() {
                       onKeyDown={e => {
                         if (e.key === 'Enter') {
                           const stored = localStorage.getItem('baga_profit_password');
-                          if (returnPwd === stored) {
+                          if (!stored || returnPwd === stored) {
                             setShowReturnPwdModal(false);
                             setShowReturnModal(true);
                             setReturnPwd('');
@@ -1339,7 +1339,7 @@ export default function PharmacyPage() {
                     <button onClick={() => { setShowReturnPwdModal(false); setReturnPwd(''); setReturnPwdError(''); }} className="btn btn-outline">Cancel</button>
                     <button onClick={() => {
                       const stored = localStorage.getItem('baga_profit_password');
-                      if (returnPwd === stored) {
+                      if (!stored || returnPwd === stored) {
                         setShowReturnPwdModal(false);
                         setShowReturnModal(true);
                         setReturnPwd('');

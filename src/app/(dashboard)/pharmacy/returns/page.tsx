@@ -46,6 +46,11 @@ async function getPrintHeader() {
 }
 
 export default function PharmacyReturnsPage() {
+  // Password gate
+  const [verified, setVerified] = useState(false);
+  const [pwd, setPwd] = useState('');
+  const [pwdError, setPwdError] = useState('');
+
   const [returns, setReturns] = useState<MedicineReturn[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [medId, setMedId] = useState('');
@@ -58,7 +63,25 @@ export default function PharmacyReturnsPage() {
   const [toastMsg, setToastMsg] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
 
-  useEffect(() => { setReturns(lsGet<MedicineReturn[]>(RETURNS_KEY, [])); }, []);
+  useEffect(() => {
+    // Auto-verify if no password is set
+    const stored = localStorage.getItem('baga_profit_password');
+    if (!stored) {
+      setVerified(true);
+    }
+  }, []);
+
+  useEffect(() => { if (verified) setReturns(lsGet<MedicineReturn[]>(RETURNS_KEY, [])); }, [verified]);
+
+  const handlePwdVerify = () => {
+    const stored = localStorage.getItem('baga_profit_password');
+    if (!stored) { setVerified(true); return; }
+    if (pwd === stored) {
+      setVerified(true); setPwd(''); setPwdError('');
+    } else {
+      setPwdError('Incorrect password');
+    }
+  };
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToastMsg(msg);
@@ -134,6 +157,32 @@ export default function PharmacyReturnsPage() {
   };
 
   const totalReturned = returns.length;
+
+  // Password gate screen
+  if (!verified) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="bg-white rounded-xl border-2 border-amber-200 p-8 text-center" style={{ maxWidth: '400px', width: '100%' }}>
+          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+          </div>
+          <h3 className="text-lg font-bold text-slate-800 mb-2">Return Medicine — Verify</h3>
+          <p className="text-sm text-slate-500 mb-4">Enter the password to access medicine returns. This password is set by the admin in Settings.</p>
+          <input
+            type="password"
+            className="form-input mb-2"
+            value={pwd}
+            onChange={e => { setPwd(e.target.value); setPwdError(''); }}
+            onKeyDown={e => { if (e.key === 'Enter') handlePwdVerify(); }}
+            placeholder="Enter password"
+            autoFocus
+          />
+          {pwdError && <p className="text-red-500 text-xs mb-2">{pwdError}</p>}
+          <button onClick={handlePwdVerify} className="btn btn-primary w-full">Verify & Continue</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">

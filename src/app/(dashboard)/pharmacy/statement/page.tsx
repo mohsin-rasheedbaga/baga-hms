@@ -73,13 +73,7 @@ export default function PharmacyStatementPage() {
       setProfitPwdError('Incorrect password');
       return;
     }
-    if (!stored && !profitPwd) {
-      setProfitPwdError('No password set. Set one in Settings first.');
-      return;
-    }
-    if (!stored && profitPwd) {
-      // First time setting - just allow access
-    }
+    // If no password set, allow access directly
     setProfitPwdError('');
 
     // Calculate net profit
