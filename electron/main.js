@@ -288,7 +288,9 @@ async function checkForUpdates() {
     updateLog('Latest release: ' + latestVersion + ' | Current: ' + APP_VERSION);
 
     // Version guard: NEVER download older or equal version
-    if (compareVersions(APP_VERSION, latestVersion) >= 0) {
+    // compareVersions(a, b): returns 1 if b > a (newer), -1 if b < a (older), 0 if equal
+    // We skip download only when installed >= latest (returns -1 or 0)
+    if (compareVersions(APP_VERSION, latestVersion) <= 0) {
       updateLog('Already up to date (or newer). Installed: ' + APP_VERSION + ', Latest: ' + latestVersion);
       sendToAllWindows('update-status', { status: 'not-available', lastChecked: new Date().toISOString(), version: latestVersion });
       return;
