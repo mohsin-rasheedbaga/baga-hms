@@ -7,25 +7,6 @@ import {
 } from '@/lib/store';
 import type { MedicineItem } from '@/lib/types';
 
-function getExpiryInfo(expiryDate: string): { label: string; bg: string; color: string; border: string; rowBg: string } | null {
-  if (!expiryDate) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const expiry = new Date(expiryDate + 'T00:00:00');
-  const diffMs = expiry.getTime() - today.getTime();
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays < 0) {
-    return { label: 'Expired', bg: '#fef2f2', color: '#dc2626', border: '#fecaca', rowBg: 'bg-red-50' };
-  }
-  if (diffDays <= 30) {
-    return { label: 'Expiring Soon', bg: '#fffbeb', color: '#d97706', border: '#fde68a', rowBg: 'bg-amber-50' };
-  }
-  if (diffDays <= 90) {
-    return { label: '', bg: '', color: '#ca8a04', border: '', rowBg: 'bg-yellow-50/40' };
-  }
-  return null;
-}
-
 export default function InventoryPage() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [currency, setCurrency] = useState('Rs.');
@@ -60,17 +41,14 @@ export default function InventoryPage() {
   const [fPacking, setFPacking] = useState('');
   const [fPrice, setFPrice] = useState('');
   const [fPurchasePrice, setFPurchasePrice] = useState('');
-  const [fWholesalePrice, setFWholesalePrice] = useState('');
-  const [fStock, setFStock] = useState('');
-  const [fMinStock, setFMinStock] = useState('');
-  const [fExpiryDate, setFExpiryDate] = useState('');
-  const [fCompany, setFCompany] = useState('');
-  const [fLocation, setFLocation] = useState('');
   const [fCategory, setFCategory] = useState('');
   const [fNewCategory, setFNewCategory] = useState('');
+  const [fBatchNumber, setFBatchNumber] = useState('');
+  const [fManufacturingDate, setFManufacturingDate] = useState('');
 
   const loadInventory = useCallback(() => {
-    setMedicines(getMedicines());
+    const meds = getMedicines();
+    setMedicines(meds);
     setCategories(getMedicineCategories());
     setExpiredMeds(getExpiredMedicines());
     setLowStockMeds(getLowStockMedicines());
@@ -89,55 +67,44 @@ export default function InventoryPage() {
   const openAddMed = () => {
     setEditingMed(null);
     setFName(''); setFGeneric(''); setFForm('Tablet'); setFStrength('');
-    setFPacking(''); setFPrice(''); setFPurchasePrice(''); setFWholesalePrice('');
-    setFStock(''); setFMinStock('10'); setFExpiryDate('');
-    setFCompany(''); setFLocation('');
-    setFCategory(categories[0] || ''); setFNewCategory('');
+    setFPacking(''); setFPrice(''); setFPurchasePrice(''); setFCategory(categories[0] || ''); setFNewCategory('');
+    setFBatchNumber(''); setFManufacturingDate('');
     setShowMedModal(true);
   };
 
   const openEditMed = (m: MedicineItem) => {
     setEditingMed(m);
     setFName(m.name); setFGeneric(m.genericName); setFForm(m.form); setFStrength(m.strength);
-    setFPacking(m.packing); setFPrice(String(m.price));
-    setFPurchasePrice(String(m.purchasePrice || 0));
-    setFWholesalePrice(String(m.wholesalePrice || 0));
-    setFStock(String(m.stock)); setFMinStock(String(m.minStock || 10));
-    setFExpiryDate(m.expiryDate || '');
-    setFCompany(m.company || ''); setFLocation(m.location || '');
-    setFCategory(m.category); setFNewCategory('');
+    setFPacking(m.packing); setFPrice(String(m.price)); setFPurchasePrice(String(m.purchasePrice || ''));
+    setFCategory(m.category); setFNewCategory(''); setFBatchNumber(m.batchNumber || ''); setFManufacturingDate(m.manufacturingDate || '');
     setShowMedModal(true);
   };
 
   const saveMed = () => {
     const cat = fCategory === '__new__' ? fNewCategory.trim() : fCategory.trim();
-    if (!fName.trim() || !fStrength.trim() || !fPrice.trim() || !cat) {
-      showToast('Name, Strength, Price, and Category are required', 'error'); return;
+    if (!fName.trim() || !fForm || !fStrength.trim() || !fPacking.trim() || !fPrice.trim() || !cat) {
+      showToast('All fields are required', 'error'); return;
     }
-    const medData: Partial<MedicineItem> = {
-      name: fName.trim(),
-      genericName: fGeneric.trim(),
-      form: fForm as MedicineItem['form'],
-      strength: fStrength.trim(),
-      packing: fPacking.trim(),
-      price: Number(fPrice),
-      purchasePrice: Number(fPurchasePrice) || 0,
-      wholesalePrice: Number(fWholesalePrice) || 0,
-      stock: Number(fStock) || 0,
-      minStock: Number(fMinStock) || 10,
-      expiryDate: fExpiryDate || '',
-      company: fCompany.trim(),
-      location: fLocation.trim(),
-      category: cat,
-    };
     if (editingMed) {
-      updateMedicine(editingMed.id, medData);
+      updateMedicine(editingMed.id, {
+        name: fName.trim(), genericName: fGeneric.trim(), form: fForm as MedicineItem['form'],
+        strength: fStrength.trim(), packing: fPacking.trim(), price: Number(fPrice),
+        purchasePrice: fPurchasePrice ? Number(fPurchasePrice) : undefined,
+        category: cat,
+        batchNumber: fBatchNumber.trim() || undefined,
+        manufacturingDate: fManufacturingDate || undefined,
+      });
       showToast('Medicine updated successfully', 'success');
     } else {
       addMedicine({
-        id: genId(), ...medData,
-        active: true,
-      } as MedicineItem);
+        id: genId(), name: fName.trim(), genericName: fGeneric.trim(), form: fForm as MedicineItem['form'],
+        strength: fStrength.trim(), packing: fPacking.trim(), price: Number(fPrice),
+        purchasePrice: fPurchasePrice ? Number(fPurchasePrice) : undefined,
+        category: cat, active: true,
+        stock: 0, expiryDate: '', minStock: 10,
+        batchNumber: fBatchNumber.trim() || undefined,
+        manufacturingDate: fManufacturingDate || undefined,
+      });
       showToast('New medicine added successfully', 'success');
     }
     setShowMedModal(false);
@@ -217,8 +184,8 @@ export default function InventoryPage() {
           <p className="text-2xl font-bold text-emerald-700">{medicines.filter(m => m.active).length}</p>
         </div>
         <div className="stat-card card-hover border border-red-200 bg-red-50">
-          <p className="text-xs text-red-600 font-medium">Expired</p>
-          <p className="text-2xl font-bold text-red-700">{expiredMeds.length}</p>
+          <p className="text-xs text-red-600 font-medium">Inactive</p>
+          <p className="text-2xl font-bold text-red-700">{medicines.filter(m => !m.active).length}</p>
         </div>
         <div className="stat-card card-hover border border-purple-200 bg-purple-50">
           <p className="text-xs text-purple-600 font-medium">Categories</p>
@@ -229,99 +196,80 @@ export default function InventoryPage() {
       {/* Medicine Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-          <table className="data-table">
+          <table className="w-full border-collapse text-xs">
             <thead className="sticky top-0 bg-white z-10">
               <tr>
-                <th>Medicine Name</th>
-                <th>Generic Name</th>
-                <th>Form</th>
-                <th>Strength</th>
-                <th>Packing</th>
-                <th>Category</th>
-                <th className="text-right">Sale Price</th>
-                <th className="text-right">Purchase Price</th>
-                <th className="text-right">Wholesale Price</th>
-                <th>Stock</th>
-                <th>Expiry Date</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Medicine Name</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Generic Name</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Form</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Strength</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Packing</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Category</th>
+                <th className="px-2 py-2 text-right font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Price</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Stock</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Expiry</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Status</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredMedicines.map(m => {
-                const expiryInfo = getExpiryInfo(m.expiryDate);
-                const rowBg = expiryInfo ? expiryInfo.rowBg : '';
-                return (
-                  <tr key={m.id} className={`${!m.active ? 'opacity-50' : ''} ${rowBg}`}>
-                    <td className="font-semibold text-slate-800">{m.name}</td>
-                    <td className="text-sm text-slate-500">{m.genericName}</td>
-                    <td><span className="badge badge-blue">{m.form}</span></td>
-                    <td className="text-sm text-slate-600">{m.strength}</td>
-                    <td className="text-sm text-slate-500">{m.packing}</td>
-                    <td><span className="badge badge-amber">{m.category}</span></td>
-                    <td className="text-right">
+              {filteredMedicines.map(m => (
+                <tr key={m.id} className={`${!m.active ? 'opacity-50' : ''} hover:bg-slate-50`}>
+                  <td className="px-2 py-2 font-semibold text-slate-800 whitespace-nowrap">{m.name}</td>
+                  <td className="px-2 py-2 text-slate-500 whitespace-nowrap">{m.genericName}</td>
+                  <td className="px-2 py-2 whitespace-nowrap"><span className="badge badge-blue">{m.form}</span></td>
+                  <td className="px-2 py-2 text-slate-600 whitespace-nowrap">{m.strength}</td>
+                  <td className="px-2 py-2 text-slate-500 whitespace-nowrap">{m.packing}</td>
+                  <td className="px-2 py-2 whitespace-nowrap"><span className="badge badge-amber">{m.category}</span></td>
+                  <td className="px-2 py-2 text-right whitespace-nowrap">
+                    <button
+                      onClick={() => { setEditPriceMed(m); setEditPriceVal(String(m.price)); }}
+                      className="font-bold text-emerald-700 hover:text-emerald-600 hover:underline cursor-pointer"
+                      title="Click to edit price"
+                    >
+                      {currency} {m.price.toLocaleString()}
+                      <svg className="w-3 h-3 inline ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                    </button>
+                  </td>
+                  <td className="px-2 py-2 whitespace-nowrap">
+                    <span className={`font-semibold ${m.stock <= 0 ? 'text-red-600' : m.stock <= (m.minStock || 10) ? 'text-amber-600' : 'text-emerald-600'}`}>
+                      {m.stock}
+                    </span>
+                    {m.stock <= 0 && <span className="badge badge-rose text-[10px] ml-0.5">OUT</span>}
+                    {m.stock > 0 && m.stock <= (m.minStock || 10) && <span className="badge badge-amber text-[10px] ml-0.5">LOW</span>}
+                  </td>
+                  <td className="px-2 py-2 whitespace-nowrap">
+                    {m.expiryDate ? (
+                      <span className={`${m.expiryDate < todayStr() ? 'text-red-600 font-bold' : 'text-slate-600'}`}>
+                        {m.expiryDate}
+                        {m.expiryDate < todayStr() && <span className="badge badge-rose text-[10px] ml-0.5">EXPIRED</span>}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">Not set</span>
+                    )}
+                  </td>
+                  <td className="px-2 py-2 whitespace-nowrap">
+                    <span className={`badge ${m.active ? 'badge-green' : 'badge-rose'}`}>
+                      {m.active ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="px-2 py-2 whitespace-nowrap">
+                    <div className="flex gap-1 flex-wrap">
+                      <button onClick={() => openEditMed(m)} className="btn btn-outline btn-sm">Edit</button>
                       <button
-                        onClick={() => { setEditPriceMed(m); setEditPriceVal(String(m.price)); }}
-                        className="font-bold text-emerald-700 hover:text-emerald-600 hover:underline cursor-pointer"
-                        title="Click to edit price"
+                        onClick={() => toggleMedStatus(m)}
+                        className={`btn btn-sm ${m.active ? 'btn-danger' : 'btn-success'}`}
                       >
-                        {currency} {m.price.toLocaleString()}
-                        <svg className="w-3 h-3 inline ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                        {m.active ? 'Disable' : 'Enable'}
                       </button>
-                    </td>
-                    <td className="text-right text-sm text-slate-600">
-                      {m.purchasePrice ? `${currency} ${m.purchasePrice.toLocaleString()}` : <span className="text-slate-400">—</span>}
-                    </td>
-                    <td className="text-right text-sm text-slate-600">
-                      {m.wholesalePrice ? `${currency} ${m.wholesalePrice.toLocaleString()}` : <span className="text-slate-400">—</span>}
-                    </td>
-                    <td>
-                      <span className={`font-semibold ${m.stock <= 0 ? 'text-red-600' : m.stock <= (m.minStock || 10) ? 'text-amber-600' : 'text-emerald-600'}`}>
-                        {m.stock}
-                      </span>
-                      {m.stock <= 0 && <span className="badge badge-rose text-xs ml-1">OUT</span>}
-                      {m.stock > 0 && m.stock <= (m.minStock || 10) && <span className="badge badge-amber text-xs ml-1">LOW</span>}
-                    </td>
-                    <td>
-                      {m.expiryDate ? (
-                        <div className="flex flex-col gap-1">
-                          <span className="text-sm text-slate-600">{m.expiryDate}</span>
-                          {expiryInfo && expiryInfo.label && (
-                            <span
-                              className="text-xs font-semibold px-2 py-0.5 rounded-full inline-block w-fit"
-                              style={{ background: expiryInfo.bg, color: expiryInfo.color, border: `1px solid ${expiryInfo.border}` }}
-                            >
-                              {expiryInfo.label}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 text-sm">Not set</span>
-                      )}
-                    </td>
-                    <td>
-                      <span className={`badge ${m.active ? 'badge-green' : 'badge-rose'}`}>
-                        {m.active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="flex gap-1 flex-wrap">
-                        <button onClick={() => openEditMed(m)} className="btn btn-outline btn-sm">Edit</button>
-                        <button
-                          onClick={() => toggleMedStatus(m)}
-                          className={`btn btn-sm ${m.active ? 'btn-danger' : 'btn-success'}`}
-                        >
-                          {m.active ? 'Disable' : 'Enable'}
-                        </button>
-                        <button onClick={() => setDeleteConfirm(m)} className="btn btn-sm btn-danger">Delete</button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                      <button onClick={() => setDeleteConfirm(m)} className="btn btn-sm btn-danger">Del</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
               {filteredMedicines.length === 0 && (
                 <tr>
-                  <td colSpan={13} className="text-center py-12 text-slate-400">
+                  <td colSpan={11} className="text-center py-12 text-slate-400">
                     No medicines found matching your search criteria.
                   </td>
                 </tr>
@@ -389,24 +337,66 @@ export default function InventoryPage() {
       {/* Add/Edit Medicine Modal */}
       {showMedModal && (
         <div className="modal-overlay" onClick={() => setShowMedModal(false)}>
-          <div className="modal-content" style={{ maxWidth: '680px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+          <div className="modal-content" style={{ maxWidth: '550px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold">{editingMed ? 'Edit Medicine' : 'Add New Medicine'}</h3>
               <button onClick={() => setShowMedModal(false)} className="btn btn-outline btn-sm">Close</button>
             </div>
             <div className="space-y-4">
-              {/* Row 1: Name, Generic Name, Category */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="form-label">Medicine Name <span className="text-red-500">*</span></label>
+                  <label className="form-label">Medicine Name *</label>
                   <input type="text" className="form-input" placeholder="e.g. Paracetamol" value={fName} onChange={e => setFName(e.target.value)} />
                 </div>
                 <div>
-                  <label className="form-label">Generic Name <span className="text-red-500">*</span></label>
+                  <label className="form-label">Generic Name</label>
                   <input type="text" className="form-input" placeholder="e.g. Acetaminophen" value={fGeneric} onChange={e => setFGeneric(e.target.value)} />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="form-label">Category <span className="text-red-500">*</span></label>
+                  <label className="form-label">Form *</label>
+                  <select className="form-input" value={fForm} onChange={e => setFForm(e.target.value)}>
+                    <option value="Tablet">Tablet</option>
+                    <option value="Capsule">Capsule</option>
+                    <option value="Syrup">Syrup</option>
+                    <option value="Injection">Injection</option>
+                    <option value="Cream">Cream</option>
+                    <option value="Drops">Drops</option>
+                    <option value="Inhaler">Inhaler</option>
+                    <option value="Powder">Powder</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Strength *</label>
+                  <input type="text" className="form-input" placeholder="e.g. 500mg" value={fStrength} onChange={e => setFStrength(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label">Packing *</label>
+                  <input type="text" className="form-input" placeholder="e.g. 10 tablets" value={fPacking} onChange={e => setFPacking(e.target.value)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="form-label">Selling Price ({currency}) *</label>
+                  <input type="number" className="form-input" placeholder="e.g. 50" value={fPrice} onChange={e => setFPrice(e.target.value)} min={0} />
+                </div>
+                <div>
+                  <label className="form-label">Purchase Price ({currency})</label>
+                  <input type="number" className="form-input" placeholder="e.g. 30 (cost price)" value={fPurchasePrice} onChange={e => setFPurchasePrice(e.target.value)} min={0} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="form-label">Batch Number</label>
+                  <input type="text" className="form-input" placeholder="e.g. BAT-2025-001" value={fBatchNumber} onChange={e => setFBatchNumber(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label">Manufacturing Date</label>
+                  <input type="date" className="form-input" value={fManufacturingDate} onChange={e => setFManufacturingDate(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label">Category *</label>
                   <select
                     className="form-input"
                     value={fCategory === '__new__' ? '__new__' : fCategory}
@@ -420,83 +410,12 @@ export default function InventoryPage() {
                   </select>
                 </div>
               </div>
-
               {fCategory === '__new__' && (
                 <div>
-                  <label className="form-label">New Category Name <span className="text-red-500">*</span></label>
+                  <label className="form-label">New Category Name *</label>
                   <input type="text" className="form-input" placeholder="Enter new category name" value={fNewCategory} onChange={e => setFNewCategory(e.target.value)} />
                 </div>
               )}
-
-              {/* Row 2: Form, Strength, Packing */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="form-label">Form</label>
-                  <select className="form-input" value={fForm} onChange={e => setFForm(e.target.value)}>
-                    <option value="Tablet">Tablet</option>
-                    <option value="Capsule">Capsule</option>
-                    <option value="Syrup">Syrup</option>
-                    <option value="Injection">Injection</option>
-                    <option value="Cream">Cream</option>
-                    <option value="Drops">Drops</option>
-                    <option value="Inhaler">Inhaler</option>
-                    <option value="Powder">Powder</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="form-label">Strength <span className="text-red-500">*</span></label>
-                  <input type="text" className="form-input" placeholder="e.g. 500mg" value={fStrength} onChange={e => setFStrength(e.target.value)} />
-                </div>
-                <div>
-                  <label className="form-label">Packing</label>
-                  <input type="text" className="form-input" placeholder="e.g. 10 tablets" value={fPacking} onChange={e => setFPacking(e.target.value)} />
-                </div>
-              </div>
-
-              {/* Row 3: Sale Price, Purchase Price, Wholesale Price */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="form-label">Sale Price ({currency}) <span className="text-red-500">*</span></label>
-                  <input type="number" className="form-input" placeholder="e.g. 50" value={fPrice} onChange={e => setFPrice(e.target.value)} min={0} />
-                </div>
-                <div>
-                  <label className="form-label">Purchase Price ({currency})</label>
-                  <input type="number" className="form-input" placeholder="e.g. 35" value={fPurchasePrice} onChange={e => setFPurchasePrice(e.target.value)} min={0} />
-                </div>
-                <div>
-                  <label className="form-label">Wholesale Price ({currency})</label>
-                  <input type="number" className="form-input" placeholder="e.g. 40" value={fWholesalePrice} onChange={e => setFWholesalePrice(e.target.value)} min={0} />
-                </div>
-              </div>
-
-              {/* Row 4: Stock Quantity, Reorder Level, Expiry Date */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="form-label">Stock Quantity</label>
-                  <input type="number" className="form-input" placeholder="e.g. 100" value={fStock} onChange={e => setFStock(e.target.value)} min={0} />
-                </div>
-                <div>
-                  <label className="form-label">Reorder Level</label>
-                  <input type="number" className="form-input" placeholder="e.g. 10" value={fMinStock} onChange={e => setFMinStock(e.target.value)} min={0} />
-                </div>
-                <div>
-                  <label className="form-label">Expiry Date</label>
-                  <input type="date" className="form-input" value={fExpiryDate} onChange={e => setFExpiryDate(e.target.value)} />
-                </div>
-              </div>
-
-              {/* Row 5: Company Name, Location/Shelf */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="form-label">Company Name</label>
-                  <input type="text" className="form-input" placeholder="e.g. GlaxoSmithKline" value={fCompany} onChange={e => setFCompany(e.target.value)} />
-                </div>
-                <div>
-                  <label className="form-label">Location / Shelf</label>
-                  <input type="text" className="form-input" placeholder="e.g. Shelf A-3" value={fLocation} onChange={e => setFLocation(e.target.value)} />
-                </div>
-              </div>
-
               <button onClick={saveMed} className="btn btn-success btn-lg w-full">
                 {editingMed ? 'Update Medicine' : 'Add Medicine'}
               </button>
@@ -514,7 +433,7 @@ export default function InventoryPage() {
               {editPriceMed.name} <span className="text-slate-400">({editPriceMed.form}, {editPriceMed.strength})</span>
             </p>
             <div className="mb-4">
-              <label className="form-label">New Sale Price ({currency})</label>
+              <label className="form-label">New Price ({currency})</label>
               <input
                 type="number"
                 className="form-input text-lg font-bold"

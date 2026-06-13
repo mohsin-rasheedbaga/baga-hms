@@ -64,7 +64,7 @@ export default function PharmacyStatementPage() {
   // Net Profit
   const [showProfitModal, setShowProfitModal] = useState(false);
   const [profitPwd, setProfitPwd] = useState('');
-  const [profitData, setProfitData] = useState<{ totalSales: number; totalExpenses: number; purchaseCost: number; netProfit: number; purchaseCostBreakdown: any } | null>(null);
+  const [profitData, setProfitData] = useState<{ totalSales: number; totalExpenses: number; purchaseCost: number; netProfit: number; grossProfit: number; purchaseCostBreakdown: any } | null>(null);
   const [profitPwdError, setProfitPwdError] = useState('');
 
   const handleNetProfit = () => {
@@ -73,7 +73,13 @@ export default function PharmacyStatementPage() {
       setProfitPwdError('Incorrect password');
       return;
     }
-    // If no password set, allow access directly
+    if (!stored && !profitPwd) {
+      setProfitPwdError('No password set. Set one in Settings first.');
+      return;
+    }
+    if (!stored && profitPwd) {
+      // First time setting - just allow access
+    }
     setProfitPwdError('');
 
     // Calculate net profit
@@ -83,29 +89,34 @@ export default function PharmacyStatementPage() {
     const totalSalesAmount = filtered.reduce((sum, s) => sum + s.totalAmount, 0);
     const totalExpensesAmount = filteredExp.reduce((sum: number, e: any) => sum + e.amount, 0);
 
-    // Calculate purchase cost from expense category "Medicine Purchase"
-    const purchaseCost = filteredExp
-      .filter((e: any) => e.category === 'Medicine Purchase')
-      .reduce((sum: number, e: any) => sum + e.amount, 0);
+    // Calculate actual purchase cost from sold medicine items
+    const medicinesList: any[] = JSON.parse(localStorage.getItem('baga_medicines') || '[]');
+    const medMap: Record<string, any> = {};
+    medicinesList.forEach((m: any) => { medMap[m.id] = m; });
 
-    // Other expenses (non-purchase)
-    const otherExpenses = totalExpensesAmount - purchaseCost;
-
-    const netProfit = totalSalesAmount - totalExpensesAmount;
-
-    // Purchase cost breakdown
+    let purchaseCost = 0;
     const purchaseBreakdown: Record<string, number> = {};
-    filteredExp
-      .filter((e: any) => e.category === 'Medicine Purchase')
-      .forEach((e: any) => {
-        const key = e.description || 'Other';
-        purchaseBreakdown[key] = (purchaseBreakdown[key] || 0) + e.amount;
+    filtered.forEach(s => {
+      s.items.forEach(item => {
+        const med = medMap[item.medicineId];
+        const cost = med?.purchasePrice || 0;
+        const lineCost = item.quantity * cost;
+        purchaseCost += lineCost;
+        if (lineCost > 0) {
+          const key = item.name || 'Unknown';
+          purchaseBreakdown[key] = (purchaseBreakdown[key] || 0) + lineCost;
+        }
       });
+    });
+
+    const grossProfit = totalSalesAmount - purchaseCost;
+    const netProfit = totalSalesAmount - totalExpensesAmount - purchaseCost;
 
     setProfitData({
       totalSales: totalSalesAmount,
       totalExpenses: totalExpensesAmount,
       purchaseCost,
+      grossProfit,
       netProfit,
       purchaseCostBreakdown: purchaseBreakdown,
     });
@@ -203,7 +214,20 @@ export default function PharmacyStatementPage() {
 
     // Expenses
     const totalExpenses = filteredExp.reduce((sum: number, e: any) => sum + e.amount, 0);
-    const profit = totalAmount - totalExpenses;
+
+    // Calculate actual purchase cost from sold medicines
+    const medicinesList: any[] = JSON.parse(localStorage.getItem('baga_medicines') || '[]');
+    const medById: Record<string, any> = {};
+    medicinesList.forEach((m: any) => { medById[m.id] = m; });
+    let purchaseCost = 0;
+    filtered.forEach(s => {
+      s.items.forEach(item => {
+        const med = medById[item.medicineId];
+        purchaseCost += item.quantity * (med?.purchasePrice || 0);
+      });
+    });
+
+    const profit = totalAmount - totalExpenses - purchaseCost;
 
     return {
       filtered,
@@ -335,7 +359,7 @@ export default function PharmacyStatementPage() {
             <p className={`text-xl font-extrabold ${stats.profit >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
               {stats.profit >= 0 ? '' : '-'}{currency} {Math.abs(stats.profit).toLocaleString()}
             </p>
-            <p className="text-xs text-slate-400">revenue - expenses</p>
+            <p className="text-xs text-slate-400">revenue - expenses - purchase cost</p>
           </div>
         </div>
       </div>
@@ -535,18 +559,23 @@ export default function PharmacyStatementPage() {
                     <p className="text-xs text-blue-600 font-medium">Medicine Purchase Cost</p>
                     <p className="text-xl font-extrabold text-blue-700">{currency} {profitData.purchaseCost.toLocaleString()}</p>
                   </div>
-                  <div className={`border-2 rounded-lg p-4 text-center ${profitData.netProfit >= 0 ? 'bg-emerald-50 border-emerald-300' : 'bg-red-50 border-red-300'}`}>
+                  <div className="bg-violet-50 border border-violet-200 rounded-lg p-4 text-center">
+                    <p className="text-xs text-violet-600 font-medium">Gross Profit</p>
+                    <p className="text-xl font-extrabold text-violet-700">{currency} {profitData.grossProfit.toLocaleString()}</p>
+                    <p className="text-xs text-violet-400 mt-1">Revenue - Purchase Cost</p>
+                  </div>
+                  <div className={`border-2 rounded-lg p-4 text-center col-span-2 ${profitData.netProfit >= 0 ? 'bg-emerald-50 border-emerald-300' : 'bg-red-50 border-red-300'}`}>
                     <p className="text-xs font-medium" style={{ color: profitData.netProfit >= 0 ? '#047857' : '#b91c1c' }}>Net Profit</p>
                     <p className={`text-2xl font-black ${profitData.netProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
                       {profitData.netProfit >= 0 ? '' : '-'}{currency} {Math.abs(profitData.netProfit).toLocaleString()}
                     </p>
-                    <p className="text-xs text-slate-400 mt-1">Revenue - All Expenses</p>
+                    <p className="text-xs text-slate-400 mt-1">Revenue - Expenses - Purchase Cost</p>
                   </div>
                 </div>
                 {Object.keys(profitData.purchaseCostBreakdown).length > 0 && (
                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-                    <p className="text-sm font-semibold text-slate-700 mb-2">Purchase Cost Breakdown</p>
-                    <div className="space-y-1">
+                    <p className="text-sm font-semibold text-slate-700 mb-2">Purchase Cost Breakdown (from sold medicines)</p>
+                    <div className="space-y-1 max-h-48 overflow-y-auto">
                       {Object.entries(profitData.purchaseCostBreakdown).map(([desc, amt]) => (
                         <div key={desc} className="flex justify-between text-sm">
                           <span className="text-slate-600">{desc}</span>

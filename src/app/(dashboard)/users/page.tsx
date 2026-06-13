@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { getUsers, addUser, updateUser, deleteUser, genId, getEmployees, todayStr } from '@/lib/store';
+import { getUsers, addUser, updateUser, deleteUser, genId, getEmployees } from '@/lib/store';
 import type { User, Employee } from '@/lib/types';
 
 const ROLES = [
@@ -134,21 +134,6 @@ export default function UsersPage() {
   const [selectedDept, setSelectedDept] = useState('Reception');
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
 
-  // License type detection
-  const [licenseType, setLicenseType] = useState<string>('');
-
-  // Simple add form (non-hospital licenses)
-  const [simpleName, setSimpleName] = useState('');
-  const [simpleFatherName, setSimpleFatherName] = useState('');
-  const [simpleCnic, setSimpleCnic] = useState('');
-
-  useEffect(() => {
-    try {
-      const s = JSON.parse(localStorage.getItem('baga_session') || '{}');
-      setLicenseType(s.licenseType || '');
-    } catch {}
-  }, []);
-
   const showToast = (msg: string, type: 'success' | 'error') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
@@ -232,9 +217,6 @@ export default function UsersPage() {
     setSelectedRole('reception');
     setSelectedDept('Reception');
     setSelectedPermissions([]);
-    setSimpleName('');
-    setSimpleFatherName('');
-    setSimpleCnic('');
   };
 
   const handleAddSubmit = () => {
@@ -442,46 +424,64 @@ export default function UsersPage() {
             </div>
 
             {/* Step Indicator */}
-            {licenseType === 'hospital' ? (
-              <div className="flex items-center gap-1 mb-6">
-                {/* Step 1 */}
-                <div className="flex items-center gap-1">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${step1Active ? 'bg-blue-600 text-white' : addStep > 1 ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                    {addStep > 1 ? '✓' : '1'}
-                  </div>
-                  <span className={`text-xs font-medium ${step1Active ? 'text-blue-600' : 'text-slate-400'}`}>Employee</span>
+            <div className="flex items-center gap-1 mb-6">
+              {/* Step 1 */}
+              <div className="flex items-center gap-1">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
+                    step1Active
+                      ? 'bg-blue-600 text-white'
+                      : addStep > 1
+                      ? 'bg-green-500 text-white'
+                      : 'bg-slate-200 text-slate-500'
+                  }`}
+                >
+                  {addStep > 1 ? '✓' : '1'}
                 </div>
-                <div className={`flex-1 h-0.5 mx-2 ${addStep > 1 ? 'bg-green-400' : 'bg-slate-200'}`} />
-                <div className="flex items-center gap-1">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${step2Active ? 'bg-blue-600 text-white' : addStep > 2 ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                    {addStep > 2 ? '✓' : '2'}
-                  </div>
-                  <span className={`text-xs font-medium ${step2Active ? 'text-blue-600' : 'text-slate-400'}`}>Login</span>
-                </div>
-                <div className={`flex-1 h-0.5 mx-2 ${addStep > 2 ? 'bg-green-400' : 'bg-slate-200'}`} />
-                <div className="flex items-center gap-1">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${step3Active ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>3</div>
-                  <span className={`text-xs font-medium ${step3Active ? 'text-blue-600' : 'text-slate-400'}`}>Role & Permissions</span>
-                </div>
+                <span className={`text-xs font-medium ${step1Active ? 'text-blue-600' : 'text-slate-400'}`}>
+                  Employee
+                </span>
               </div>
-            ) : (
-              <div className="flex items-center gap-1 mb-6">
-                <div className="flex items-center gap-1">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${step1Active ? 'bg-blue-600 text-white' : addStep > 1 ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                    {addStep > 1 ? '✓' : '1'}
-                  </div>
-                  <span className={`text-xs font-medium ${step1Active ? 'text-blue-600' : 'text-slate-400'}`}>Employee Info</span>
+              {/* Connector */}
+              <div className={`flex-1 h-0.5 mx-2 ${addStep > 1 ? 'bg-green-400' : 'bg-slate-200'}`} />
+              {/* Step 2 */}
+              <div className="flex items-center gap-1">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
+                    step2Active
+                      ? 'bg-blue-600 text-white'
+                      : addStep > 2
+                      ? 'bg-green-500 text-white'
+                      : 'bg-slate-200 text-slate-500'
+                  }`}
+                >
+                  {addStep > 2 ? '✓' : '2'}
                 </div>
-                <div className={`flex-1 h-0.5 mx-2 ${addStep > 1 ? 'bg-green-400' : 'bg-slate-200'}`} />
-                <div className="flex items-center gap-1">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${step3Active ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>2</div>
-                  <span className={`text-xs font-medium ${step3Active ? 'text-blue-600' : 'text-slate-400'}`}>Rights & Permissions</span>
-                </div>
+                <span className={`text-xs font-medium ${step2Active ? 'text-blue-600' : 'text-slate-400'}`}>
+                  Login
+                </span>
               </div>
-            )}
+              {/* Connector */}
+              <div className={`flex-1 h-0.5 mx-2 ${addStep > 2 ? 'bg-green-400' : 'bg-slate-200'}`} />
+              {/* Step 3 */}
+              <div className="flex items-center gap-1">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
+                    step3Active
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-200 text-slate-500'
+                  }`}
+                >
+                  3
+                </div>
+                <span className={`text-xs font-medium ${step3Active ? 'text-blue-600' : 'text-slate-400'}`}>
+                  Role & Permissions
+                </span>
+              </div>
+            </div>
 
-            {/* ===== STEP 1: Employee Code Lookup (hospital) / Simple Form (non-hospital) ===== */}
-            {addStep === 1 && licenseType === 'hospital' && (
+            {/* ===== STEP 1: Employee Code Lookup ===== */}
+            {addStep === 1 && (
               <div className="space-y-4">
                 <div>
                   <p className="text-sm text-slate-500 mb-4">
@@ -601,115 +601,8 @@ export default function UsersPage() {
               </div>
             )}
 
-            {addStep === 1 && licenseType !== 'hospital' && (
-              <div className="space-y-4">
-                <div>
-                  <label className="form-label">Employee Name *</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={simpleName}
-                    onChange={e => setSimpleName(e.target.value)}
-                    placeholder="Enter employee full name"
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Father Name</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={simpleFatherName}
-                    onChange={e => setSimpleFatherName(e.target.value)}
-                    placeholder="Enter father name"
-                  />
-                </div>
-                <div>
-                  <label className="form-label">CNIC *</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={simpleCnic}
-                    onChange={e => {
-                      // Auto-format CNIC: 00000-0000000-0
-                      let v = e.target.value.replace(/[^0-9]/g, '').slice(0, 13);
-                      if (v.length > 5 && v.length <= 12) v = v.slice(0, 5) + '-' + v.slice(5);
-                      if (v.length > 12) v = v.slice(0, 5) + '-' + v.slice(5, 12) + '-' + v.slice(12);
-                      setSimpleCnic(v);
-                    }}
-                    placeholder="00000-0000000-0"
-                    maxLength={15}
-                  />
-                </div>
-                {/* Auto-generated Login ID and Password */}
-                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                  <p className="text-xs text-emerald-600 font-semibold mb-2">Auto-Generated Credentials</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] text-slate-500 font-medium">Login ID</label>
-                      <div className="flex items-center gap-2 mt-1">
-                        <code className="bg-white border border-emerald-300 rounded px-2 py-1 text-sm font-mono font-bold text-emerald-700">
-                          {simpleName.trim() ? simpleName.trim().charAt(0).toUpperCase() + String(Math.floor(1000 + Math.random() * 9000)) : '---'}
-                        </code>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-500 font-medium">Password</label>
-                      <div className="flex items-center gap-2 mt-1">
-                        <code className="bg-white border border-emerald-300 rounded px-2 py-1 text-sm font-mono font-bold text-emerald-700">
-                          {simpleName.trim() ? 'Baga@' + String(Math.floor(1000 + Math.random() * 9000)) : '---'}
-                        </code>
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-emerald-500 mt-2">Login ID and Password will be finalized when you click Next.</p>
-                </div>
-                {/* Step 1 Actions */}
-                <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={() => {
-                      if (!simpleName.trim()) { showToast('Employee name is required', 'error'); return; }
-                      if (!simpleCnic.trim() || simpleCnic.replace(/[^0-9]/g, '').length !== 13) { showToast('Enter a valid 13-digit CNIC', 'error'); return; }
-                      // Generate final credentials
-                      const genId = simpleName.trim().charAt(0).toUpperCase() + String(Math.floor(1000 + Math.random() * 9000));
-                      const genPwd = 'Baga@' + String(Math.floor(1000 + Math.random() * 9000));
-                      setLoginId(genId);
-                      setLoginPassword(genPwd);
-                      // Set foundEmployee mock for step 2/3 compatibility
-                      setFoundEmployee({
-                        id: '',
-                        name: simpleName.trim(),
-                        fatherName: simpleFatherName.trim(),
-                        cnic: simpleCnic.trim(),
-                        department: selectedDept,
-                        designation: ROLES.find(r => r.value === selectedRole)?.label || '',
-                        employeeCode: genId,
-                        mobile: '',
-                        gender: '',
-                        dob: '',
-                        qualification: '',
-                        joiningDate: todayStr(),
-                        salary: 0,
-                        active: true,
-                      } as any);
-                      setAddStep(3);
-                    }}
-                    className="btn btn-success btn-lg flex-1"
-                  >
-                    Next: Rights & Access →
-                  </button>
-                  <button
-                    onClick={() => setShowAdd(false)}
-                    className="btn btn-outline btn-lg"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* ===== STEP 2: Login Credentials ===== */}
-            {addStep === 2 && licenseType === 'hospital' && (
+            {addStep === 2 && (
               <div className="space-y-4">
                 {/* Employee Summary */}
                 <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
@@ -770,15 +663,9 @@ export default function UsersPage() {
                 <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
                   <p className="text-xs text-slate-500 mb-1">Creating account for:</p>
                   <p className="font-semibold text-slate-800">{foundEmployee?.name}</p>
-                  {foundEmployee?.fatherName && <p className="text-xs text-slate-500">Father: {foundEmployee.fatherName}</p>}
                   <p className="text-xs text-slate-500">
                     Login: <span className="font-mono font-medium text-slate-700">{loginId}</span>
-                    <span className="mx-2 text-slate-300">|</span>
-                    Password: <span className="font-mono font-medium text-slate-700">{loginPassword}</span>
                   </p>
-                  {licenseType !== 'hospital' && foundEmployee?.cnic && (
-                    <p className="text-xs text-slate-500">CNIC: <span className="font-mono font-medium text-slate-700">{foundEmployee.cnic}</span></p>
-                  )}
                 </div>
 
                 {/* Role Selection */}
@@ -906,7 +793,7 @@ export default function UsersPage() {
                 {/* Step 3 Actions */}
                 <div className="flex gap-3 pt-2">
                   <button
-                    onClick={() => setAddStep(licenseType === 'hospital' ? 2 : 1)}
+                    onClick={() => setAddStep(2)}
                     className="btn btn-outline btn-lg"
                   >
                     ← Back

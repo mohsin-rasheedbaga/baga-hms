@@ -1,6 +1,5 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
 import {
   searchPatients, searchMedicines, getMedicines, addMedicine, updateMedicine, deleteMedicine,
   getMedicineCategories, getActivePrescriptions, updatePrescription, addDispense,
@@ -21,6 +20,20 @@ interface MedicineReturn {
   returnedBy: string;
   date: string;
   time: string;
+}
+
+interface CodeItem {
+  medicineId: string;
+  name: string;
+  genericName: string;
+  form: string;
+  strength: string;
+  packing: string;
+  price: number;
+ days: number;
+ dosage: string;
+ frequency: string;
+ instructions: string;
 }
 
 interface CartItem {
@@ -50,6 +63,9 @@ interface PharmacySale {
   time: string;
   servedBy: string;
   paymentMethod: 'Cash' | 'Card' | 'Online';
+  discountPercent?: number;
+  discountAmount?: number;
+  discountType?: 'patient' | 'prescriber';
 }
 
 /* ==================== LOCAL STORAGE HELPERS ==================== */
@@ -97,24 +113,9 @@ async function getPrintHeader(): Promise<{ hospitalName: string; hospitalLogo: s
 }
 
 export default function PharmacyPage() {
-  const searchParams = useSearchParams();
-  const tabParam = searchParams.get('tab');
-  const [mainTab, setMainTab] = useState<'dashboard' | 'pos' | 'prescriptions' | 'inventory' | 'reports'>(
-    tabParam === 'dashboard' ? 'dashboard' : 
-    tabParam === 'inventory' ? 'inventory' : 
-    tabParam === 'reports' ? 'reports' : 
-    tabParam === 'prescriptions' ? 'prescriptions' : 'pos'
-  );
+  const [initialTab, setInitialTab] = useState<'pos' | 'prescriptions' | 'inventory' | 'reports'>('pos');
+  const [mainTab, setMainTab] = useState<'pos' | 'prescriptions' | 'inventory' | 'reports'>('pos');
   const [licenseType, setLicenseType] = useState<string>('');
-
-  // React to URL param changes for tab switching
-  useEffect(() => {
-    if (tabParam === 'dashboard') setMainTab('dashboard');
-    else if (tabParam === 'inventory') setMainTab('inventory');
-    else if (tabParam === 'reports') setMainTab('reports');
-    else if (tabParam === 'prescriptions') setMainTab('prescriptions');
-    else setMainTab('pos');
-  }, [tabParam]);
 
   useEffect(() => {
     try {
@@ -125,6 +126,18 @@ export default function PharmacyPage() {
       }
     } catch {}
   }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab');
+      if (tab === 'inventory') setInitialTab('inventory');
+      else if (tab === 'reports') setInitialTab('reports');
+      else if (tab === 'prescriptions') setInitialTab('prescriptions');
+      else setInitialTab('pos');
+    }
+  }, []);
+  useEffect(() => { setMainTab(initialTab); }, [initialTab]);
 
   /* ==================== SHARED ==================== */
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -150,8 +163,6 @@ export default function PharmacyPage() {
   const [outdoorAge, setOutdoorAge] = useState('');
   const [outdoorGender, setOutdoorGender] = useState('Male');
   const [outdoorNo, setOutdoorNo] = useState('');
-  const [slipId, setSlipId] = useState('');
-  const [pharmacyId, setPharmacyId] = useState('');
 
   // Medicine search
   const [medQuery, setMedQuery] = useState('');
@@ -167,6 +178,16 @@ export default function PharmacyPage() {
   const [billDiscount, setBillDiscount] = useState(0);
   const [discountType, setDiscountType] = useState<'patient' | 'prescriber'>('patient');
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'Online'>('Cash');
+  const [receiptHeader, setReceiptHeader] = useState<{ hospitalName: string; hospitalLogo: string; hospitalAddress: string; hospitalPhone: string } | null>(null);
+
+  useEffect(() => {
+    if (saleBill) {
+      getPrintHeader().then(setReceiptHeader);
+    }
+  }, [saleBill]);
+
+  // Code (Prescription Builder)
+  const [codeItems, setCodeItems] = useState<CodeItem[]>([]);
 
   // Cart
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -236,10 +257,6 @@ export default function PharmacyPage() {
 
   useEffect(() => { loadSales(); }, [loadSales]);
   useEffect(() => { setOutdoorNo(`OUT-${String(getOutdoorCounter()).padStart(4, '0')}`); }, []);
-  useEffect(() => {
-    setSlipId(`SLP-${String(Date.now()).slice(-6)}`);
-    setPharmacyId(`PHM-${String(Date.now()).slice(-6)}`);
-  }, []);
 
   // Stats
   const todaySales = sales.filter(s => s.date === todayStr());
@@ -274,6 +291,67 @@ export default function PharmacyPage() {
     setShowMedDropdown(true);
   };
 
+  const addToCode = (med: MedicineItem) => {
+    const existing = codeItems.find(c => c.medicineId === med.id);
+    if (existing) {
+      // Already in code - show toast
+      showToast('Medicine already in code. Use +/- quantity or change days.', 'error');
+    } else {
+      setCodeItems([...codeItems, {
+        medicineId: med.id, name: med.name, genericName: med.genericName,
+        form: med.form, strength: med.strength, packing: med.packing,
+        price: med.price, days: 7, dosage: '1 tablet', frequency: 'TID (3 times a day)', instructions: '',
+      }]);
+    }
+    setMedQuery('');
+    setMedResults([]);
+    setShowMedDropdown(false);
+    setTimeout(() => medSearchRef.current?.focus(), 50);
+  };
+
+  const updateCodeItemDays = (medId: string, days: number) => {
+    setCodeItems(codeItems.map(c => c.medicineId === medId ? { ...c, days: Math.max(1, days) } : c));
+  };
+  const updateCodeItemDosage = (medId: string, dosage: string) => {
+    setCodeItems(codeItems.map(c => c.medicineId === medId ? { ...c, dosage } : c));
+  };
+  const updateCodeItemFrequency = (medId: string, frequency: string) => {
+    setCodeItems(codeItems.map(c => c.medicineId === medId ? { ...c, frequency } : c));
+  };
+  const removeFromCode = (medId: string) => {
+    setCodeItems(codeItems.filter(c => c.medicineId !== medId));
+  };
+
+  const addAllToCart = () => {
+    if (codeItems.length === 0) return;
+    const count = codeItems.length;
+    setCart(prevCart => {
+      let newCart = [...prevCart];
+      for (const ci of codeItems) {
+        const existing = newCart.find(c => c.medicineId === ci.medicineId);
+        if (existing) {
+          newCart = newCart.map(c =>
+            c.medicineId === ci.medicineId
+              ? { ...c, days: ci.days, dosage: ci.dosage, frequency: ci.frequency, quantity: c.quantity + 1, total: (c.quantity + 1) * c.price }
+              : c
+          );
+        } else {
+          newCart.push({
+            medicineId: ci.medicineId, name: ci.name, genericName: ci.genericName,
+            form: ci.form, strength: ci.strength, packing: ci.packing,
+            price: ci.price, quantity: 1, total: ci.price,
+            days: ci.days, dosage: ci.dosage, frequency: ci.frequency,
+          });
+        }
+      }
+      return newCart;
+    });
+    setCodeItems([]);
+    showToast(`${count} medicine(s) added to cart`, 'success');
+  };
+
+  const codeTotal = codeItems.reduce((a, c) => a + c.price, 0);
+
   const updateCartQty = (medId: string, qty: number) => {
     if (qty < 1) {
       setCart(cart.filter(c => c.medicineId !== medId));
@@ -294,6 +372,7 @@ export default function PharmacyPage() {
 
   const resetSale = () => {
     clearCart();
+    setCodeItems([]);
     setSelectedPatient(null);
     setPatientQuery('');
     setPatientResults([]);
@@ -301,8 +380,6 @@ export default function PharmacyPage() {
     setOutdoorMobile('');
     setOutdoorAge('');
     setOutdoorGender('Male');
-    setSlipId(`SLP-${String(Date.now()).slice(-6)}`);
-    setPharmacyId(`PHM-${String(Date.now()).slice(-6)}`);
   };
 
   const completeSale = () => {
@@ -344,6 +421,9 @@ export default function PharmacyPage() {
       setOutdoorNo(`OUT-${String(counter + 1).padStart(4, '0')}`);
     }
 
+    const discountAmt = Math.round(cartTotal * billDiscount / 100);
+    const grandTotal = cartTotal - discountAmt;
+
     const sale: PharmacySale = {
       id: genId(),
       patientNo,
@@ -351,11 +431,14 @@ export default function PharmacyPage() {
       patientMobile,
       type: patientMode,
       items: [...cart],
-      totalAmount: cartTotal,
+      totalAmount: grandTotal,
       date: todayStr(),
       time: timeStr(),
       servedBy: (typeof window !== 'undefined' && localStorage.getItem('baga_session')) ? JSON.parse(localStorage.getItem('baga_session')!).name || 'Pharmacist' : 'Pharmacist',
       paymentMethod,
+      discountPercent: billDiscount > 0 ? billDiscount : undefined,
+      discountAmount: discountAmt > 0 ? discountAmt : undefined,
+      discountType: billDiscount > 0 ? discountType : undefined,
     };
 
     addPharmacySale(sale);
@@ -368,13 +451,13 @@ export default function PharmacyPage() {
       }
     }
     loadInventory();
-    showToast(`Sale completed! ${currency} ${cartTotal.toLocaleString()}`, 'success');
+    showToast(`Sale completed! ${currency} ${grandTotal.toLocaleString()}`, 'success');
     setSaleBill(sale);
+    // Auto-print after a small delay, but keep the modal open so user can see & re-print
+    setTimeout(() => { printBillSlip(); }, 500);
     setBillDiscount(0);
     setDiscountType('patient');
     loadSales();
-    setSlipId(`SLP-${String(Date.now()).slice(-6)}`);
-    setPharmacyId(`PHM-${String(Date.now()).slice(-6)}`);
   };
 
   const closeBill = () => {
@@ -388,8 +471,11 @@ export default function PharmacyPage() {
   const printBillSlip = async () => {
     if (!saleBill) return;
     try {
-      const discountAmt = Math.round(saleBill.totalAmount * billDiscount / 100);
-      const grandTotal = saleBill.totalAmount - discountAmt;
+      const subtotal = saleBill.items.reduce((a, c) => a + c.total, 0);
+      const discountPct = saleBill.discountPercent ?? billDiscount;
+      const discountAmt = saleBill.discountAmount ?? Math.round(subtotal * discountPct / 100);
+      const dType = saleBill.discountType ?? discountType;
+      const grandTotal = saleBill.totalAmount;
       const { hospitalName, hospitalLogo, hospitalAddress, hospitalPhone } = await getPrintHeader();
       const cur = currency;
       const itemRows = saleBill.items.map((it, i) => {
@@ -454,8 +540,8 @@ export default function PharmacyPage() {
           <tbody>${itemRows}</tbody>
         </table>
         <div class="totals">
-          <div class="total-row"><span>Subtotal (${saleBill.items.length} items)</span><span>${cur} ${saleBill.totalAmount.toLocaleString()}</span></div>
-          ${billDiscount > 0 ? `<div class="total-row discount"><span>Discount (${billDiscount}% ${discountType === 'patient' ? '- Patient' : '- Prescriber'})</span><span>-${cur} ${discountAmt.toLocaleString()}</span></div>` : ''}
+          <div class="total-row"><span>Subtotal (${saleBill.items.length} items)</span><span>${cur} ${subtotal.toLocaleString()}</span></div>
+          ${discountPct > 0 ? `<div class="total-row discount"><span>Discount (${discountPct}% ${dType === 'patient' ? '- Patient' : '- Prescriber'})</span><span>-${cur} ${discountAmt.toLocaleString()}</span></div>` : ''}
           <div class="grand-total"><span>GRAND TOTAL</span><span>${cur} ${grandTotal.toLocaleString()}</span></div>
         </div>
         <div class="footer">
@@ -471,22 +557,7 @@ export default function PharmacyPage() {
 
   const handleMedSearchEnter = () => {
     if (medResults.length >= 1) {
-      const m = medResults[0];
-      const existing = cart.find(c => c.medicineId === m.id);
-      if (existing) {
-        setCart(cart.map(c => c.medicineId === m.id ? { ...c, quantity: c.quantity + 1, total: (c.quantity + 1) * c.price } : c));
-      } else {
-        setCart([...cart, {
-          medicineId: m.id, name: m.name, genericName: m.genericName,
-          form: m.form, strength: m.strength, packing: m.packing,
-          price: m.price, quantity: 1, total: m.price,
-          days: 0, dosage: '', frequency: '',
-        }]);
-      }
-      showToast(`${m.name} added to cart`, 'success');
-      setMedQuery('');
-      setMedResults([]);
-      setShowMedDropdown(false);
+      addToCode(medResults[0]);
       setTimeout(() => medSearchRef.current?.focus(), 50);
     }
   };
@@ -549,12 +620,6 @@ export default function PharmacyPage() {
   const [fPrice, setFPrice] = useState('');
   const [fCategory, setFCategory] = useState('');
   const [fNewCategory, setFNewCategory] = useState('');
-  const [fMfgDate, setFMfgDate] = useState('');
-  const [fBatchNo, setFBatchNo] = useState('');
-  const [fExpiryDate, setFExpiryDate] = useState('');
-  const [fCostPrice, setFCostPrice] = useState('');
-  const [fWholesalePrice, setFWholesalePrice] = useState('');
-  const [fStock, setFStock] = useState('0');
 
   const loadInventory = useCallback(() => {
     setMedicines(getMedicines());
@@ -575,7 +640,6 @@ export default function PharmacyPage() {
     setEditingMed(null);
     setFName(''); setFGeneric(''); setFForm('Tablet'); setFStrength('');
     setFPacking(''); setFPrice(''); setFCategory(categories[0] || ''); setFNewCategory('');
-    setFMfgDate(''); setFBatchNo(''); setFExpiryDate(''); setFCostPrice(''); setFWholesalePrice(''); setFStock('0');
     setShowMedModal(true);
   };
 
@@ -583,12 +647,6 @@ export default function PharmacyPage() {
     setEditingMed(m);
     setFName(m.name); setFGeneric(m.genericName); setFForm(m.form); setFStrength(m.strength);
     setFPacking(m.packing); setFPrice(String(m.price)); setFCategory(m.category); setFNewCategory('');
-    setFMfgDate(m.manufacturingDate || '');
-    setFBatchNo(m.batchNo || '');
-    setFExpiryDate(m.expiryDate || '');
-    setFCostPrice(String(m.purchasePrice || m.costPrice || 0));
-    setFWholesalePrice(String(m.wholesalePrice || 0));
-    setFStock(String(m.stock || 0));
     setShowMedModal(true);
   };
 
@@ -601,14 +659,13 @@ export default function PharmacyPage() {
       updateMedicine(editingMed.id, {
         name: fName.trim(), genericName: fGeneric.trim(), form: fForm as MedicineItem['form'],
         strength: fStrength.trim(), packing: fPacking.trim(), price: Number(fPrice), category: cat,
-        manufacturingDate: fMfgDate, batchNo: fBatchNo, expiryDate: fExpiryDate, purchasePrice: Number(fCostPrice) || 0, wholesalePrice: Number(fWholesalePrice) || 0, stock: Number(fStock) || 0,
       });
       showToast('Medicine updated successfully', 'success');
     } else {
       addMedicine({
         id: genId(), name: fName.trim(), genericName: fGeneric.trim(), form: fForm as MedicineItem['form'],
         strength: fStrength.trim(), packing: fPacking.trim(), price: Number(fPrice), category: cat, active: true,
-        stock: Number(fStock) || 0, expiryDate: fExpiryDate, minStock: 10, purchasePrice: Number(fCostPrice) || 0, wholesalePrice: Number(fWholesalePrice) || 0, manufacturingDate: fMfgDate, batchNo: fBatchNo, company: '', location: '',
+        stock: 0, expiryDate: '', minStock: 10,
       });
       showToast('New medicine added successfully', 'success');
     }
@@ -643,104 +700,122 @@ export default function PharmacyPage() {
     <div className="space-y-5">
       {toast && <div className={`toast ${toast.type === 'success' ? 'toast-success' : 'toast-error'}`}>{toast.msg}</div>}
 
-      {/* Sale Bill Modal */}
-      {saleBill && (
-        <div className="modal-overlay" onClick={closeBill}>
-          <div className="modal-content" style={{ maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-slate-800">Sale Bill</h3>
-              <button onClick={closeBill} className="btn btn-outline btn-sm">Close</button>
-            </div>
-
-            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div><span className="text-slate-500">Patient ID:</span> <span className="font-mono font-bold text-blue-600">{saleBill.patientNo}</span></div>
-                <div><span className="text-slate-500">Name:</span> <span className="font-semibold">{saleBill.patientName}</span></div>
-                <div><span className="text-slate-500">Mobile:</span> <span>{saleBill.patientMobile}</span></div>
-                <div><span className="text-slate-500">Date:</span> <span>{saleBill.date} {saleBill.time}</span></div>
-                <div><span className="text-slate-500">Served By:</span> <span>{saleBill.servedBy}</span></div>
+      {/* Sale Bill Modal — Receipt Preview */}
+      {saleBill && (() => {
+        const subtotal = saleBill.items.reduce((a, c) => a + c.total, 0);
+        const discPct = saleBill.discountPercent ?? 0;
+        const discAmt = saleBill.discountAmount ?? 0;
+        const discTypeLabel = (saleBill.discountType ?? 'patient') === 'patient' ? 'Patient' : 'Prescriber';
+        const hdr = receiptHeader;
+        return (
+          <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={closeBill}>
+            <div onClick={e => e.stopPropagation()} style={{
+              maxWidth: 320, width: '100%', maxHeight: '90vh', overflowY: 'auto',
+              background: '#fff', borderRadius: 8, boxShadow: '0 8px 40px rgba(0,0,0,0.25)',
+              padding: '16px 12px', fontFamily: "'Segoe UI', Arial, sans-serif", fontSize: 11, color: '#1e293b',
+            }}>
+              {/* Header */}
+              <div style={{ textAlign: 'center', paddingBottom: 8, borderBottom: '2px dashed #cbd5e1' }}>
+                {hdr?.hospitalLogo && <img src={hdr.hospitalLogo} alt="" style={{ width: 40, height: 40, objectFit: 'contain', display: 'block', margin: '0 auto 4px' }} />}
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#0c2340', letterSpacing: 1 }}>{hdr?.hospitalName || 'BAGA HOSPITAL'}</div>
+                {hdr?.hospitalAddress && <div style={{ fontSize: 8, color: '#64748b', marginTop: 1 }}>{hdr.hospitalAddress}</div>}
+                {hdr?.hospitalPhone && <div style={{ fontSize: 8, color: '#64748b' }}>{hdr.hospitalPhone}</div>}
+                <div style={{ fontSize: 8, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>Pharmacy Department</div>
               </div>
-            </div>
 
-            <div className="border border-slate-200 rounded-lg overflow-hidden mb-4">
-              <table className="data-table">
-                <thead><tr><th>#</th><th>Medicine</th><th>Form</th><th>Strength</th><th className="text-right">Price</th><th className="text-center">Qty</th><th className="text-right">Total</th></tr></thead>
+              {/* Bill Info */}
+              <div style={{ padding: '6px 0', borderBottom: '1px dashed #e2e8f0' }}>
+                {[
+                  ['Bill No', saleBill.id.slice(-6).toUpperCase()],
+                  ['Patient', saleBill.patientName],
+                  ['ID', saleBill.patientNo],
+                  ['Mobile', saleBill.patientMobile || '-'],
+                  ['Date', `${saleBill.date} ${saleBill.time}`],
+                  ['Served By', saleBill.servedBy],
+                  ['Payment', saleBill.paymentMethod],
+                ].map(([label, value]) => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, padding: '1px 0' }}>
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>{label}:</span>
+                    <span style={{ color: '#1e293b', fontWeight: 500 }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Title */}
+              <div style={{ textAlign: 'center', padding: '4px 0', borderBottom: '1px dashed #e2e8f0', borderTop: '1px dashed #e2e8f0' }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#0c2340', letterSpacing: 1 }}>Medicine Bill / Slip</span>
+              </div>
+
+              {/* Items Table — compact */}
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 4 }}>
+                <thead>
+                  <tr>
+                    {['#', 'Name', 'Qty', 'Total'].map(h => (
+                      <th key={h} style={{
+                        padding: '2px 4px', fontSize: 8, fontWeight: 700, textTransform: 'uppercase',
+                        letterSpacing: 0.5, color: '#0c2340', background: '#f1f5f9',
+                        borderBottom: '2px solid #0c2340', textAlign: h === 'Total' ? 'right' : h === 'Qty' ? 'center' : 'left',
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
                 <tbody>
                   {saleBill.items.map((it, i) => (
-                    <tr key={i}>
-                      <td className="text-sm text-slate-400">{i + 1}</td>
-                      <td><p className="font-semibold text-sm">{it.name}</p><p className="text-xs text-slate-400">{it.genericName}</p></td>
-                      <td><span className="badge badge-blue text-xs">{it.form}</span></td>
-                      <td className="text-sm">{it.strength}</td>
-                      <td className="text-right text-sm">{currency} {it.price.toLocaleString()}</td>
-                      <td className="text-center text-sm font-semibold">{it.quantity}</td>
-                      <td className="text-right text-sm font-bold">{currency} {it.total.toLocaleString()}</td>
+                    <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                      <td style={{ padding: '2px 4px', fontSize: 10, borderBottom: '1px solid #f1f5f9' }}>{i + 1}</td>
+                      <td style={{ padding: '2px 4px', fontSize: 10, borderBottom: '1px solid #f1f5f9', fontWeight: 600 }}>{it.name}</td>
+                      <td style={{ padding: '2px 4px', fontSize: 10, borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>{it.quantity}</td>
+                      <td style={{ padding: '2px 4px', fontSize: 10, borderBottom: '1px solid #f1f5f9', textAlign: 'right', fontWeight: 700 }}>{currency} {it.total.toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
 
-            <div className="space-y-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600">Subtotal ({saleBill.items.length} items)</span>
-                <span className="font-semibold">{currency} {saleBill.totalAmount.toLocaleString()}</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm text-slate-600">Discount Type</span>
-                <div className="flex bg-slate-100 rounded-lg p-0.5">
-                  <button
-                    onClick={() => setDiscountType('patient')}
-                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${discountType === 'patient' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
-                  >
-                    Patient
-                  </button>
-                  <button
-                    onClick={() => setDiscountType('prescriber')}
-                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${discountType === 'prescriber' ? 'bg-white shadow-sm text-purple-700' : 'text-slate-500 hover:text-slate-700'}`}
-                  >
-                    Prescriber
-                  </button>
+              {/* Totals */}
+              <div style={{ padding: '6px 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '2px 0' }}>
+                  <span>Subtotal ({saleBill.items.length} items)</span>
+                  <span>{currency} {subtotal.toLocaleString()}</span>
+                </div>
+                {discPct > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '2px 0', color: '#dc2626' }}>
+                    <span>Discount ({discPct}% - {discTypeLabel})</span>
+                    <span>-{currency} {discAmt.toLocaleString()}</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 900, color: '#0c2340', padding: '4px 0', borderTop: '2px solid #0c2340', borderBottom: '2px solid #0c2340', marginTop: 4 }}>
+                  <span>GRAND TOTAL</span>
+                  <span>{currency} {saleBill.totalAmount.toLocaleString()}</span>
                 </div>
               </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm text-slate-600">Payment Method</span>
-                <span className="font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg text-sm">{saleBill.paymentMethod}</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm text-slate-600">Discount (%)</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={billDiscount}
-                  onChange={e => setBillDiscount(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
-                  className="w-20 h-9 text-right border border-slate-300 rounded-lg px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
-                  placeholder="0"
-                />
-              </div>
-              {billDiscount > 0 && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-red-500">Discount Amount ({billDiscount}% - {discountType === 'patient' ? 'Patient' : 'Prescriber'})</span>
-                  <span className="font-semibold text-red-500">-{currency} {Math.round(saleBill.totalAmount * billDiscount / 100).toLocaleString()}</span>
-                </div>
-              )}
-              <div className="flex items-center justify-between pt-3 border-t-2 border-slate-300">
-                <span className="text-lg font-bold text-slate-800">Grand Total</span>
-                <span className="text-2xl font-black text-emerald-700">{currency} {(saleBill.totalAmount - Math.round(saleBill.totalAmount * billDiscount / 100)).toLocaleString()}</span>
-              </div>
-            </div>
 
-            <div className="flex gap-2 mt-4">
-              <button onClick={printBillSlip} className="btn btn-primary flex-1">
-                <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                Print Slip
-              </button>
-              <button onClick={closeBill} className="btn btn-outline flex-1">Close</button>
+              {/* Footer */}
+              <div style={{ textAlign: 'center', padding: '6px 0', marginTop: 4, borderTop: '2px dashed #cbd5e1' }}>
+                <div style={{ fontSize: 9, color: '#64748b', fontStyle: 'italic' }}>Thank you for visiting {hdr?.hospitalName || 'BAGA HOSPITAL'}!</div>
+                <div style={{ fontSize: 7, color: '#94a3b8' }}>Computer Generated Bill | {saleBill.date} {saleBill.time}</div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <button onClick={printBillSlip} style={{
+                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                  padding: '8px 0', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6,
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}>
+                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                  Re-Print
+                </button>
+                <button onClick={closeBill} style={{
+                  flex: 1, padding: '8px 0', background: '#fff', color: '#475569', border: '1px solid #cbd5e1',
+                  borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}>
+                  Close
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Header */}
       <div>
@@ -748,179 +823,510 @@ export default function PharmacyPage() {
         <p className="text-sm text-slate-500">Medicine sales, prescriptions, and inventory management</p>
       </div>
 
-      {/* ==================== DASHBOARD TAB ==================== */}
-      {mainTab === 'dashboard' && (
+      {/* ==================== POINT OF SALE TAB ==================== */}
+      {mainTab === 'pos' && (
         <>
-          {/* Welcome Banner */}
-          <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 rounded-2xl p-6 text-white relative overflow-hidden">
-            <div className="absolute right-0 top-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/4"></div>
-            <div className="absolute right-20 bottom-0 w-32 h-32 bg-white/5 rounded-full translate-y-1/2"></div>
-            <div className="relative z-10">
-              <h2 className="text-2xl font-bold mb-1">Pharmacy Dashboard</h2>
-              <p className="text-emerald-100 text-sm">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          {/* Stats Row */}
+          <div className={`grid gap-3 ${licenseType === 'pharmacy' ? 'grid-cols-2' : 'grid-cols-2 lg:grid-cols-4'}`}>
+            <div className="stat-card card-hover border border-emerald-200 bg-emerald-50">
+              <p className="text-xs text-emerald-600 font-medium">Today&apos;s Sales</p>
+              <p className="text-2xl font-bold text-emerald-700">{currency} {todayTotal.toLocaleString()}</p>
+            </div>
+            <div className="stat-card card-hover border border-blue-200 bg-blue-50">
+              <p className="text-xs text-blue-600 font-medium">Total Sales Today</p>
+              <p className="text-2xl font-bold text-blue-700">{todaySales.length}</p>
+            </div>
+            {licenseType !== 'pharmacy' && (
+              <>
+                <div className="stat-card card-hover border border-purple-200 bg-purple-50">
+                  <p className="text-xs text-purple-600 font-medium">Indoor Patients</p>
+                  <p className="text-2xl font-bold text-purple-700">{todayIndoor}</p>
+                </div>
+                <div className="stat-card card-hover border border-amber-200 bg-amber-50">
+                  <p className="text-xs text-amber-600 font-medium">Outdoor Patients</p>
+                  <p className="text-2xl font-bold text-amber-700">{todayOutdoor}</p>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Patient Mode Toggle + Selection */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
+            {/* Mode Toggle - hidden for pharmacy license */}
+            {licenseType !== 'pharmacy' && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                <span className="font-semibold text-slate-700">Patient</span>
+              </div>
+              <div className="flex bg-slate-100 rounded-lg p-1">
+                <button
+                  onClick={() => { setPatientMode('Indoor'); clearPatient(); }}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${patientMode === 'Indoor' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                  Indoor Patient (Card Holder)
+                </button>
+                <button
+                  onClick={() => { setPatientMode('Outdoor'); clearPatient(); }}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${patientMode === 'Outdoor' ? 'bg-white shadow-sm text-amber-700' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  Outdoor Patient (Walk-in)
+                </button>
+              </div>
+            </div>
+            )}
+
+            {/* Indoor Patient Search */}
+            {patientMode === 'Indoor' && (
+              <>
+                {!selectedPatient ? (
+                  <div className="relative">
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative">
+                        <svg className="w-5 h-5 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        <input
+                          type="text"
+                          className="form-input pl-10"
+                          placeholder="Search by card number (BAGA-0001) or mobile number..."
+                          value={patientQuery}
+                          onChange={e => handlePatientSearch(e.target.value)}
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+                    {patientResults.length > 0 && (
+                      <div className="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg bg-white shadow-lg max-h-64 overflow-y-auto">
+                        {patientResults.map(p => (
+                          <button
+                            key={p.id}
+                            onClick={() => selectPatient(p)}
+                            className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-slate-100 last:border-0 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="font-mono font-bold text-blue-600">{p.patientNo}</span>
+                                <span className="ml-3 font-medium text-slate-700">{p.name}</span>
+                                <span className="ml-2 text-xs text-slate-400">{p.gender} | {p.age} yrs</span>
+                              </div>
+                              <span className="text-sm text-slate-400">{p.mobile}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {patientQuery.length >= 1 && patientResults.length === 0 && (
+                      <div className="mt-2 text-center py-4 text-sm text-slate-400 bg-slate-50 rounded-lg border border-slate-100">
+                        No patients found matching &ldquo;{patientQuery}&rdquo;
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                          {selectedPatient.name.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-800">{selectedPatient.name}</p>
+                          <p className="text-sm text-slate-500">
+                            <span className="font-mono text-blue-600 font-semibold">{selectedPatient.patientNo}</span>
+                            <span className="mx-2 text-slate-300">|</span>
+                            {selectedPatient.gender}
+                            <span className="mx-2 text-slate-300">|</span>
+                            {selectedPatient.age} yrs
+                            <span className="mx-2 text-slate-300">|</span>
+                            {selectedPatient.mobile}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            <span className={`badge ${selectedPatient.cardStatus === 'Active' ? 'badge-green' : 'badge-rose'} text-xs`}>{selectedPatient.cardStatus}</span>
+                            <span className="ml-2">Visits: {selectedPatient.totalVisits}</span>
+                          </p>
+                        </div>
+                      </div>
+                      <button onClick={clearPatient} className="btn btn-outline btn-sm">Change Patient</button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Outdoor Patient Form */}
+            {patientMode === 'Outdoor' && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                    #
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-800 text-sm">Walk-in Patient — <span className="font-mono font-bold text-amber-700">{outdoorNo}</span></p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="form-label">Full Name *</label>
+                    <input ref={outdoorNameRef} type="text" className="form-input" placeholder="Patient name" value={outdoorName} onChange={e => setOutdoorName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('name'); } }} />
+                  </div>
+                  <div>
+                    <label className="form-label">Mobile Number</label>
+                    <input ref={outdoorMobileRef} type="text" className="form-input" maxLength={11} inputMode="numeric" placeholder="03XX-XXXXXXX" value={outdoorMobile.replace(/[^0-9]/g,'')} onChange={e => setOutdoorMobile(e.target.value.replace(/[^0-9]/g,''))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('mobile'); } }} />
+                  </div>
+                  <div>
+                    <label className="form-label">Age</label>
+                    <input ref={outdoorAgeRef} type="text" className="form-input" maxLength={2} inputMode="numeric" placeholder="e.g. 35" value={outdoorAge.replace(/[^0-9]/g,'')} onChange={e => setOutdoorAge(e.target.value.replace(/[^0-9]/g,''))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('age'); } }} />
+                  </div>
+                  <div>
+                    <label className="form-label">Gender</label>
+                    <select className="form-input" value={outdoorGender} onChange={e => setOutdoorGender(e.target.value)}>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Medicine Search */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-2">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                <span className="font-semibold text-slate-700">Add Medicine to Cart</span>
+              </div>
+              <span className="text-sm text-slate-400">Search by medicine name, generic name, or category</span>
+            </div>
+            <div className="relative">
+              <div className="flex gap-2">
+                <div className="flex-1 relative">
+                  <svg className="w-5 h-5 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  <input
+                    ref={medSearchRef}
+                    type="text"
+                    className="form-input pl-10 text-base"
+                    placeholder="Search medicine... e.g. Paracetamol, Amoxicillin, Vitamin C"
+                    value={medQuery}
+                    onChange={e => handleMedSearch(e.target.value)}
+                    onFocus={() => { if (medResults.length > 0) setShowMedDropdown(true); }}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleMedSearchEnter(); } }}
+                  />
+                </div>
+                {showMedDropdown && (
+                  <button onClick={() => { setShowMedDropdown(false); setMedResults([]); }} className="btn btn-outline btn-sm">
+                    Close
+                  </button>
+                )}
+              </div>
+              {showMedDropdown && medResults.length > 0 && (
+                <div className="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg bg-white shadow-lg max-h-72 overflow-y-auto">
+                  {medResults.map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => addToCode(m)}
+                      className="w-full text-left px-4 py-3 hover:bg-emerald-50 border-b border-slate-100 last:border-0 transition-colors group"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-semibold text-slate-800 group-hover:text-emerald-700">{m.name}</span>
+                          <span className="text-xs text-slate-400 ml-2">({m.genericName})</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="badge badge-blue text-xs">{m.form}</span>
+                            <span className="text-xs text-slate-500">{m.strength}</span>
+                            <span className="text-xs text-slate-400">{m.packing}</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-emerald-700">{currency} {m.price.toLocaleString()}</p>
+                          <p className="text-xs text-slate-400">{m.category}</p>
+                          <p className="text-xs text-emerald-600 mt-1 font-medium">+ Add to Code</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {medQuery.length >= 1 && showMedDropdown && medResults.length === 0 && (
+                <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg p-4 text-center text-sm text-slate-400">
+                  No medicines found matching &ldquo;{medQuery}&rdquo;
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg transition-shadow">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                </div>
-                <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">Today</span>
-              </div>
-              <p className="text-2xl font-bold text-slate-800">{currency} {todayTotal.toLocaleString()}</p>
-              <p className="text-xs text-slate-500 mt-1">Today&apos;s Sales</p>
-            </div>
-
-            <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg transition-shadow">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                </div>
-                <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded-full">Count</span>
-              </div>
-              <p className="text-2xl font-bold text-slate-800">{todaySales.length}</p>
-              <p className="text-xs text-slate-500 mt-1">Total Transactions</p>
-            </div>
-
-            <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg transition-shadow">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
-                </div>
-                <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-full">Alert</span>
-              </div>
-              <p className="text-2xl font-bold text-slate-800">{medicines.filter((m: any) => m.stock <= (m.reorderLevel || 10) && m.stock > 0).length}</p>
-              <p className="text-xs text-slate-500 mt-1">Low Stock Items</p>
-            </div>
-
-            <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg transition-shadow">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                </div>
-              </div>
-              <p className="text-2xl font-bold text-slate-800">{medicines.length}</p>
-              <p className="text-xs text-slate-500 mt-1">Total Medicines</p>
-            </div>
-          </div>
-
-          {/* Two Column: Recent Sales + Low Stock */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Recent Sales - 2 cols */}
-            <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+          {/* ========= PRESCRIPTION CODE PANEL ========= */}
+          {codeItems.length > 0 && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-300 p-4 space-y-4">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-                  <h3 className="font-bold text-slate-800">Recent Sales</h3>
-                  <span className="badge badge-emerald">{todaySales.length} today</span>
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2zm-6 4h3m-3 4h3" /></svg>
+                  <h3 className="font-bold text-blue-800">Prescription Code ({codeItems.length} medicine{codeItems.length > 1 ? 's' : ''})</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-blue-700">{currency} {codeTotal.toLocaleString()}</span>
+                  <button onClick={() => setCodeItems([])} className="btn btn-outline btn-sm text-red-500 border-red-200 hover:bg-red-50">Clear Code</button>
                 </div>
               </div>
-              {todaySales.length === 0 ? (
-                <div className="p-12 text-center">
-                  <svg className="w-16 h-16 text-slate-200 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                  <p className="text-slate-400 font-medium">No sales today</p>
-                  <p className="text-slate-300 text-xs mt-1">Start selling from Point of Sale</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto max-h-80 overflow-y-auto">
+
+              <div className="space-y-2">
+                {codeItems.map((ci, idx) => (
+                  <div key={ci.medicineId} className="bg-white border border-blue-200 rounded-lg p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded">{idx + 1}</span>
+                          <span className="font-bold text-slate-800">{ci.name}</span>
+                          <span className="text-xs text-slate-400">({ci.genericName})</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <span className="badge badge-blue">{ci.form}</span>
+                          <span>{ci.strength}</span>
+                          <span className="text-slate-300">|</span>
+                          <span className="font-bold text-emerald-700">{currency} {ci.price.toLocaleString()}</span>
+                        </div>
+                      </div>
+                      <button onClick={() => removeFromCode(ci.medicineId)} className="w-7 h-7 rounded flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-600 shrink-0" title="Remove">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 mt-2">
+                      <div>
+                        <label className="text-xs text-slate-500 font-medium">Days *</label>
+                        <select
+                          className="form-input h-8 text-xs"
+                          value={ci.days}
+                          onChange={e => updateCodeItemDays(ci.medicineId, Number(e.target.value))}
+                        >
+                          <option value={1}>1 day</option>
+                          <option value={3}>3 days</option>
+                          <option value={5}>5 days</option>
+                          <option value={7}>7 days</option>
+                          <option value={10}>10 days</option>
+                          <option value={14}>14 days</option>
+                          <option value={15}>15 days</option>
+                          <option value={21}>21 days</option>
+                          <option value={30}>30 days</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 font-medium">Dosage</label>
+                        <select
+                          className="form-input h-8 text-xs"
+                          value={ci.dosage}
+                          onChange={e => updateCodeItemDosage(ci.medicineId, e.target.value)}
+                        >
+                          <option value="1 tablet">1 tablet</option>
+                          <option value="0.5 tablet">0.5 tablet</option>
+                          <option value="2 tablets">2 tablets</option>
+                          <option value="1 capsule">1 capsule</option>
+                          <option value="1 spoon">1 spoon (5ml)</option>
+                          <option value="2 spoons">2 spoons (10ml)</option>
+                          <option value="1 injection">1 injection</option>
+                          <option value="as prescribed">As prescribed</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 font-medium">Frequency</label>
+                        <select
+                          className="form-input h-8 text-xs"
+                          value={ci.frequency}
+                          onChange={e => updateCodeItemFrequency(ci.medicineId, e.target.value)}
+                        >
+                          <option value="OD (once a day)">OD (Once a day)</option>
+                          <option value="BID (twice a day)">BID (Twice a day)</option>
+                          <option value="TID (3 times a day)">TID (3 times a day)</option>
+                          <option value="QID (4 times a day)">QID (4 times a day)</option>
+                          <option value="SOS (as needed)">SOS (As needed)</option>
+                          <option value="At bedtime">At bedtime</option>
+                          <option value="Empty stomach">Empty stomach</option>
+                          <option value="After meal">After meal</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button onClick={addAllToCart} className="btn btn-primary btn-lg w-full flex items-center justify-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                Add {codeItems.length} Medicine{codeItems.length > 1 ? 's' : ''} to Cart
+              </button>
+            </div>
+          )}
+
+          {/* Cart / Sale Table */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                <h3 className="font-bold text-slate-800">
+                  Medicine Cart
+                  {cart.length > 0 && <span className="ml-2 badge badge-amber">{cart.length} item{cart.length > 1 ? 's' : ''}</span>}
+                </h3>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-500">
+                  Patient: {patientMode === 'Indoor'
+                    ? (selectedPatient ? <span className="font-mono font-bold text-blue-600">{selectedPatient.patientNo} - {selectedPatient.name}</span> : <span className="text-red-400">Not selected</span>)
+                    : (outdoorName ? <span className="font-mono font-bold text-amber-600">{outdoorNo} - {outdoorName}</span> : <span className="text-red-400">Not entered</span>)
+                  }
+                </span>
+              </div>
+            </div>
+
+            {cart.length === 0 ? (
+              <div className="p-12 text-center">
+                <svg className="w-16 h-16 text-slate-200 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" /></svg>
+                <p className="text-slate-400 text-lg font-medium">Cart is empty</p>
+                <p className="text-slate-300 text-sm mt-1">Search medicines above and add them to the cart</p>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
                   <table className="data-table">
-                    <thead className="sticky top-0 bg-white">
+                    <thead>
                       <tr>
-                        <th>Time</th>
-                        <th>Patient</th>
-                        <th>Type</th>
-                        <th>Items</th>
+                        <th className="w-8">#</th>
+                        <th>Medicine</th>
+                        <th>Form</th>
+                        <th>Strength</th>
+                        <th>Packing</th>
+                        <th className="text-center">Days</th>
+                        <th className="text-right">Price</th>
+                        <th className="text-center w-32">Qty</th>
                         <th className="text-right">Total</th>
+                        <th className="w-20">Action</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {todaySales.sort((a: any, b: any) => b.time.localeCompare(a.time)).slice(0, 15).map((s: any) => (
-                        <tr key={s.id} className="hover:bg-slate-50">
-                          <td className="text-sm text-slate-500 whitespace-nowrap">{s.time}</td>
+                      {cart.map((item, idx) => (
+                        <tr key={item.medicineId} className="hover:bg-slate-50">
+                          <td className="text-slate-400 text-sm font-medium">{idx + 1}</td>
                           <td>
-                            <p className="font-medium text-sm">{s.patientName}</p>
-                            <p className="text-xs text-slate-400 font-mono">{s.patientNo}</p>
+                            <p className="font-semibold text-slate-800">{item.name}</p>
+                            <p className="text-xs text-slate-400">{item.genericName}</p>
                           </td>
-                          <td><span className={`badge text-xs ${s.type === 'Indoor' ? 'badge-blue' : 'badge-amber'}`}>{s.type}</span></td>
-                          <td className="text-sm">{s.items.length} items</td>
-                          <td className="text-right font-bold text-emerald-700">{currency} {s.totalAmount.toLocaleString()}</td>
+                          <td><span className="badge badge-blue">{item.form}</span></td>
+                          <td className="text-sm text-slate-600">{item.strength}</td>
+                          <td className="text-sm text-slate-500">{item.packing}</td>
+                          <td className="text-center">
+                            <span className="badge badge-amber text-xs">{item.days} days</span>
+                          </td>
+                          <td className="text-right font-medium text-slate-700">{currency} {item.price.toLocaleString()}</td>
+                          <td className="text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => updateCartQty(item.medicineId, item.quantity - 1)}
+                                className="w-8 h-8 rounded-md border border-slate-300 flex items-center justify-center text-slate-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors font-bold"
+                              >-</button>
+                              <input
+                                type="number"
+                                min={1}
+                                value={item.quantity}
+                                onChange={e => {
+                                  const v = parseInt(e.target.value) || 1;
+                                  updateCartQty(item.medicineId, v > 0 ? v : 1);
+                                }}
+                                className="w-14 h-8 text-center border border-slate-300 rounded-md text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                              />
+                              <button
+                                onClick={() => updateCartQty(item.medicineId, item.quantity + 1)}
+                                className="w-8 h-8 rounded-md border border-slate-300 flex items-center justify-center text-slate-500 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 transition-colors font-bold"
+                              >+</button>
+                            </div>
+                          </td>
+                          <td className="text-right font-bold text-emerald-700">{currency} {item.total.toLocaleString()}</td>
+                          <td>
+                            <button
+                              onClick={() => removeFromCart(item.medicineId)}
+                              className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                              title="Remove from cart"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              )}
-            </div>
 
-            {/* Low Stock Alerts - 1 col */}
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-200 flex items-center gap-2">
-                <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
-                <h3 className="font-bold text-slate-800">Low Stock</h3>
-              </div>
-              {(() => {
-                const lowStock = medicines.filter((m: any) => m.stock <= (m.reorderLevel || 10) && m.stock > 0).sort((a: any, b: any) => a.stock - b.stock).slice(0, 10);
-                const outOfStock = medicines.filter((m: any) => m.stock === 0);
-                return lowStock.length === 0 && outOfStock.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <svg className="w-12 h-12 text-emerald-200 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    <p className="text-slate-400 text-sm font-medium">All medicines in stock</p>
-                  </div>
-                ) : (
-                  <div className="p-3 space-y-2 max-h-80 overflow-y-auto">
-                    {outOfStock.slice(0, 5).map((m: any) => (
-                      <div key={m.id} className="flex items-center justify-between p-2.5 bg-red-50 border border-red-200 rounded-lg">
-                        <div>
-                          <p className="font-semibold text-sm text-red-800">{m.name}</p>
-                          <p className="text-xs text-red-500">{m.form} | {m.strength}</p>
-                        </div>
-                        <span className="text-xs font-bold text-red-600 bg-red-100 px-2 py-1 rounded-full">Out of Stock</span>
+                {/* Cart Footer - Total + Actions */}
+                <div className="border-t-2 border-slate-200 bg-slate-50 px-5 py-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="bg-white border border-slate-200 rounded-lg px-4 py-3">
+                        <p className="text-xs text-slate-400">Items</p>
+                        <p className="text-lg font-bold text-slate-700">{cart.length}</p>
                       </div>
-                    ))}
-                    {lowStock.map((m: any) => (
-                      <div key={m.id} className="flex items-center justify-between p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
-                        <div>
-                          <p className="font-semibold text-sm text-slate-800">{m.name}</p>
-                          <p className="text-xs text-slate-400">{m.form} | {m.strength}</p>
-                        </div>
-                        <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-1 rounded-full">{m.stock} left</span>
+                      <div className="bg-white border border-2 border-emerald-200 rounded-lg px-6 py-3">
+                        <p className="text-xs text-emerald-500 font-medium">Grand Total</p>
+                        <p className="text-2xl font-bold text-emerald-700">{currency} {cartTotal.toLocaleString()}</p>
                       </div>
-                    ))}
+                    </div>
+                    <div className="flex gap-2 w-full sm:w-auto">
+                      <button onClick={clearCart} className="btn btn-outline flex-1 sm:flex-none">
+                        Clear Cart
+                      </button>
+                      <button onClick={completeSale} className="btn btn-success btn-lg flex-1 sm:flex-none px-8">
+                        <svg className="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        Complete Sale
+                      </button>
+                    </div>
                   </div>
-                );
-              })()}
-            </div>
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Top Selling Medicines */}
+          {/* Recent Sales */}
           {todaySales.length > 0 && (
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-200 flex items-center gap-2">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-                <h3 className="font-bold text-slate-800">Top Selling Medicines (Today)</h3>
+              <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <h3 className="font-bold text-slate-800">Today&apos;s Sales ({todaySales.length})</h3>
+                </div>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 p-4">
-                {(() => {
-                  const medMap: Record<string, { name: string; qty: number; total: number }> = {};
-                  todaySales.forEach((s: any) => s.items.forEach((it: any) => {
-                    if (!medMap[it.medicineId]) medMap[it.medicineId] = { name: it.name, qty: 0, total: 0 };
-                    medMap[it.medicineId].qty += it.quantity;
-                    medMap[it.medicineId].total += it.total;
-                  }));
-                  return Object.values(medMap).sort((a, b) => b.qty - a.qty).slice(0, 5).map((m, i) => (
-                    <div key={i} className="text-center p-3 bg-gradient-to-b from-blue-50 to-white border border-blue-100 rounded-xl">
-                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                        <span className="text-blue-700 font-bold text-sm">#{i + 1}</span>
-                      </div>
-                      <p className="font-semibold text-sm text-slate-800 truncate">{m.name}</p>
-                      <p className="text-xs text-slate-500">{m.qty} sold</p>
-                      <p className="text-sm font-bold text-emerald-700 mt-1">{currency} {m.total.toLocaleString()}</p>
-                    </div>
-                  ));
-                })()}
+              <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                <table className="data-table">
+                  <thead className="sticky top-0 bg-white">
+                    <tr>
+                      <th>Time</th>
+                      <th>Patient No</th>
+                      <th>Patient Name</th>
+                      <th>Type</th>
+                      <th>Medicines</th>
+                      <th className="text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {todaySales.sort((a, b) => b.time.localeCompare(a.time)).map(s => (
+                      <tr key={s.id}>
+                        <td className="text-sm text-slate-500 whitespace-nowrap">{s.time}</td>
+                        <td className="font-mono font-bold text-blue-600 text-sm">{s.patientNo}</td>
+                        <td className="font-medium text-sm">{s.patientName}</td>
+                        <td>
+                          <span className={`badge ${s.type === 'Indoor' ? 'badge-blue' : 'badge-amber'}`}>
+                            {s.type}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="flex flex-wrap gap-1">
+                            {s.items.slice(0, 3).map((it, i) => (
+                              <span key={i} className="badge text-xs">{it.name} x{it.quantity}</span>
+                            ))}
+                            {s.items.length > 3 && (
+                              <span className="badge text-xs badge-amber">+{s.items.length - 3} more</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="text-right font-bold text-emerald-700">{currency} {s.totalAmount.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -953,7 +1359,7 @@ export default function PharmacyPage() {
                       onKeyDown={e => {
                         if (e.key === 'Enter') {
                           const stored = localStorage.getItem('baga_profit_password');
-                          if (!stored || returnPwd === stored) {
+                          if (returnPwd === stored) {
                             setShowReturnPwdModal(false);
                             setShowReturnModal(true);
                             setReturnPwd('');
@@ -972,7 +1378,7 @@ export default function PharmacyPage() {
                     <button onClick={() => { setShowReturnPwdModal(false); setReturnPwd(''); setReturnPwdError(''); }} className="btn btn-outline">Cancel</button>
                     <button onClick={() => {
                       const stored = localStorage.getItem('baga_profit_password');
-                      if (!stored || returnPwd === stored) {
+                      if (returnPwd === stored) {
                         setShowReturnPwdModal(false);
                         setShowReturnModal(true);
                         setReturnPwd('');
@@ -980,7 +1386,7 @@ export default function PharmacyPage() {
                       } else {
                         setReturnPwdError('Incorrect password');
                       }
-                    }} className="btn btn-primary">Verify &amp; Continue</button>
+                    }} className="btn btn-primary">Verify & Continue</button>
                   </div>
                 </div>
               </div>
@@ -1032,375 +1438,6 @@ export default function PharmacyPage() {
               </div>
             </div>
           )}
-        </>
-      )}
-
-      {/* ==================== POINT OF SALE TAB ==================== */}
-      {mainTab === 'pos' && (
-        <>
-          <div className="flex flex-col lg:flex-row gap-6">
-            {/* ========== LEFT COLUMN: Medicine Search & Grid ========== */}
-            <div className="flex-1 min-w-0 space-y-4">
-              {/* Search Bar */}
-              <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-                <div className="relative">
-                  <svg className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                  <input
-                    ref={medSearchRef}
-                    type="text"
-                    className="w-full pl-11 pr-10 py-3 text-base border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 bg-slate-50 transition-colors"
-                    placeholder="Search medicine by name, generic name, or category..."
-                    value={medQuery}
-                    onChange={e => handleMedSearch(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleMedSearchEnter(); } }}
-                  />
-                  {medQuery.length > 0 && (
-                    <button
-                      onClick={() => { setMedQuery(''); setMedResults([]); setShowMedDropdown(false); }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-500 hover:text-slate-700 transition-colors"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                  )}
-                </div>
-                {medQuery.length > 0 && (
-                  <p className="mt-2 text-sm text-slate-500">
-                    {medResults.length} medicine{medResults.length !== 1 ? 's' : ''} found for &ldquo;{medQuery}&rdquo;
-                  </p>
-                )}
-              </div>
-
-              {/* Medicine Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {(medQuery.length > 0 ? medResults : medicines.slice(0, 30)).map(m => (
-                  <div
-                    key={m.id}
-                    className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all duration-200 group flex flex-col"
-                  >
-                    <div className="flex-1 space-y-2">
-                      <h4 className="font-bold text-slate-800 text-sm leading-tight">{m.name}</h4>
-                      <p className="text-xs text-slate-400">{m.genericName}</p>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-xs font-medium border border-emerald-100">{m.form}</span>
-                        <span className="text-xs text-slate-500">{m.strength}</span>
-                        <span className="text-xs text-slate-300">&middot;</span>
-                        <span className="text-xs text-slate-400">{m.packing}</span>
-                      </div>
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                        <div>
-                          <p className="text-lg font-bold text-emerald-600">{currency} {m.price.toLocaleString()}</p>
-                          <p className="text-xs text-slate-400">Stock: {m.stock || 0}</p>
-                        </div>
-                        <button
-                          onClick={() => {
-                            const existing = cart.find(c => c.medicineId === m.id);
-                            if (existing) {
-                              setCart(cart.map(c => c.medicineId === m.id ? { ...c, quantity: c.quantity + 1, total: (c.quantity + 1) * c.price } : c));
-                            } else {
-                              setCart([...cart, {
-                                medicineId: m.id, name: m.name, genericName: m.genericName,
-                                form: m.form, strength: m.strength, packing: m.packing,
-                                price: m.price, quantity: 1, total: m.price,
-                                days: 0, dosage: '', frequency: '',
-                              }]);
-                            }
-                            showToast(`${m.name} added to cart`, 'success');
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm hover:shadow-md"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                          Add
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Empty States */}
-              {medQuery.length === 0 && medicines.length === 0 && (
-                <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-sm">
-                  <svg className="w-16 h-16 text-slate-200 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
-                  <p className="text-slate-400 text-lg font-medium">No medicines in inventory</p>
-                  <p className="text-slate-300 text-sm mt-1">Add medicines from the Inventory tab first</p>
-                </div>
-              )}
-              {medQuery.length > 0 && medResults.length === 0 && (
-                <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-sm">
-                  <svg className="w-16 h-16 text-slate-200 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                  <p className="text-slate-400 text-lg font-medium">No medicines found</p>
-                  <p className="text-slate-300 text-sm mt-1">Try a different search term</p>
-                </div>
-              )}
-              {medQuery.length === 0 && medicines.length > 30 && (
-                <p className="text-center text-sm text-slate-400">Showing 30 of {medicines.length} medicines. Use search to find more.</p>
-              )}
-            </div>
-
-            {/* ========== RIGHT COLUMN: Patient + Cart (Sticky) ========== */}
-            <div className="w-full lg:w-[420px] shrink-0 lg:sticky lg:top-4 lg:self-start space-y-4 lg:max-h-[calc(100vh-100px)] lg:overflow-y-auto lg:pr-1">
-
-              {/* Patient Section */}
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
-                  <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                  <span className="text-sm font-semibold text-slate-700">Patient Details</span>
-                </div>
-
-                <div className="p-4 space-y-3">
-                  {/* Mode Toggle - hospital license only */}
-                  {licenseType !== 'pharmacy' && (
-                    <div className="flex bg-slate-100 rounded-lg p-0.5">
-                      <button
-                        onClick={() => { setPatientMode('Indoor'); clearPatient(); }}
-                        className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${patientMode === 'Indoor' ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}
-                      >
-                        Indoor
-                      </button>
-                      <button
-                        onClick={() => { setPatientMode('Outdoor'); clearPatient(); }}
-                        className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${patientMode === 'Outdoor' ? 'bg-white shadow-sm text-amber-700' : 'text-slate-500 hover:text-slate-700'}`}
-                      >
-                        Outdoor
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Indoor Patient Search */}
-                  {patientMode === 'Indoor' && (
-                    selectedPatient ? (
-                      <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="w-9 h-9 bg-emerald-600 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">
-                              {selectedPatient.name.charAt(0)}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="font-bold text-slate-800 text-sm truncate">{selectedPatient.name}</p>
-                              <p className="text-xs text-slate-500 truncate">
-                                <span className="font-mono text-emerald-600 font-semibold">{selectedPatient.patientNo}</span>
-                                <span className="mx-1 text-slate-300">|</span>
-                                {selectedPatient.gender} | {selectedPatient.age} yrs
-                              </p>
-                            </div>
-                          </div>
-                          <button onClick={clearPatient} className="text-xs text-slate-400 hover:text-red-500 font-medium shrink-0">Change</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="relative">
-                        <svg className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                        <input
-                          type="text"
-                          className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400"
-                          placeholder="Search card number or mobile..."
-                          value={patientQuery}
-                          onChange={e => handlePatientSearch(e.target.value)}
-                          autoFocus
-                        />
-                        {patientResults.length > 0 && (
-                          <div className="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg bg-white shadow-lg max-h-48 overflow-y-auto">
-                            {patientResults.map(p => (
-                              <button
-                                key={p.id}
-                                onClick={() => selectPatient(p)}
-                                className="w-full text-left px-3 py-2.5 hover:bg-emerald-50 border-b border-slate-100 last:border-0 transition-colors text-sm"
-                              >
-                                <span className="font-mono font-bold text-emerald-600">{p.patientNo}</span>
-                                <span className="ml-2 font-medium text-slate-700">{p.name}</span>
-                                <span className="ml-1 text-xs text-slate-400">{p.mobile}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {patientQuery.length >= 1 && patientResults.length === 0 && (
-                          <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-center text-xs text-slate-400">
-                            No patients found
-                          </div>
-                        )}
-                      </div>
-                    )
-                  )}
-
-                  {/* Outdoor Patient Form - Compact */}
-                  {patientMode === 'Outdoor' && (
-                    <div className="space-y-2">
-                      <div className="flex gap-3 mb-1">
-                        <div className="flex-1 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                          <span className="text-[10px] text-blue-500 font-medium block">Slip ID</span>
-                          <span className="text-xs font-mono font-bold text-blue-700">{slipId}</span>
-                        </div>
-                        <div className="flex-1 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                          <span className="text-[10px] text-emerald-500 font-medium block">Pharmacy ID</span>
-                          <span className="text-xs font-mono font-bold text-emerald-700">{pharmacyId}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-mono font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">{outdoorNo}</span>
-                        <span className="text-xs text-slate-400">Walk-in Patient</span>
-                      </div>
-                      <input
-                        ref={outdoorNameRef}
-                        type="text"
-                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400"
-                        placeholder="Patient name *"
-                        value={outdoorName}
-                        onChange={e => setOutdoorName(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('name'); } }}
-                      />
-                      <input
-                        ref={outdoorMobileRef}
-                        type="text"
-                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400"
-                        placeholder="Mobile number"
-                        maxLength={11}
-                        inputMode="numeric"
-                        value={outdoorMobile.replace(/[^0-9]/g, '')}
-                        onChange={e => setOutdoorMobile(e.target.value.replace(/[^0-9]/g, ''))}
-                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('mobile'); } }}
-                      />
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          ref={outdoorAgeRef}
-                          type="text"
-                          className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400"
-                          placeholder="Age"
-                          maxLength={2}
-                          inputMode="numeric"
-                          value={outdoorAge.replace(/[^0-9]/g, '')}
-                          onChange={e => setOutdoorAge(e.target.value.replace(/[^0-9]/g, ''))}
-                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('age'); } }}
-                        />
-                        <select
-                          className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400"
-                          value={outdoorGender}
-                          onChange={e => setOutdoorGender(e.target.value)}
-                        >
-                          <option value="Male">Male</option>
-                          <option value="Female">Female</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Cart Section */}
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                {/* Cart Header */}
-                <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
-                  <div className="flex items-center gap-2">
-                    <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" /></svg>
-                    <span className="text-sm font-semibold text-slate-700">Cart</span>
-                    {cart.length > 0 && (
-                      <span className="bg-emerald-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">{cart.length}</span>
-                    )}
-                  </div>
-                  {cart.length > 0 && (
-                    <button onClick={clearCart} className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors">Clear All</button>
-                  )}
-                </div>
-
-                {/* Cart Body */}
-                {cart.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <svg className="w-14 h-14 text-slate-200 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" /></svg>
-                    <p className="text-slate-400 text-sm font-medium">Cart is empty</p>
-                    <p className="text-slate-300 text-xs mt-1">Add medicines from the grid</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="max-h-[280px] overflow-y-auto divide-y divide-slate-100">
-                      {cart.map(item => (
-                        <div key={item.medicineId} className="p-3 flex items-center gap-2.5">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-slate-800 truncate">{item.name}</p>
-                            <p className="text-xs text-slate-400">{item.form} &middot; {item.strength}</p>
-                            <p className="text-xs font-bold text-emerald-600 mt-0.5">{currency} {item.price.toLocaleString()} &times; {item.quantity} = {currency} {item.total.toLocaleString()}</p>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              onClick={() => updateCartQty(item.medicineId, item.quantity - 1)}
-                              className="w-7 h-7 rounded-md border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-red-50 hover:border-red-200 hover:text-red-500 transition-colors text-sm font-bold"
-                            >&minus;</button>
-                            <span className="w-8 text-center text-sm font-semibold text-slate-700">{item.quantity}</span>
-                            <button
-                              onClick={() => updateCartQty(item.medicineId, item.quantity + 1)}
-                              className="w-7 h-7 rounded-md border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 transition-colors text-sm font-bold"
-                            >+</button>
-                          </div>
-                          <button
-                            onClick={() => removeFromCart(item.medicineId)}
-                            className="w-7 h-7 rounded flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 shrink-0 transition-colors"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Cart Footer */}
-                    <div className="border-t border-slate-200 p-4 space-y-2.5 bg-slate-50/50 shrink-0">
-                      {/* Subtotal */}
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-500">Subtotal ({cart.length} items)</span>
-                        <span className="font-semibold text-slate-700">{currency} {cartTotal.toLocaleString()}</span>
-                      </div>
-
-                      {/* Discount */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm text-slate-500">Discount (%)</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={billDiscount}
-                          onChange={e => setBillDiscount(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
-                          className="w-20 h-8 text-right border border-slate-200 rounded-lg px-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 bg-white"
-                          placeholder="0"
-                        />
-                      </div>
-                      {billDiscount > 0 && (
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-red-500">Discount Amount</span>
-                          <span className="text-red-500 font-semibold">-{currency} {Math.round(cartTotal * billDiscount / 100).toLocaleString()}</span>
-                        </div>
-                      )}
-
-                      {/* Grand Total */}
-                      <div className="flex items-center justify-between pt-3 border-t-2 border-slate-300">
-                        <span className="text-base font-bold text-slate-800">Grand Total</span>
-                        <span className="text-xl font-black text-emerald-700">{currency} {(cartTotal - Math.round(cartTotal * billDiscount / 100)).toLocaleString()}</span>
-                      </div>
-
-                      {/* Payment Method */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm text-slate-500">Payment</span>
-                        <select
-                          value={paymentMethod}
-                          onChange={e => setPaymentMethod(e.target.value as 'Cash' | 'Card' | 'Online')}
-                          className="h-8 text-sm border border-slate-200 rounded-lg px-2 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 bg-white"
-                        >
-                          <option value="Cash">Cash</option>
-                          <option value="Card">Card</option>
-                          <option value="Online">Online</option>
-                        </select>
-                      </div>
-
-                      {/* Checkout Button */}
-                      <button
-                        onClick={completeSale}
-                        className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                        Complete Sale
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
         </>
       )}
 
@@ -1709,7 +1746,7 @@ export default function PharmacyPage() {
 
           {/* Medicine Table */}
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: 'calc(100vh - 340px)' }}>
               <table className="data-table">
                 <thead className="sticky top-0 bg-white z-10">
                   <tr>
@@ -1720,8 +1757,6 @@ export default function PharmacyPage() {
                     <th>Packing</th>
                     <th>Category</th>
                     <th className="text-right">Price</th>
-                    <th className="text-right">Cost</th>
-                    <th className="text-right">Wholesale</th>
                     <th>Stock</th>
                     <th>Expiry</th>
                     <th>Status</th>
@@ -1747,8 +1782,6 @@ export default function PharmacyPage() {
                           <svg className="w-3 h-3 inline ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                         </button>
                       </td>
-                      <td className="text-right text-sm text-slate-500">{m.purchasePrice ? `${currency} ${m.purchasePrice.toLocaleString()}` : '-'}</td>
-                      <td className="text-right text-sm text-slate-500">{m.wholesalePrice ? `${currency} ${m.wholesalePrice.toLocaleString()}` : '-'}</td>
                       <td>
                         <span className={`font-semibold ${m.stock <= 0 ? 'text-red-600' : m.stock <= (m.minStock || 10) ? 'text-amber-600' : 'text-emerald-600'}`}>
                           {m.stock}
@@ -1772,8 +1805,14 @@ export default function PharmacyPage() {
                         </span>
                       </td>
                       <td>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 flex-wrap">
                           <button onClick={() => openEditMed(m)} className="btn btn-outline btn-sm">Edit</button>
+                          <button
+                            onClick={() => toggleMedStatus(m)}
+                            className={`btn btn-sm ${m.active ? 'btn-danger' : 'btn-success'}`}
+                          >
+                            {m.active ? 'Disable' : 'Enable'}
+                          </button>
                           <button onClick={() => setDeleteConfirm(m)} className="btn btn-sm btn-danger">Delete</button>
                         </div>
                       </td>
@@ -1781,7 +1820,7 @@ export default function PharmacyPage() {
                   ))}
                   {filteredMedicines.length === 0 && (
                     <tr>
-                      <td colSpan={13} className="text-center py-12 text-slate-400">
+                      <td colSpan={11} className="text-center py-12 text-slate-400">
                         No medicines found matching your search criteria.
                       </td>
                     </tr>
@@ -1957,34 +1996,6 @@ export default function PharmacyPage() {
                       <input type="text" className="form-input" placeholder="Enter new category name" value={fNewCategory} onChange={e => setFNewCategory(e.target.value)} />
                     </div>
                   )}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    <div>
-                      <label className="form-label">Mfg. Date</label>
-                      <input type="date" className="form-input" value={fMfgDate} onChange={e => setFMfgDate(e.target.value)} />
-                    </div>
-                    <div>
-                      <label className="form-label">Batch No.</label>
-                      <input type="text" className="form-input" placeholder="e.g. B12345" value={fBatchNo} onChange={e => setFBatchNo(e.target.value)} />
-                    </div>
-                    <div>
-                      <label className="form-label">Expiry Date</label>
-                      <input type="date" className="form-input" value={fExpiryDate} onChange={e => setFExpiryDate(e.target.value)} />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="form-label">Cost Price ({currency})</label>
-                      <input type="number" className="form-input" placeholder="0" value={fCostPrice} onChange={e => setFCostPrice(e.target.value)} min={0} />
-                    </div>
-                    <div>
-                      <label className="form-label">Wholesale ({currency})</label>
-                      <input type="number" className="form-input" placeholder="0" value={fWholesalePrice} onChange={e => setFWholesalePrice(e.target.value)} min={0} />
-                    </div>
-                    <div>
-                      <label className="form-label">Stock (Strips)</label>
-                      <input type="number" className="form-input" placeholder="0" value={fStock} onChange={e => setFStock(e.target.value)} min={0} />
-                    </div>
-                  </div>
                   <button onClick={saveMed} className="btn btn-success btn-lg w-full">
                     {editingMed ? 'Update Medicine' : 'Add Medicine'}
                   </button>

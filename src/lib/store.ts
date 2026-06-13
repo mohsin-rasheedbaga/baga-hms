@@ -454,17 +454,7 @@ const defaultMedicines: MedicineItem[] = [
   { id: 'med80', name: 'Sucralfate', genericName: 'Sucralfate', form: 'Tablet', strength: '1g', packing: '10 tablets', price: 85, category: 'Gastrointestinal', active: true, stock: 50, expiryDate: '2027-01-15', minStock: 10 },
 ];
 
-export function getMedicines(): MedicineItem[] {
-  const meds = get(KEYS.medicines, defaultMedicines);
-  // Backward compatibility: fill new fields with defaults for old data
-  return meds.map(m => ({
-    ...m,
-    purchasePrice: (m as any).purchasePrice ?? 0,
-    wholesalePrice: (m as any).wholesalePrice ?? 0,
-    company: (m as any).company ?? '',
-    location: (m as any).location ?? '',
-  }));
-}
+export function getMedicines(): MedicineItem[] { return get(KEYS.medicines, defaultMedicines); }
 export function setMedicines(m: MedicineItem[]): void { set(KEYS.medicines, m); }
 export function addMedicine(m: MedicineItem): void { const all = getMedicines(); all.push(m); setMedicines(all); }
 export function updateMedicine(id: string, data: Partial<MedicineItem>): void { setMedicines(getMedicines().map(m => m.id === id ? { ...m, ...data } : m)); }

@@ -134,9 +134,7 @@ function updateLog(msg) {
   console.log('[AutoUpdate]', msg);
 }
 
-// GitHub PAT for private repo access
-// Token is injected during CI/CD build via GitHub Actions secret
-// In development, create electron/config.json: { "gh_token": "ghp_xxx" }
+// GitHub PAT for private repo - read from config file (not in git for security)
 let GH_TOKEN = '';
 try {
   const cfgPaths = [
@@ -146,14 +144,11 @@ try {
   for (const cp of cfgPaths) {
     if (fs.existsSync(cp)) {
       GH_TOKEN = JSON.parse(fs.readFileSync(cp, 'utf8')).gh_token || '';
-      if (GH_TOKEN) {
-        updateLog('GH_TOKEN loaded from: ' + cp);
-        break;
-      }
+      updateLog('GH_TOKEN loaded from: ' + cp);
+      break;
     }
   }
-} catch (e) {}
-updateLog('GH_TOKEN: ' + (GH_TOKEN ? 'SET' : 'EMPTY'));
+} catch (e) { updateLog('No config file found'); }
 
 function sendToAllWindows(channel, data) {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, data);
@@ -293,9 +288,7 @@ async function checkForUpdates() {
     updateLog('Latest release: ' + latestVersion + ' | Current: ' + APP_VERSION);
 
     // Version guard: NEVER download older or equal version
-    // compareVersions(a, b): returns 1 if b > a (newer), -1 if b < a (older), 0 if equal
-    // We skip download only when installed >= latest (returns -1 or 0)
-    if (compareVersions(APP_VERSION, latestVersion) <= 0) {
+    if (compareVersions(APP_VERSION, latestVersion) >= 0) {
       updateLog('Already up to date (or newer). Installed: ' + APP_VERSION + ', Latest: ' + latestVersion);
       sendToAllWindows('update-status', { status: 'not-available', lastChecked: new Date().toISOString(), version: latestVersion });
       return;

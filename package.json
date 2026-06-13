@@ -1,6 +1,6 @@
 {
   "name": "baga-hms",
-  "version": "3.5.3",
+  "version": "3.5.4",
   "private": true,
   "description": "BAGA Hospital Management System - Desktop Edition",
   "main": "electron/main.js",
@@ -32,10 +32,10 @@
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@types/better-sqlite3": "^7.6.12",
     "concurrently": "^9.1.2",
     "electron": "^35.1.5",
     "electron-builder": "^26.0.12",
@@ -63,15 +63,11 @@
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         },
         {
           "target": "portable",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         }
       ],
       "icon": "build/icon.ico",

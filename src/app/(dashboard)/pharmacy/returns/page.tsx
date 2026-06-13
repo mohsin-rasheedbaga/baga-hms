@@ -1,28 +1,79 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { todayStr } from '@/lib/store';
+import { useState, useEffect, useCallback } from 'react';
+import { todayStr, timeStr, genId, getHospitalSettings } from '@/lib/store';
 import { triggerPrint } from '@/lib/print-utils';
 
-interface MedicineReturn {
-  id: string;
+/* ==================== TYPES ==================== */
+
+interface PharmacySaleItem {
   medicineId: string;
-  medicineName: string;
+  name: string;
+  genericName: string;
+  form: string;
+  strength: string;
+  packing: string;
+  price: number;
   quantity: number;
-  returnPrice: number;
-  reason: string;
+  total: number;
+}
+
+interface PharmacySale {
+  id: string;
+  patientNo: string;
+  patientName: string;
+  patientMobile: string;
+  type: 'Indoor' | 'Outdoor';
+  items: PharmacySaleItem[];
+  totalAmount: number;
+  date: string;
+  time: string;
+  servedBy: string;
+  paymentMethod: 'Cash' | 'Card' | 'Online';
+  discountPercent?: number;
+  discountAmount?: number;
+}
+
+interface ReturnItem {
+  medicineId: string;
+  name: string;
+  quantity: number;
+  price: number;
+}
+
+interface PharmacyReturn {
+  id: string;
+  slipId: string;
+  patientNo: string;
+  patientName: string;
+  items: ReturnItem[];
+  totalRefund: number;
   returnedBy: string;
   date: string;
   time: string;
 }
+
+interface ItemReturnState {
+  selected: boolean;
+  returnQty: number;
+}
+
+/* ==================== HELPERS ==================== */
 
 function lsGet<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
   try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : fallback; } catch { return fallback; }
 }
 
-const RETURNS_KEY = 'baga_pharmacy_returns';
+function lsSet<T>(key: string, data: T): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(key, JSON.stringify(data));
+}
 
-async function getPrintHeader() {
+const SALES_KEY = 'baga_pharmacy_sales';
+const RETURNS_KEY = 'baga_pharmacy_returns';
+const MEDICINES_KEY = 'baga_medicines';
+
+async function getPrintHeader(): Promise<{ hospitalName: string; hospitalLogo: string; hospitalAddress: string; hospitalPhone: string }> {
   let hospitalName = 'BAGA HOSPITAL';
   let hospitalLogo = '';
   let hospitalAddress = '';
@@ -45,192 +96,614 @@ async function getPrintHeader() {
   return { hospitalName, hospitalLogo, hospitalAddress, hospitalPhone };
 }
 
+/* ==================== COMPONENT ==================== */
+
 export default function PharmacyReturnsPage() {
-  // Password gate
-  const [verified, setVerified] = useState(false);
-  const [pwd, setPwd] = useState('');
-  const [pwdError, setPwdError] = useState('');
+  const [currency, setCurrency] = useState('Rs.');
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
-  const [returns, setReturns] = useState<MedicineReturn[]>([]);
-  const [showModal, setShowModal] = useState(false);
-  const [medId, setMedId] = useState('');
-  const [medName, setMedName] = useState('');
-  const [qty, setQty] = useState(1);
-  const [reason, setReason] = useState('');
-  const [medQuery, setMedQuery] = useState('');
-  const [medResults, setMedResults] = useState<any[]>([]);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [toastMsg, setToastMsg] = useState('');
-  const [toastType, setToastType] = useState<'success' | 'error'>('success');
+  // Slip search
+  const [slipQuery, setSlipQuery] = useState('');
+  const [foundSale, setFoundSale] = useState<PharmacySale | null>(null);
+  const [searchError, setSearchError] = useState('');
 
-  useEffect(() => {
-    // Auto-verify if no password is set
-    const stored = localStorage.getItem('baga_profit_password');
-    if (!stored) {
-      setVerified(true);
-    }
+  // Item selection state: { [medicineId]: { selected, returnQty } }
+  const [itemStates, setItemStates] = useState<Record<string, ItemReturnState>>({});
+  const [allSelected, setAllSelected] = useState(false);
+
+  // Return history
+  const [returns, setReturns] = useState<PharmacyReturn[]>([]);
+
+  // Last processed return (for print button)
+  const [lastReturn, setLastReturn] = useState<PharmacyReturn | null>(null);
+
+  // Loading
+  const [processing, setProcessing] = useState(false);
+
+  const showToast = (msg: string, type: 'success' | 'error') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const loadReturns = useCallback(() => {
+    setReturns(lsGet<PharmacyReturn[]>(RETURNS_KEY, []));
   }, []);
 
-  useEffect(() => { if (verified) setReturns(lsGet<MedicineReturn[]>(RETURNS_KEY, [])); }, [verified]);
+  useEffect(() => {
+    const s = getHospitalSettings();
+    setCurrency(s.currency);
+    loadReturns();
+  }, [loadReturns]);
 
-  const handlePwdVerify = () => {
-    const stored = localStorage.getItem('baga_profit_password');
-    if (!stored) { setVerified(true); return; }
-    if (pwd === stored) {
-      setVerified(true); setPwd(''); setPwdError('');
-    } else {
-      setPwdError('Incorrect password');
+  /* ==================== SLIP SEARCH ==================== */
+
+  const searchSlip = () => {
+    const q = slipQuery.trim();
+    if (!q) {
+      setSearchError('Please enter a Slip ID');
+      setFoundSale(null);
+      setItemStates({});
+      setAllSelected(false);
+      return;
     }
+    const sales = lsGet<PharmacySale[]>(SALES_KEY, []);
+    // Match by full ID or last 6 chars (common pattern)
+    const sale = sales.find(
+      (s) => s.id === q || s.id.toLowerCase() === q.toLowerCase() || s.id.slice(-6).toUpperCase() === q.toUpperCase()
+    );
+    if (!sale) {
+      setSearchError('No sale found with this Slip ID');
+      setFoundSale(null);
+      setItemStates({});
+      setAllSelected(false);
+      return;
+    }
+    setSearchError('');
+    setFoundSale(sale);
+    setLastReturn(null);
+    // Initialize item states: all selected, full quantity
+    const states: Record<string, ItemReturnState> = {};
+    for (const item of sale.items) {
+      states[item.medicineId] = { selected: true, returnQty: item.quantity };
+    }
+    setItemStates(states);
+    setAllSelected(true);
   };
 
-  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
-    setToastMsg(msg);
-    setToastType(type);
-    setTimeout(() => setToastMsg(''), 3000);
+  const clearSearch = () => {
+    setSlipQuery('');
+    setFoundSale(null);
+    setSearchError('');
+    setItemStates({});
+    setAllSelected(false);
+    setLastReturn(null);
   };
 
-  const handleMedSearch = (q: string) => {
-    setMedQuery(q);
-    if (q.length < 1) { setMedResults([]); setShowDropdown(false); return; }
-    try {
-      const meds = JSON.parse(localStorage.getItem('baga_medicines') || '[]') as any[];
-      const lq = q.toLowerCase();
-      setMedResults(meds.filter((m: any) =>
-        m.name.toLowerCase().includes(lq) || m.genericName.toLowerCase().includes(lq)
-      ).slice(0, 20));
-      setShowDropdown(true);
-    } catch { setMedResults([]); }
+  /* ==================== ITEM SELECTION ==================== */
+
+  const toggleItem = (medicineId: string) => {
+    setItemStates((prev) => {
+      const current = prev[medicineId];
+      const newStates = {
+        ...prev,
+        [medicineId]: { ...current, selected: !current.selected },
+      };
+      // Update allSelected
+      const allItems = foundSale?.items || [];
+      if (allItems.length > 0) {
+        setAllSelected(allItems.every((it) => newStates[it.medicineId]?.selected));
+      }
+      return newStates;
+    });
   };
 
-  const selectMed = (m: any) => {
-    setMedId(m.id);
-    setMedName(m.name);
-    setMedQuery(m.name);
-    setMedResults([]);
-    setShowDropdown(false);
+  const toggleSelectAll = () => {
+    if (!foundSale) return;
+    const newState = !allSelected;
+    setAllSelected(newState);
+    setItemStates((prev) => {
+      const updated = { ...prev };
+      for (const item of foundSale.items) {
+        updated[item.medicineId] = {
+          ...updated[item.medicineId],
+          selected: newState,
+        };
+      }
+      return updated;
+    });
   };
+
+  const updateReturnQty = (medicineId: string, qty: number) => {
+    if (!foundSale) return;
+    const item = foundSale.items.find((it) => it.medicineId === medicineId);
+    if (!item) return;
+    const clampedQty = Math.max(1, Math.min(item.quantity, Math.floor(qty)));
+    setItemStates((prev) => ({
+      ...prev,
+      [medicineId]: { ...prev[medicineId], returnQty: clampedQty },
+    }));
+  };
+
+  /* ==================== CALCULATIONS ==================== */
+
+  const selectedItems = foundSale
+    ? foundSale.items.filter((it) => itemStates[it.medicineId]?.selected)
+    : [];
+
+  const totalRefund = selectedItems.reduce((sum, it) => {
+    const rQty = itemStates[it.medicineId]?.returnQty || 0;
+    return sum + it.price * rQty;
+  }, 0);
+
+  /* ==================== PROCESS RETURN ==================== */
 
   const processReturn = () => {
-    if (!medId || !reason.trim()) { showToast('Select medicine and enter reason', 'error'); return; }
-    if (qty < 1) { showToast('Enter valid quantity', 'error'); return; }
+    if (!foundSale) {
+      showToast('No sale selected', 'error');
+      return;
+    }
+    if (selectedItems.length === 0) {
+      showToast('Please select at least one item to return', 'error');
+      return;
+    }
+
+    setProcessing(true);
+
     try {
-      // Add stock back
-      const medsRaw = localStorage.getItem('baga_medicines');
-      if (medsRaw) {
-        const meds = JSON.parse(medsRaw) as any[];
-        const med = meds.find((m: any) => m.id === medId);
-        if (med) {
-          med.stock = (med.stock || 0) + qty;
-          localStorage.setItem('baga_medicines', JSON.stringify(meds));
+      // 1. Add stock back for each selected item
+      const medicines = lsGet<any[]>(MEDICINES_KEY, []);
+      const updatedMeds = [...medicines];
+      const returnItems: ReturnItem[] = [];
+
+      for (const item of selectedItems) {
+        const rQty = itemStates[item.medicineId]?.returnQty || 0;
+        if (rQty <= 0) continue;
+
+        const medIndex = updatedMeds.findIndex((m) => m.id === item.medicineId);
+        if (medIndex !== -1) {
+          updatedMeds[medIndex] = {
+            ...updatedMeds[medIndex],
+            stock: (updatedMeds[medIndex].stock || 0) + rQty,
+          };
         }
+
+        returnItems.push({
+          medicineId: item.medicineId,
+          name: item.name,
+          quantity: rQty,
+          price: item.price,
+        });
       }
-      // Save return
-      const sessionData = JSON.parse(localStorage.getItem('baga_session') || '{}');
-      const newReturn: MedicineReturn = {
-        id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36),
-        medicineId: medId,
-        medicineName: medName,
-        quantity: qty,
-        returnPrice: 0,
-        reason: reason.trim(),
+
+      lsSet(MEDICINES_KEY, updatedMeds);
+
+      // 2. Save return record
+      const sessionData = JSON.parse(
+        typeof window !== 'undefined'
+          ? localStorage.getItem('baga_session') || '{}'
+          : '{}'
+      );
+      const refund = returnItems.reduce((sum, ri) => sum + ri.price * ri.quantity, 0);
+
+      const returnRecord: PharmacyReturn = {
+        id: genId(),
+        slipId: foundSale.id,
+        patientNo: foundSale.patientNo,
+        patientName: foundSale.patientName,
+        items: returnItems,
+        totalRefund: refund,
         returnedBy: sessionData.name || 'Pharmacist',
         date: todayStr(),
-        time: new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' }),
+        time: timeStr(),
       };
-      const all = lsGet<MedicineReturn[]>(RETURNS_KEY, []);
-      all.push(newReturn);
-      localStorage.setItem(RETURNS_KEY, JSON.stringify(all));
-      setReturns(all);
-      showToast(`Returned ${qty} x ${medName} to stock`, 'success');
-      setShowModal(false);
-      setMedId(''); setMedName(''); setQty(1); setReason(''); setMedQuery('');
-    } catch (e) {
-      showToast('Failed to process return', 'error');
+
+      const allReturns = lsGet<PharmacyReturn[]>(RETURNS_KEY, []);
+      allReturns.push(returnRecord);
+      lsSet(RETURNS_KEY, allReturns);
+
+      // 3. Update UI
+      loadReturns();
+      setLastReturn(returnRecord);
+      showToast(
+        `Return processed! ${currency} ${refund.toLocaleString()} refunded for ${returnItems.length} item(s)`,
+        'success'
+      );
+
+      // Clear the sale view
+      setFoundSale(null);
+      setItemStates({});
+      setAllSelected(false);
+      setSlipQuery('');
+    } catch (err) {
+      console.error('Return processing failed:', err);
+      showToast('Failed to process return. Please try again.', 'error');
+    } finally {
+      setProcessing(false);
     }
   };
 
-  const printReturns = async () => {
-    if (returns.length === 0) return;
-    const { hospitalName, hospitalLogo, hospitalAddress, hospitalPhone } = await getPrintHeader();
-    const rows = returns.sort((a, b) => b.date.localeCompare(a.date)).map((r, i) => `<tr style="background:${i%2===0?'#fff':'#f0fdf4'}"><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #d1d5db;">${i+1}</td><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #d1d5db;font-weight:600;">${r.medicineName}</td><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #d1d5db;text-align:center;">${r.quantity}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #d1d5db;">${r.reason}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #d1d5db;">${r.returnedBy}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #d1d5db;">${r.date} ${r.time}</td></tr>`).join('');
-    triggerPrint(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Returns</title><style>@page{size:A4;margin:10mm;}*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;font-size:11px;}.header{text-align:center;padding:10px 0;border-bottom:2px solid #059669;}.logo{width:48px;height:48px;object-fit:contain;}.hname{font-size:18px;font-weight:800;color:#065f46;}.haddr,.hphone{font-size:10px;color:#64748b;}.title{text-align:center;padding:8px;font-size:14px;font-weight:700;color:#065f46;}table{width:100%;border-collapse:collapse;margin-top:8px;}th{padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;color:#fff;background:#059669;border-bottom:2px solid #065f46;text-align:left;}td{padding:4px 8px;font-size:10px;border-bottom:1px solid #d1d5db;}.footer{text-align:center;padding:10px;font-size:9px;color:#94a3b8;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body><div class="header">${hospitalLogo?`<img class="logo" src="${hospitalLogo}" />`:''}<div class="hname">${hospitalName}</div>${hospitalAddress?`<div class="haddr">${hospitalAddress}</div>`:''}${hospitalPhone?`<div class="hphone">${hospitalPhone}</div>`:''}</div><div class="title">Medicine Returns Report</div><table><thead><tr><th>#</th><th>Medicine</th><th>Qty</th><th>Reason</th><th>Returned By</th><th>Date/Time</th></tr></thead><tbody>${rows}</tbody></table><div class="footer">Total Returns: ${returns.length} | Generated: ${todayStr()}</div></body></html>`);
+  /* ==================== PRINT RETURN SLIP ==================== */
+
+  const printReturnSlip = async () => {
+    if (!lastReturn) return;
+    try {
+      const { hospitalName, hospitalLogo, hospitalAddress, hospitalPhone } = await getPrintHeader();
+      const cur = currency;
+
+      const itemRows = lastReturn.items
+        .map((it, i) => {
+          const alt = i % 2 === 0 ? '#fff' : '#f8fafc';
+          const lineTotal = it.price * it.quantity;
+          return `<tr style="background:${alt};">
+            <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;">${i + 1}</td>
+            <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;font-weight:600;">${it.name}</td>
+            <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:center;">${it.quantity}</td>
+            <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:right;">${cur} ${it.price.toLocaleString()}</td>
+            <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:700;">${cur} ${lineTotal.toLocaleString()}</td>
+          </tr>`;
+        })
+        .join('');
+
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Return Slip</title><style>
+        @page{size:80mm auto;margin:3mm;}
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;background:#fff;font-size:11px;width:80mm;margin:0 auto;}
+        .header{text-align:center;padding:6px 0;border-bottom:2px dashed #cbd5e1;}
+        .logo{width:48px;height:48px;object-fit:contain;}
+        .hname{font-size:14px;font-weight:800;color:#0c2340;letter-spacing:1px;}
+        .hsub{font-size:8px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;}
+        .haddr{font-size:8px;color:#64748b;margin-top:1px;}
+        .hphone{font-size:8px;color:#64748b;}
+        .title-bar{text-align:center;padding:5px 0;border-bottom:1px dashed #e2e8f0;border-top:1px dashed #e2e8f0;background:#fef2f2;}
+        .title-bar h3{font-size:13px;font-weight:800;color:#991b1b;letter-spacing:1px;}
+        .info{padding:4px 0;border-bottom:1px dashed #e2e8f0;}
+        .info-row{display:flex;justify-content:space-between;font-size:10px;padding:1px 0;}
+        .info-row .label{color:#64748b;font-weight:600;}
+        .info-row .value{color:#1e293b;font-weight:500;}
+        table{width:100%;border-collapse:collapse;margin-top:4px;}
+        th{padding:3px 6px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#0c2340;background:#f1f5f9;border-bottom:2px solid #0c2340;text-align:left;}
+        td{padding:3px 6px;font-size:10px;border-bottom:1px solid #f1f5f9;}
+        .totals{padding:4px 0;}
+        .grand-total{display:flex;justify-content:space-between;font-size:14px;font-weight:900;color:#991b1b;padding:6px 0;border-top:2px solid #991b1b;border-bottom:2px solid #991b1b;margin-top:4px;}
+        .footer{text-align:center;padding:6px 0;margin-top:4px;border-top:2px dashed #cbd5e1;}
+        .footer .ty{font-size:9px;color:#64748b;font-style:italic;}
+        .footer .info{font-size:7px;color:#94a3b8;}
+        @media print{body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+      </style></head><body>
+        <div class="header">
+          ${hospitalLogo ? `<img class="logo" src="${hospitalLogo}" alt="" />` : ''}
+          <div class="hname">${hospitalName}</div>
+          ${hospitalAddress ? `<div class="haddr">${hospitalAddress}</div>` : ''}
+          ${hospitalPhone ? `<div class="hphone">${hospitalPhone}</div>` : ''}
+          <div class="hsub">Pharmacy Department</div>
+        </div>
+        <div class="title-bar"><h3>MEDICINE RETURN SLIP</h3></div>
+        <div class="info">
+          <div class="info-row"><span class="label">Return ID:</span><span class="value">${lastReturn.id.slice(-6).toUpperCase()}</span></div>
+          <div class="info-row"><span class="label">Original Slip:</span><span class="value">${lastReturn.slipId.slice(-6).toUpperCase()}</span></div>
+          <div class="info-row"><span class="label">Patient:</span><span class="value">${lastReturn.patientName}</span></div>
+          <div class="info-row"><span class="label">Patient ID:</span><span class="value">${lastReturn.patientNo}</span></div>
+          <div class="info-row"><span class="label">Returned By:</span><span class="value">${lastReturn.returnedBy}</span></div>
+          <div class="info-row"><span class="label">Date:</span><span class="value">${lastReturn.date} ${lastReturn.time}</span></div>
+        </div>
+        <table>
+          <thead><tr><th>#</th><th>Medicine</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+        <div class="totals">
+          <div class="grand-total"><span>TOTAL REFUND</span><span>${cur} ${lastReturn.totalRefund.toLocaleString()}</span></div>
+        </div>
+        <div class="footer">
+          <div class="ty">Items returned to stock</div>
+          <div class="info">Computer Generated | ${lastReturn.date} ${lastReturn.time}</div>
+        </div>
+      </body></html>`;
+      triggerPrint(html);
+    } catch (err) {
+      console.error('Failed to print return slip:', err);
+      showToast('Failed to print return slip', 'error');
+    }
   };
 
-  const totalReturned = returns.length;
+  /* ==================== RENDER ==================== */
 
-  // Password gate screen
-  if (!verified) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="bg-white rounded-xl border-2 border-amber-200 p-8 text-center" style={{ maxWidth: '400px', width: '100%' }}>
-          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-          </div>
-          <h3 className="text-lg font-bold text-slate-800 mb-2">Return Medicine — Verify</h3>
-          <p className="text-sm text-slate-500 mb-4">Enter the password to access medicine returns. This password is set by the admin in Settings.</p>
-          <input
-            type="password"
-            className="form-input mb-2"
-            value={pwd}
-            onChange={e => { setPwd(e.target.value); setPwdError(''); }}
-            onKeyDown={e => { if (e.key === 'Enter') handlePwdVerify(); }}
-            placeholder="Enter password"
-            autoFocus
-          />
-          {pwdError && <p className="text-red-500 text-xs mb-2">{pwdError}</p>}
-          <button onClick={handlePwdVerify} className="btn btn-primary w-full">Verify & Continue</button>
-        </div>
-      </div>
-    );
-  }
+  const totalReturnsCount = returns.length;
+  const todayReturnsCount = returns.filter((r) => r.date === todayStr()).length;
+  const totalRefundAmount = returns.reduce((sum, r) => sum + r.totalRefund, 0);
+  const todayRefundAmount = returns.filter((r) => r.date === todayStr()).reduce((sum, r) => sum + r.totalRefund, 0);
 
   return (
     <div className="space-y-5">
-      {toastMsg && (
-        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white font-medium ${toastType === 'success' ? 'bg-emerald-600' : 'bg-rose-600'}`}>
-          {toastMsg}
+      {toast && (
+        <div className={`toast ${toast.type === 'success' ? 'toast-success' : 'toast-error'}`}>
+          {toast.msg}
         </div>
       )}
 
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-slate-800">Return Medicine</h2>
-          <p className="text-sm text-slate-500">View and process medicine returns</p>
+          <p className="text-sm text-slate-500">Process medicine returns by Slip ID</p>
         </div>
-        <div className="flex gap-2">
-          {returns.length > 0 && (
-            <button onClick={printReturns} className="btn btn-outline">
-              <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-              Print
-            </button>
-          )}
-          <button onClick={() => setShowModal(true)} className="btn btn-primary">
-            <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-            New Return
+        {lastReturn && (
+          <button onClick={printReturnSlip} className="btn btn-primary">
+            <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            Print Return Slip
           </button>
+        )}
+      </div>
+
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="stat-card card-hover border border-rose-200 bg-rose-50">
+          <p className="text-xs text-rose-600 font-medium">Total Returns</p>
+          <p className="text-2xl font-bold text-rose-700">{totalReturnsCount}</p>
+        </div>
+        <div className="stat-card card-hover border border-amber-200 bg-amber-50">
+          <p className="text-xs text-amber-600 font-medium">Today&apos;s Returns</p>
+          <p className="text-2xl font-bold text-amber-700">{todayReturnsCount}</p>
+        </div>
+        <div className="stat-card card-hover border border-red-200 bg-red-50">
+          <p className="text-xs text-red-600 font-medium">Total Refunded</p>
+          <p className="text-lg font-bold text-red-700">{currency} {totalRefundAmount.toLocaleString()}</p>
+        </div>
+        <div className="stat-card card-hover border border-orange-200 bg-orange-50">
+          <p className="text-xs text-orange-600 font-medium">Today&apos;s Refund</p>
+          <p className="text-lg font-bold text-orange-700">{currency} {todayRefundAmount.toLocaleString()}</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="stat-card card-hover border border-blue-200 bg-blue-50">
-          <p className="text-xs text-blue-600 font-medium">Total Returns</p>
-          <p className="text-2xl font-bold text-blue-700">{totalReturned}</p>
+      {/* Slip ID Search Section */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200">
+          <h3 className="font-bold text-slate-800 flex items-center gap-2">
+            <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            Search Sale by Slip ID
+          </h3>
+          <p className="text-xs text-slate-500 mt-0.5">Enter the full Slip ID or last 6 characters to find the sale</p>
         </div>
-        <div className="stat-card card-hover border border-emerald-200 bg-emerald-50">
-          <p className="text-xs text-emerald-600 font-medium">Today&apos;s Returns</p>
-          <p className="text-2xl font-bold text-emerald-700">{returns.filter(r => r.date === todayStr()).length}</p>
+        <div className="p-5">
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <svg className="w-5 h-5 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+              </svg>
+              <input
+                type="text"
+                className="form-input pl-10"
+                placeholder="Enter Slip ID (e.g. m3abc12def)..."
+                value={slipQuery}
+                onChange={(e) => {
+                  setSlipQuery(e.target.value);
+                  if (searchError) setSearchError('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') searchSlip();
+                }}
+                autoFocus
+              />
+            </div>
+            <button onClick={searchSlip} className="btn btn-primary">
+              <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              Search
+            </button>
+            {(foundSale || searchError) && (
+              <button onClick={clearSearch} className="btn btn-outline">
+                <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Clear
+              </button>
+            )}
+          </div>
+          {searchError && (
+            <div className="mt-3 flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5 text-sm">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {searchError}
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Sale Details (when found) */}
+      {foundSale && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          {/* Patient Info Header */}
+          <div className="px-5 py-4 border-b border-slate-200 bg-gradient-to-r from-emerald-50 to-slate-50">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Sale Details — Slip #{foundSale.id.slice(-6).toUpperCase()}
+              </h3>
+              <span className="badge badge-emerald">{foundSale.type}</span>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+              <div>
+                <span className="text-slate-500">Patient ID:</span>{' '}
+                <span className="font-mono font-bold text-blue-600">{foundSale.patientNo}</span>
+              </div>
+              <div>
+                <span className="text-slate-500">Name:</span>{' '}
+                <span className="font-semibold text-slate-800">{foundSale.patientName}</span>
+              </div>
+              <div>
+                <span className="text-slate-500">Mobile:</span>{' '}
+                <span className="text-slate-700">{foundSale.patientMobile || '-'}</span>
+              </div>
+              <div>
+                <span className="text-slate-500">Date:</span>{' '}
+                <span className="text-slate-700">{foundSale.date}</span>
+              </div>
+              <div>
+                <span className="text-slate-500">Time:</span>{' '}
+                <span className="text-slate-700">{foundSale.time}</span>
+              </div>
+              <div>
+                <span className="text-slate-500">Served By:</span>{' '}
+                <span className="text-slate-700">{foundSale.servedBy}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Medicines Table */}
+          <div className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-semibold text-slate-700 text-sm">
+                Medicines ({foundSale.items.length} items)
+              </h4>
+              <button
+                onClick={toggleSelectAll}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors text-slate-600"
+              >
+                {allSelected ? (
+                  <>
+                    <svg className="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Deselect All
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Select All
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th className="w-10 text-center">✓</th>
+                    <th>#</th>
+                    <th>Medicine Name</th>
+                    <th>Form</th>
+                    <th>Strength</th>
+                    <th className="text-right">Price</th>
+                    <th className="text-center">Qty Sold</th>
+                    <th className="text-center">Return Qty</th>
+                    <th className="text-right">Return Amt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {foundSale.items.map((item, i) => {
+                    const state = itemStates[item.medicineId] || { selected: false, returnQty: item.quantity };
+                    const returnAmt = state.selected ? item.price * state.returnQty : 0;
+                    return (
+                      <tr
+                        key={item.medicineId}
+                        className={state.selected ? 'bg-emerald-50/50' : 'opacity-60'}
+                      >
+                        <td className="text-center">
+                          <input
+                            type="checkbox"
+                            checked={state.selected}
+                            onChange={() => toggleItem(item.medicineId)}
+                            className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          />
+                        </td>
+                        <td className="text-sm text-slate-400">{i + 1}</td>
+                        <td>
+                          <p className="font-semibold text-sm text-slate-800">{item.name}</p>
+                          <p className="text-xs text-slate-400">{item.genericName}</p>
+                        </td>
+                        <td>
+                          <span className="badge badge-blue text-xs">{item.form}</span>
+                        </td>
+                        <td className="text-sm text-slate-600">{item.strength}</td>
+                        <td className="text-right text-sm text-slate-700">
+                          {currency} {item.price.toLocaleString()}
+                        </td>
+                        <td className="text-center">
+                          <span className="badge badge-amber text-xs">{item.quantity}</span>
+                        </td>
+                        <td className="text-center">
+                          <input
+                            type="number"
+                            min={1}
+                            max={item.quantity}
+                            value={state.returnQty}
+                            onChange={(e) => updateReturnQty(item.medicineId, Number(e.target.value) || 1)}
+                            disabled={!state.selected}
+                            className="w-16 h-8 text-center border border-slate-300 rounded-md text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 disabled:bg-slate-100 disabled:text-slate-400"
+                          />
+                        </td>
+                        <td className="text-right text-sm font-bold text-emerald-700">
+                          {state.selected ? `${currency} ${returnAmt.toLocaleString()}` : '-'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Summary & Process */}
+            <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="space-y-1">
+                <p className="text-sm text-slate-500">
+                  <span className="font-semibold text-slate-700">{selectedItems.length}</span> of {foundSale.items.length} items selected
+                </p>
+                {selectedItems.length > 0 && (
+                  <p className="text-lg font-bold text-rose-700">
+                    Total Refund: {currency} {totalRefund.toLocaleString()}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={processReturn}
+                disabled={selectedItems.length === 0 || processing}
+                className="btn btn-primary"
+              >
+                {processing ? (
+                  <>
+                    <svg className="w-4 h-4 inline mr-1 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                    </svg>
+                    Process Return ({selectedItems.length} item{selectedItems.length !== 1 ? 's' : ''})
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Return History */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
           <h3 className="font-bold text-slate-800">Return History</h3>
-          <span className="badge badge-amber">{totalReturned} returns</span>
+          <span className="badge badge-amber">{totalReturnsCount} returns</span>
         </div>
         {returns.length === 0 ? (
           <div className="p-12 text-center">
-            <svg className="w-16 h-16 text-slate-200 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+            <svg className="w-16 h-16 text-slate-200 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+            </svg>
             <p className="text-slate-400 font-medium">No returns recorded yet</p>
+            <p className="text-slate-300 text-sm mt-1">Search a Slip ID above to process a return</p>
           </div>
         ) : (
           <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
@@ -240,69 +713,44 @@ export default function PharmacyReturnsPage() {
                   <th>#</th>
                   <th>Date</th>
                   <th>Time</th>
-                  <th>Medicine</th>
-                  <th className="text-center">Qty</th>
-                  <th>Reason</th>
+                  <th>Slip ID</th>
+                  <th>Patient</th>
+                  <th className="text-center">Items</th>
+                  <th className="text-right">Refund</th>
                   <th>Returned By</th>
                 </tr>
               </thead>
               <tbody>
-                {returns.sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time)).map((r, i) => (
-                  <tr key={r.id} className="hover:bg-slate-50">
-                    <td className="text-slate-400 text-sm">{i + 1}</td>
-                    <td className="font-medium text-slate-700">{r.date}</td>
-                    <td className="text-slate-500">{r.time}</td>
-                    <td className="font-semibold text-slate-800">{r.medicineName}</td>
-                    <td className="text-center"><span className="badge badge-amber">{r.quantity}</span></td>
-                    <td className="text-sm text-slate-600 max-w-[200px] truncate">{r.reason}</td>
-                    <td className="text-sm text-slate-500">{r.returnedBy}</td>
-                  </tr>
-                ))}
+                {returns
+                  .sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time))
+                  .map((r, i) => (
+                    <tr key={r.id} className="hover:bg-slate-50">
+                      <td className="text-slate-400 text-sm">{i + 1}</td>
+                      <td className="font-medium text-slate-700">{r.date}</td>
+                      <td className="text-slate-500">{r.time}</td>
+                      <td>
+                        <span className="font-mono text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                          {r.slipId.slice(-6).toUpperCase()}
+                        </span>
+                      </td>
+                      <td>
+                        <p className="font-semibold text-slate-800 text-sm">{r.patientName}</p>
+                        <p className="text-xs text-slate-400">{r.patientNo}</p>
+                      </td>
+                      <td className="text-center">
+                        <span className="badge badge-blue text-xs">{r.items.length}</span>
+                      </td>
+                      <td className="text-right font-bold text-rose-600">
+                        {currency} {r.totalRefund.toLocaleString()}
+                      </td>
+                      <td className="text-sm text-slate-500">{r.returnedBy}</td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
         )}
       </div>
-
-      {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-content" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-slate-800">Return Medicine to Stock</h3>
-              <button onClick={() => setShowModal(false)} className="btn btn-outline btn-sm">Close</button>
-            </div>
-            <div className="space-y-4">
-              <div className="relative">
-                <label className="form-label">Medicine *</label>
-                <input type="text" className="form-input" placeholder="Search medicine..." value={medQuery} onChange={e => handleMedSearch(e.target.value)} />
-                {showDropdown && medResults.length > 0 && (
-                  <div className="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg bg-white shadow-lg max-h-48 overflow-y-auto">
-                    {medResults.map((m: any) => (
-                      <button key={m.id} onClick={() => selectMed(m)} className="w-full text-left px-4 py-2 hover:bg-emerald-50 border-b border-slate-100 last:border-0 text-sm">
-                        <span className="font-semibold">{m.name}</span>
-                        <span className="text-xs text-slate-400 ml-2">({m.form}, {m.strength})</span>
-                        <span className="text-xs text-slate-400 ml-1">Stock: {m.stock}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="form-label">Quantity *</label>
-                <input type="number" className="form-input" min={1} value={qty} onChange={e => setQty(Math.max(1, Number(e.target.value) || 1))} />
-              </div>
-              <div>
-                <label className="form-label">Return Reason *</label>
-                <textarea className="form-input" rows={2} value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Wrong purchase, damaged, expired..." />
-              </div>
-              <div className="flex gap-3">
-                <button onClick={() => setShowModal(false)} className="btn btn-outline flex-1">Cancel</button>
-                <button onClick={processReturn} className="btn btn-primary flex-1">Process Return</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
