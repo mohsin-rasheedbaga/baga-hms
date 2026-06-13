@@ -288,7 +288,9 @@ async function checkForUpdates() {
     updateLog('Latest release: ' + latestVersion + ' | Current: ' + APP_VERSION);
 
     // Version guard: NEVER download older or equal version
-    if (compareVersions(APP_VERSION, latestVersion) >= 0) {
+    // compareVersions returns 1 if b>a (newer), -1 if b<a (older), 0 if equal
+    // Skip update only when installed >= latest (b <= a), i.e. result <= 0
+    if (compareVersions(APP_VERSION, latestVersion) <= 0) {
       updateLog('Already up to date (or newer). Installed: ' + APP_VERSION + ', Latest: ' + latestVersion);
       sendToAllWindows('update-status', { status: 'not-available', lastChecked: new Date().toISOString(), version: latestVersion });
       return;
@@ -987,6 +989,29 @@ ipcMain.handle('manual-check-update', async () => {
   return { checking: true };
 });
 ipcMain.handle('quit-app', () => app.quit());
+ipcMain.handle('open-update-file', async (event, filePath) => {
+  if (!filePath) {
+    // If no path provided, find the latest downloaded update
+    const userDataPath = app.getPath('userData');
+    const fs = require('fs');
+    const path = require('path');
+    try {
+      const files = fs.readdirSync(userDataPath).filter(f => f.startsWith('BAGA-HMS-Update-') && f.endsWith('.exe'));
+      if (files.length > 0) {
+        files.sort().reverse(); // newest first
+        filePath = path.join(userDataPath, files[0]);
+      }
+    } catch (e) {}
+  }
+  if (!filePath) return { success: false, error: 'No update file found' };
+  try {
+    const { shell } = require('electron');
+    await shell.openPath(filePath);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
 
 // ============================================================
 // IPC HANDLERS - PRINT (Native Electron Print Dialog)

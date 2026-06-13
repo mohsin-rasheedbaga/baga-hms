@@ -191,7 +191,9 @@ export default function SettingsPage() {
     latestVersion: string | null;
     error: string | null;
     checking: boolean;
-  }>({ status: 'idle', lastChecked: null, latestVersion: null, error: null, checking: false });
+    downloadPercent: number;
+    downloadedFile: string | null;
+  }>({ status: 'idle', lastChecked: null, latestVersion: null, error: null, checking: false, downloadPercent: 0, downloadedFile: null });
 
   // Room type modal
   const [roomModal, setRoomModal] = useState(false);
@@ -252,6 +254,8 @@ export default function SettingsPage() {
             latestVersion: data.version || prev.latestVersion,
             error: data.message || data.error || null,
             checking: data.status === 'checking' || data.status === 'downloading',
+            downloadPercent: data.percent ?? prev.downloadPercent,
+            downloadedFile: data.filePath || prev.downloadedFile,
           }));
         });
       } catch (e) {}
@@ -857,6 +861,68 @@ export default function SettingsPage() {
                 <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
                   <p className="text-xs font-semibold text-red-700 mb-1">Error Details:</p>
                   <p className="text-xs text-red-600 font-mono break-all">{updateDiag.error}</p>
+                </div>
+              )}
+
+              {/* Download Progress Bar */}
+              {updateDiag.status === 'downloading' && (
+                <div className="mt-3">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs text-slate-600 font-medium">Downloading update...</span>
+                    <span className="text-xs font-bold text-emerald-600">{updateDiag.downloadPercent}%</span>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className="bg-emerald-500 h-2.5 rounded-full transition-all duration-300"
+                      style={{ width: updateDiag.downloadPercent + '%' }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons when update found */}
+              {updateDiag.status === 'available' && (
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => {
+                      setUpdateDiag(prev => ({ ...prev, checking: true }));
+                      try { (window as any).bagaAPI.manualCheckUpdate(); } catch (e: any) {
+                        setUpdateDiag(prev => ({ ...prev, checking: false, error: e.message }));
+                      }
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium text-sm"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Download v{updateDiag.latestVersion}
+                  </button>
+                </div>
+              )}
+
+              {/* Install button when downloaded */}
+              {updateDiag.status === 'downloaded' && (
+                <div className="mt-3">
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg mb-2">
+                    <p className="text-xs font-semibold text-emerald-700">Update v{updateDiag.latestVersion} downloaded successfully!</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        try { (window as any).bagaAPI.openUpdateFile(updateDiag.downloadedFile); } catch (e: any) { alert('Error: ' + e.message); }
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition font-medium text-sm"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                      Install Now
+                    </button>
+                    <button
+                      onClick={() => {
+                        setUpdateDiag({ status: 'idle', lastChecked: null, latestVersion: null, error: null, checking: false, downloadPercent: 0, downloadedFile: null });
+                      }}
+                      className="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 rounded-lg transition font-medium text-sm"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('bagaAPI', {
     ipcRenderer.on('update-status', listener);
     return () => ipcRenderer.removeListener('update-status', listener);
   },
+  openUpdateFile: (filePath) => ipcRenderer.invoke('open-update-file', filePath),
   
   // App Control
   quitApp: () => ipcRenderer.invoke('quit-app'),
@@ -77,4 +78,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('update-status', listener);
     return () => ipcRenderer.removeListener('update-status', listener);
   },
+  openUpdateFile: (filePath) => ipcRenderer.invoke('open-update-file', filePath),
 });
