@@ -18,6 +18,7 @@ const ALL_PERMISSIONS = [
   'order_lab', 'prescribe', 'order_xray', 'order_ultrasound', 'write_notes',
   'discharge', 'view_reports', 'view_lab_orders', 'enter_results', 'print_report',
   'view_prescriptions', 'dispense_medicine', 'view_bills', 'collect_payment', 'daily_report',
+  'return_medicine', 'view_profit', 'add_inventory', 'view_statement',
 ];
 
 const PERMISSION_LABELS: Record<string, string> = {
@@ -41,6 +42,10 @@ const PERMISSION_LABELS: Record<string, string> = {
   view_bills: 'View Bills',
   collect_payment: 'Collect Payment',
   daily_report: 'Daily Report',
+  return_medicine: 'Return Medicine',
+  view_profit: 'View Net Profit',
+  add_inventory: 'Add/Edit Inventory',
+  view_statement: 'View Statement',
 };
 
 const PERMISSION_GROUPS = [
@@ -59,6 +64,14 @@ const PERMISSION_GROUPS = [
   {
     title: 'Pharmacy & Billing',
     perms: ['view_prescriptions', 'dispense_medicine', 'view_bills', 'collect_payment', 'daily_report'],
+  },
+  {
+    title: 'Sensitive Operations (PIN Protected)',
+    perms: ['return_medicine', 'view_profit'],
+  },
+  {
+    title: 'Inventory & Data',
+    perms: ['add_inventory', 'view_statement'],
   },
 ];
 

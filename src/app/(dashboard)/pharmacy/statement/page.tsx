@@ -18,6 +18,7 @@ interface PharmacySale {
     strength: string;
     packing: string;
     price: number;
+    purchasePrice?: number;
     quantity: number;
     total: number;
   }[];
@@ -98,8 +99,10 @@ export default function PharmacyStatementPage() {
     const purchaseBreakdown: Record<string, number> = {};
     filtered.forEach(s => {
       s.items.forEach(item => {
-        const med = medMap[item.medicineId];
-        const cost = med?.purchasePrice || 0;
+        // Use stored purchasePrice from sale item (if available), else fallback to current inventory
+        const cost = item.purchasePrice != null && item.purchasePrice > 0
+          ? item.purchasePrice
+          : (medMap[item.medicineId]?.purchasePrice || 0);
         const lineCost = item.quantity * cost;
         purchaseCost += lineCost;
         if (lineCost > 0) {
@@ -222,8 +225,11 @@ export default function PharmacyStatementPage() {
     let purchaseCost = 0;
     filtered.forEach(s => {
       s.items.forEach(item => {
-        const med = medById[item.medicineId];
-        purchaseCost += item.quantity * (med?.purchasePrice || 0);
+        // Use stored purchasePrice from sale item (if available), else fallback to current inventory
+        const cost = item.purchasePrice != null && item.purchasePrice > 0
+          ? item.purchasePrice
+          : (medById[item.medicineId]?.purchasePrice || 0);
+        purchaseCost += item.quantity * cost;
       });
     });
 

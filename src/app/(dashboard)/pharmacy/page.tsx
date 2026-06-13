@@ -31,6 +31,7 @@ interface CodeItem {
   strength: string;
   packing: string;
   price: number;
+  purchasePrice: number;
  days: number;
  dosage: string;
  frequency: string;
@@ -45,6 +46,7 @@ interface CartItem {
   strength: string;
   packing: string;
   price: number;
+  purchasePrice: number;
   quantity: number;
   total: number;
   days: number;
@@ -306,7 +308,7 @@ export default function PharmacyPage() {
       return [...prevCart, {
         medicineId: med.id, name: med.name, genericName: med.genericName,
         form: med.form, strength: med.strength, packing: med.packing,
-        price: med.price, quantity: 1, total: med.price,
+        price: med.price, purchasePrice: med.purchasePrice || 0, quantity: 1, total: med.price,
         days: 7, dosage: '1 tablet', frequency: 'TID (3 times a day)',
       }];
     });
@@ -324,7 +326,7 @@ export default function PharmacyPage() {
       setCodeItems([...codeItems, {
         medicineId: med.id, name: med.name, genericName: med.genericName,
         form: med.form, strength: med.strength, packing: med.packing,
-        price: med.price, days: 7, dosage: '1 tablet', frequency: 'TID (3 times a day)', instructions: '',
+        price: med.price, purchasePrice: med.purchasePrice || 0, days: 7, dosage: '1 tablet', frequency: 'TID (3 times a day)', instructions: '',
       }]);
     }
     setMedQuery('');
@@ -363,7 +365,7 @@ export default function PharmacyPage() {
           newCart.push({
             medicineId: ci.medicineId, name: ci.name, genericName: ci.genericName,
             form: ci.form, strength: ci.strength, packing: ci.packing,
-            price: ci.price, quantity: 1, total: ci.price,
+            price: ci.price, purchasePrice: ci.purchasePrice || 0, quantity: 1, total: ci.price,
             days: ci.days, dosage: ci.dosage, frequency: ci.frequency,
           });
         }

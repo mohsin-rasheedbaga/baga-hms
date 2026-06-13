@@ -2,9 +2,9 @@
 import { useState, useEffect, ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { getHospital } from '@/lib/store';
+import { getHospital, getMedicines, getExpiredMedicines, getLowStockMedicines, getEmployees, addEmployee, generateEmployeeCode, genId } from '@/lib/store';
 import { getSession, clearSession, fetchLicenseInfo } from '@/lib/db-bridge';
-import type { User } from '@/lib/types';
+import type { User, Employee } from '@/lib/types';
 
 interface MenuItem {
   label: string;
@@ -228,6 +228,42 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [licenseInfo, setLicenseInfo] = useState<any>(null);
   const [logoSrc, setLogoSrc] = useState<string>('');
 
+  // Notification state
+  const [showNotif, setShowNotif] = useState(false);
+  const [notifItems, setNotifItems] = useState<{ type: string; msg: string; color: string }[]>([]);
+
+  // Dark mode state
+  const [darkMode, setDarkMode] = useState(false);
+
+  // Employee modal state
+  const [showEmpModal, setShowEmpModal] = useState(false);
+  const [empForm, setEmpForm] = useState({ name: '', fatherName: '', cnic: '', mobile: '', gender: 'Male', age: '', address: '', designation: '', department: '', salary: 0, education: '' });
+
+  // Load dark mode preference
+  useEffect(() => {
+    const dm = localStorage.getItem('baga_dark_mode');
+    if (dm === 'true') { setDarkMode(true); document.documentElement.classList.add('dark'); }
+  }, []);
+
+  const toggleDarkMode = () => {
+    const next = !darkMode;
+    setDarkMode(next);
+    document.documentElement.classList.toggle('dark', next);
+    localStorage.setItem('baga_dark_mode', String(next));
+  };
+
+  // Load notifications
+  const loadNotifications = () => {
+    const items: { type: string; msg: string; color: string }[] = [];
+    try {
+      const expired = getExpiredMedicines();
+      const lowStock = getLowStockMedicines();
+      expired.forEach(m => items.push({ type: 'expired', msg: `${m.name} (${m.strength}) expired`, color: 'rose' }));
+      lowStock.filter(m => !expired.find(e => e.id === m.id)).slice(0, 5).forEach(m => items.push({ type: 'low_stock', msg: `${m.name} stock: ${m.stock}`, color: 'amber' }));
+    } catch {}
+    setNotifItems(items);
+  };
+
   useEffect(() => {
     setSearchStr(typeof window !== 'undefined' ? window.location.search : '');
   }, [pathname]);
@@ -273,7 +309,46 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       } catch (e) {}
     }
     loadLicense();
+    loadNotifications();
+    // Refresh notifications every 60 seconds
+    const notifInterval = setInterval(loadNotifications, 60000);
+    return () => clearInterval(notifInterval);
   }, []);
+
+  // Employee save handler
+  const handleSaveEmployee = () => {
+    if (!empForm.name.trim() || !empForm.mobile.trim() || !empForm.designation.trim() || !empForm.department.trim()) {
+      alert('Name, Mobile, Designation and Department are required');
+      return;
+    }
+    const code = generateEmployeeCode();
+    const newEmp: Employee = {
+      id: genId(),
+      employeeCode: code,
+      name: empForm.name.trim(),
+      fatherName: empForm.fatherName.trim(),
+      cnic: empForm.cnic.trim(),
+      mobile: empForm.mobile.trim(),
+      gender: empForm.gender,
+      age: empForm.age || '-',
+      address: empForm.address.trim(),
+      designation: empForm.designation.trim(),
+      department: empForm.department.trim(),
+      salary: empForm.salary || 0,
+      joinDate: new Date().toISOString().split('T')[0],
+      status: 'Active',
+      education: empForm.education ? [{ degree: empForm.education, institution: '', year: new Date().getFullYear().toString(), grade: '' }] : [],
+      experience: [],
+      documents: [],
+      equipment: [],
+      bankAccount: '',
+      emergencyContact: '',
+    };
+    addEmployee(newEmp);
+    setShowEmpModal(false);
+    setEmpForm({ name: '', fatherName: '', cnic: '', mobile: '', gender: 'Male', age: '', address: '', designation: '', department: '', salary: 0, education: '' });
+    alert(`Employee ${newEmp.name} added! Code: ${code}`);
+  };
 
   // Auto-expand submenus when on sub-paths
   useEffect(() => {
@@ -500,6 +575,47 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <h1 className="text-lg font-semibold text-slate-800">{currentLabel}</h1>
           </div>
           <div className="flex items-center gap-3">
+            {/* Dark Mode Toggle */}
+            <button onClick={toggleDarkMode} className="p-2 rounded-lg hover:bg-slate-100 transition" title={darkMode ? 'Light Mode' : 'Dark Mode'}>
+              {darkMode ? (
+                <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+              ) : (
+                <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+              )}
+            </button>
+
+            {/* Notification Bell */}
+            <div className="relative">
+              <button onClick={() => { setShowNotif(!showNotif); loadNotifications(); }} className="p-2 rounded-lg hover:bg-slate-100 transition relative">
+                <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                {notifItems.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{notifItems.length > 9 ? '9+' : notifItems.length}</span>
+                )}
+              </button>
+              {showNotif && (
+                <div className="absolute right-0 top-full mt-1 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-80 overflow-hidden">
+                  <div className="px-4 py-2 border-b border-slate-100 font-semibold text-sm text-slate-700">Notifications</div>
+                  {notifItems.length === 0 ? (
+                    <div className="p-6 text-center text-sm text-slate-400">No notifications</div>
+                  ) : (
+                    <div className="max-h-60 overflow-y-auto">
+                      {notifItems.map((n, i) => (
+                        <div key={i} className={`px-4 py-2 text-xs border-b border-slate-50 flex items-center gap-2 ${n.color === 'rose' ? 'bg-red-50' : 'bg-amber-50'}`}>
+                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${n.color === 'rose' ? 'bg-red-500' : 'bg-amber-500'}`} />
+                          <span className="text-slate-700">{n.msg}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Add Employee Button */}
+            <button onClick={() => setShowEmpModal(true)} className="p-2 rounded-lg hover:bg-slate-100 transition" title="Add Employee">
+              <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
+            </button>
+
             <span className={`badge ${roleColors[session.role] ? roleColors[session.role].replace('bg-', 'bg-') : ''}`} style={{background: 'var(--sidebar-active)', color: 'white'}}>
               {getLicenseRoleLabel()}
             </span>
@@ -515,6 +631,36 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             )}
           </div>
         </header>
+
+        {/* Add Employee Modal */}
+        {showEmpModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={() => setShowEmpModal(false)}>
+            <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-slate-800">Add Employee</h3>
+                <button onClick={() => setShowEmpModal(false)} className="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="form-label">Full Name *</label><input className="form-input" value={empForm.name} onChange={e => setEmpForm({...empForm, name: e.target.value})} placeholder="Employee name" /></div>
+                <div><label className="form-label">Father Name</label><input className="form-input" value={empForm.fatherName} onChange={e => setEmpForm({...empForm, fatherName: e.target.value})} /></div>
+                <div><label className="form-label">CNIC</label><input className="form-input" value={empForm.cnic} onChange={e => setEmpForm({...empForm, cnic: e.target.value})} placeholder="XXXXX-XXXXXXX-X" /></div>
+                <div><label className="form-label">Mobile *</label><input className="form-input" value={empForm.mobile} onChange={e => setEmpForm({...empForm, mobile: e.target.value})} placeholder="03XX-XXXXXXX" /></div>
+                <div><label className="form-label">Gender</label><select className="form-input" value={empForm.gender} onChange={e => setEmpForm({...empForm, gender: e.target.value})}><option>Male</option><option>Female</option></select></div>
+                <div><label className="form-label">Age</label><input className="form-input" value={empForm.age} onChange={e => setEmpForm({...empForm, age: e.target.value})} /></div>
+                <div><label className="form-label">Designation *</label><input className="form-input" value={empForm.designation} onChange={e => setEmpForm({...empForm, designation: e.target.value})} placeholder="e.g. Pharmacist" /></div>
+                <div><label className="form-label">Department *</label><input className="form-input" value={empForm.department} onChange={e => setEmpForm({...empForm, department: e.target.value})} placeholder="e.g. Pharmacy" /></div>
+                <div><label className="form-label">Salary</label><input type="number" className="form-input" value={empForm.salary || ''} onChange={e => setEmpForm({...empForm, salary: Number(e.target.value) || 0})} /></div>
+                <div><label className="form-label">Education</label><input className="form-input" value={empForm.education} onChange={e => setEmpForm({...empForm, education: e.target.value})} placeholder="e.g. B.Pharm" /></div>
+                <div className="col-span-2"><label className="form-label">Address</label><input className="form-input" value={empForm.address} onChange={e => setEmpForm({...empForm, address: e.target.value})} /></div>
+              </div>
+              <div className="flex gap-3 mt-5">
+                <button onClick={() => setShowEmpModal(false)} className="btn btn-outline flex-1">Cancel</button>
+                <button onClick={handleSaveEmployee} className="btn btn-primary flex-1">Add Employee</button>
+              </div>
+              <p className="text-xs text-slate-400 mt-2">Employee ID will be auto-generated. For full details, manage in HR Department.</p>
+            </div>
+          </div>
+        )}
         <main className="p-6">{children}</main>
       </div>
     </div>

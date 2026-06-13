@@ -199,28 +199,25 @@ export default function InventoryPage() {
           <table className="w-full border-collapse text-xs">
             <thead className="sticky top-0 bg-white z-10">
               <tr>
-                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Medicine Name</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Generic Name</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Form</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Strength</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Packing</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Category</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Name</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Form / Strength</th>
                 <th className="px-2 py-2 text-right font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Price</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Stock</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Expiry</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Status</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Actions</th>
+                <th className="px-2 py-2 text-center font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Stock</th>
+                <th className="px-2 py-2 text-center font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Status</th>
+                <th className="px-2 py-2 text-center font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredMedicines.map(m => (
                 <tr key={m.id} className={`${!m.active ? 'opacity-50' : ''} hover:bg-slate-50`}>
-                  <td className="px-2 py-2 font-semibold text-slate-800 whitespace-nowrap">{m.name}</td>
-                  <td className="px-2 py-2 text-slate-500 whitespace-nowrap">{m.genericName}</td>
-                  <td className="px-2 py-2 whitespace-nowrap"><span className="badge badge-blue">{m.form}</span></td>
-                  <td className="px-2 py-2 text-slate-600 whitespace-nowrap">{m.strength}</td>
-                  <td className="px-2 py-2 text-slate-500 whitespace-nowrap">{m.packing}</td>
-                  <td className="px-2 py-2 whitespace-nowrap"><span className="badge badge-amber">{m.category}</span></td>
+                  <td className="px-2 py-2">
+                    <p className="font-semibold text-slate-800">{m.name}</p>
+                    <p className="text-[10px] text-slate-400">{m.genericName} | {m.packing} | {m.category}</p>
+                  </td>
+                  <td className="px-2 py-2 whitespace-nowrap">
+                    <span className="badge badge-blue text-[10px]">{m.form}</span>
+                    <span className="text-slate-600 ml-1">{m.strength}</span>
+                  </td>
                   <td className="px-2 py-2 text-right whitespace-nowrap">
                     <button
                       onClick={() => { setEditPriceMed(m); setEditPriceVal(String(m.price)); }}
@@ -228,48 +225,35 @@ export default function InventoryPage() {
                       title="Click to edit price"
                     >
                       {currency} {m.price.toLocaleString()}
-                      <svg className="w-3 h-3 inline ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                     </button>
                   </td>
-                  <td className="px-2 py-2 whitespace-nowrap">
+                  <td className="px-2 py-2 text-center whitespace-nowrap">
                     <span className={`font-semibold ${m.stock <= 0 ? 'text-red-600' : m.stock <= (m.minStock || 10) ? 'text-amber-600' : 'text-emerald-600'}`}>
                       {m.stock}
                     </span>
-                    {m.stock <= 0 && <span className="badge badge-rose text-[10px] ml-0.5">OUT</span>}
-                    {m.stock > 0 && m.stock <= (m.minStock || 10) && <span className="badge badge-amber text-[10px] ml-0.5">LOW</span>}
+                    {m.stock <= 0 && <span className="badge badge-rose text-[9px] ml-0.5">OUT</span>}
+                    {m.stock > 0 && m.stock <= (m.minStock || 10) && <span className="badge badge-amber text-[9px] ml-0.5">LOW</span>}
                   </td>
-                  <td className="px-2 py-2 whitespace-nowrap">
-                    {m.expiryDate ? (
-                      <span className={`${m.expiryDate < todayStr() ? 'text-red-600 font-bold' : 'text-slate-600'}`}>
-                        {m.expiryDate}
-                        {m.expiryDate < todayStr() && <span className="badge badge-rose text-[10px] ml-0.5">EXPIRED</span>}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400">Not set</span>
-                    )}
-                  </td>
-                  <td className="px-2 py-2 whitespace-nowrap">
-                    <span className={`badge ${m.active ? 'badge-green' : 'badge-rose'}`}>
-                      {m.active ? 'Active' : 'Inactive'}
+                  <td className="px-2 py-2 text-center whitespace-nowrap">
+                    <span className={`badge text-[10px] ${m.active ? 'badge-green' : 'badge-rose'}`}>
+                      {m.active ? 'Active' : 'Off'}
                     </span>
+                    {m.expiryDate && m.expiryDate < todayStr() && <span className="badge badge-rose text-[9px] ml-0.5">EXP</span>}
                   </td>
                   <td className="px-2 py-2 whitespace-nowrap">
-                    <div className="flex gap-1 flex-wrap">
-                      <button onClick={() => openEditMed(m)} className="btn btn-outline btn-sm">Edit</button>
-                      <button
-                        onClick={() => toggleMedStatus(m)}
-                        className={`btn btn-sm ${m.active ? 'btn-danger' : 'btn-success'}`}
-                      >
-                        {m.active ? 'Disable' : 'Enable'}
+                    <div className="flex gap-1 justify-center">
+                      <button onClick={() => openEditMed(m)} className="btn btn-outline btn-sm text-[10px] px-2 py-1">Edit</button>
+                      <button onClick={() => toggleMedStatus(m)} className={`btn btn-sm text-[10px] px-2 py-1 ${m.active ? 'btn-danger' : 'btn-success'}`}>
+                        {m.active ? 'Off' : 'On'}
                       </button>
-                      <button onClick={() => setDeleteConfirm(m)} className="btn btn-sm btn-danger">Del</button>
+                      <button onClick={() => setDeleteConfirm(m)} className="btn btn-sm btn-danger text-[10px] px-2 py-1">Del</button>
                     </div>
                   </td>
                 </tr>
               ))}
               {filteredMedicines.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="text-center py-12 text-slate-400">
+                  <td colSpan={6} className="text-center py-12 text-slate-400">
                     No medicines found matching your search criteria.
                   </td>
                 </tr>
