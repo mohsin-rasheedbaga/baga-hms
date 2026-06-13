@@ -297,7 +297,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     if (lt === 'lab') return 'Lab';
     if (lt === 'clinic') return 'Clinic';
     if (lt === 'reception') return 'Reception';
-    return roleLabels[session.role] || session?.name || 'Admin';
+    return session?.role ? (roleLabels[session.role] || session.name) : 'Admin';
   };
 
   const toggleMenu = (label: string) => {

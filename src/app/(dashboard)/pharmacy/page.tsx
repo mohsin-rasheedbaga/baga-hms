@@ -2259,18 +2259,17 @@ export default function PharmacyPage() {
                   </div>
                   <div>
                     <label className="form-label">Category *</label>
-                      <select
-                        className="form-input"
-                        value={fCategory === '__new__' ? '__new__' : fCategory}
-                        onChange={e => setFCategory(e.target.value)}
-                      >
-                        <option value="">Select category...</option>
-                        {categories.map(c => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                        <option value="__new__">+ New Category</option>
-                      </select>
-                    </div>
+                    <select
+                      className="form-input"
+                      value={fCategory === '__new__' ? '__new__' : fCategory}
+                      onChange={e => setFCategory(e.target.value)}
+                    >
+                      <option value="">Select category...</option>
+                      {categories.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                      <option value="__new__">+ New Category</option>
+                    </select>
                   </div>
                   {fCategory === '__new__' && (
                     <div>
