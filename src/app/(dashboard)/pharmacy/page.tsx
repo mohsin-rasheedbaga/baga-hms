@@ -292,10 +292,33 @@ export default function PharmacyPage() {
     setShowMedDropdown(true);
   };
 
+  // Direct add to cart (default behavior when selecting a medicine)
+  const addToCartDirect = (med: MedicineItem) => {
+    setCart(prevCart => {
+      const existing = prevCart.find(c => c.medicineId === med.id);
+      if (existing) {
+        return prevCart.map(c =>
+          c.medicineId === med.id
+            ? { ...c, quantity: c.quantity + 1, total: (c.quantity + 1) * c.price }
+            : c
+        );
+      }
+      return [...prevCart, {
+        medicineId: med.id, name: med.name, genericName: med.genericName,
+        form: med.form, strength: med.strength, packing: med.packing,
+        price: med.price, quantity: 1, total: med.price,
+        days: 7, dosage: '1 tablet', frequency: 'TID (3 times a day)',
+      }];
+    });
+    setMedQuery('');
+    setMedResults([]);
+    setShowMedDropdown(false);
+    setTimeout(() => medSearchRef.current?.focus(), 50);
+  };
+
   const addToCode = (med: MedicineItem) => {
     const existing = codeItems.find(c => c.medicineId === med.id);
     if (existing) {
-      // Already in code - show toast
       showToast('Medicine already in code. Use +/- quantity or change days.', 'error');
     } else {
       setCodeItems([...codeItems, {
@@ -443,10 +466,10 @@ export default function PharmacyPage() {
     };
 
     addPharmacySale(sale);
-    // Deduct stock for sold medicines
+    // Deduct stock for sold medicines (read once)
+    const allMeds = getMedicines();
     for (const item of cart) {
-      const meds = getMedicines();
-      const med = meds.find(m => m.id === item.medicineId);
+      const med = allMeds.find(m => m.id === item.medicineId);
       if (med) {
         updateMedicine(med.id, { stock: Math.max(0, med.stock - item.quantity) });
       }
@@ -558,8 +581,7 @@ export default function PharmacyPage() {
 
   const handleMedSearchEnter = () => {
     if (medResults.length >= 1) {
-      addToCode(medResults[0]);
-      setTimeout(() => medSearchRef.current?.focus(), 50);
+      addToCartDirect(medResults[0]);
     }
   };
 
@@ -619,6 +641,10 @@ export default function PharmacyPage() {
   const [fStrength, setFStrength] = useState('');
   const [fPacking, setFPacking] = useState('');
   const [fPrice, setFPrice] = useState('');
+  const [fPurchasePrice, setFPurchasePrice] = useState('');
+  const [fStock, setFStock] = useState('');
+  const [fExpiryDate, setFExpiryDate] = useState('');
+  const [fMinStock, setFMinStock] = useState('');
   const [fCategory, setFCategory] = useState('');
   const [fNewCategory, setFNewCategory] = useState('');
 
@@ -640,14 +666,18 @@ export default function PharmacyPage() {
   const openAddMed = () => {
     setEditingMed(null);
     setFName(''); setFGeneric(''); setFForm('Tablet'); setFStrength('');
-    setFPacking(''); setFPrice(''); setFCategory(categories[0] || ''); setFNewCategory('');
+    setFPacking(''); setFPrice(''); setFPurchasePrice(''); setFStock('0');
+    setFExpiryDate(''); setFMinStock('10');
+    setFCategory(categories[0] || ''); setFNewCategory('');
     setShowMedModal(true);
   };
 
   const openEditMed = (m: MedicineItem) => {
     setEditingMed(m);
     setFName(m.name); setFGeneric(m.genericName); setFForm(m.form); setFStrength(m.strength);
-    setFPacking(m.packing); setFPrice(String(m.price)); setFCategory(m.category); setFNewCategory('');
+    setFPacking(m.packing); setFPrice(String(m.price)); setFPurchasePrice(String(m.purchasePrice || ''));
+    setFStock(String(m.stock)); setFExpiryDate(m.expiryDate || ''); setFMinStock(String(m.minStock || 10));
+    setFCategory(m.category); setFNewCategory('');
     setShowMedModal(true);
   };
 
@@ -656,17 +686,22 @@ export default function PharmacyPage() {
     if (!fName.trim() || !fForm || !fStrength.trim() || !fPacking.trim() || !fPrice.trim() || !cat) {
       showToast('All fields are required', 'error'); return;
     }
+    const purchasePrice = fPurchasePrice ? Number(fPurchasePrice) : undefined;
+    const stock = Number(fStock) || 0;
+    const expiryDate = fExpiryDate || '';
+    const minStock = Number(fMinStock) || 10;
     if (editingMed) {
       updateMedicine(editingMed.id, {
         name: fName.trim(), genericName: fGeneric.trim(), form: fForm as MedicineItem['form'],
         strength: fStrength.trim(), packing: fPacking.trim(), price: Number(fPrice), category: cat,
+        purchasePrice, stock, expiryDate, minStock,
       });
       showToast('Medicine updated successfully', 'success');
     } else {
       addMedicine({
         id: genId(), name: fName.trim(), genericName: fGeneric.trim(), form: fForm as MedicineItem['form'],
         strength: fStrength.trim(), packing: fPacking.trim(), price: Number(fPrice), category: cat, active: true,
-        stock: 0, expiryDate: '', minStock: 10,
+        stock, expiryDate, minStock, purchasePrice,
       });
       showToast('New medicine added successfully', 'success');
     }
@@ -868,7 +903,7 @@ export default function PharmacyPage() {
                 </div>
                 <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-full">Alert</span>
               </div>
-              <p className="text-2xl font-bold text-slate-800">{medicines.filter((m: any) => m.stock <= (m.reorderLevel || 10) && m.stock > 0).length}</p>
+              <p className="text-2xl font-bold text-slate-800">{medicines.filter((m: any) => m.stock <= (m.minStock || 10) && m.stock > 0).length}</p>
               <p className="text-xs text-slate-500 mt-1">Low Stock Items</p>
             </div>
 
@@ -938,7 +973,7 @@ export default function PharmacyPage() {
                 <h3 className="font-bold text-slate-800">Low Stock</h3>
               </div>
               {(() => {
-                const lowStock = medicines.filter((m: any) => m.stock <= (m.reorderLevel || 10) && m.stock > 0).sort((a: any, b: any) => a.stock - b.stock).slice(0, 10);
+                const lowStock = medicines.filter((m: any) => m.stock <= (m.minStock || 10) && m.stock > 0).sort((a: any, b: any) => a.stock - b.stock).slice(0, 10);
                 const outOfStock = medicines.filter((m: any) => m.stock === 0);
                 return lowStock.length === 0 && outOfStock.length === 0 ? (
                   <div className="p-8 text-center">
@@ -1202,28 +1237,39 @@ export default function PharmacyPage() {
               {showMedDropdown && medResults.length > 0 && (
                 <div className="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg bg-white shadow-lg max-h-72 overflow-y-auto">
                   {medResults.map(m => (
-                    <button
+                    <div
                       key={m.id}
-                      onClick={() => addToCode(m)}
-                      className="w-full text-left px-4 py-3 hover:bg-emerald-50 border-b border-slate-100 last:border-0 transition-colors group"
+                      className="flex items-center px-4 py-3 hover:bg-emerald-50 border-b border-slate-100 last:border-0 transition-colors group cursor-pointer"
+                      onClick={() => addToCartDirect(m)}
                     >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="font-semibold text-slate-800 group-hover:text-emerald-700">{m.name}</span>
-                          <span className="text-xs text-slate-400 ml-2">({m.genericName})</span>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="badge badge-blue text-xs">{m.form}</span>
-                            <span className="text-xs text-slate-500">{m.strength}</span>
-                            <span className="text-xs text-slate-400">{m.packing}</span>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-semibold text-slate-800 group-hover:text-emerald-700">{m.name}</span>
+                            <span className="text-xs text-slate-400 ml-2">({m.genericName})</span>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="badge badge-blue text-xs">{m.form}</span>
+                              <span className="text-xs text-slate-500">{m.strength}</span>
+                              <span className="text-xs text-slate-400">{m.packing}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-right mr-2">
+                              <p className="font-bold text-emerald-700">{currency} {m.price.toLocaleString()}</p>
+                              <p className="text-xs text-slate-400">{m.category}</p>
+                            </div>
+                            {licenseType !== 'pharmacy' && (
+                              <button
+                                onClick={e => { e.stopPropagation(); addToCode(m); }}
+                                className="text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded-md px-2 py-1 hover:bg-blue-100 font-medium shrink-0"
+                                title="Add to Prescription Code"
+                              >Code</button>
+                            )}
+                            <span className="text-xs text-emerald-600 font-medium shrink-0">+ Add</span>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-bold text-emerald-700">{currency} {m.price.toLocaleString()}</p>
-                          <p className="text-xs text-slate-400">{m.category}</p>
-                          <p className="text-xs text-emerald-600 mt-1 font-medium">+ Add to Code</p>
-                        </div>
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -1363,7 +1409,7 @@ export default function PharmacyPage() {
               </div>
             ) : (
               <>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -1434,15 +1480,52 @@ export default function PharmacyPage() {
 
                 {/* Cart Footer - Total + Actions */}
                 <div className="border-t-2 border-slate-200 bg-slate-50 px-5 py-4">
+                  {/* Discount & Payment Row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                    <div>
+                      <label className="text-xs text-slate-500 font-medium mb-1 block">Discount %</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={billDiscount || ''}
+                        onChange={e => setBillDiscount(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                        placeholder="0"
+                        className="form-input h-9 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 font-medium mb-1 block">Discount Type</label>
+                      <select className="form-input h-9 text-sm" value={discountType} onChange={e => setDiscountType(e.target.value as 'patient' | 'prescriber')}>
+                        <option value="patient">Patient Discount</option>
+                        <option value="prescriber">Prescriber Discount</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 font-medium mb-1 block">Payment Method</label>
+                      <select className="form-input h-9 text-sm" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as 'Cash' | 'Card' | 'Online')}>
+                        <option value="Cash">Cash</option>
+                        <option value="Card">Card</option>
+                        <option value="Online">Online</option>
+                      </select>
+                    </div>
+                  </div>
+
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                       <div className="bg-white border border-slate-200 rounded-lg px-4 py-3">
                         <p className="text-xs text-slate-400">Items</p>
                         <p className="text-lg font-bold text-slate-700">{cart.length}</p>
                       </div>
+                      {billDiscount > 0 && (
+                        <div className="bg-white border border-red-200 rounded-lg px-4 py-3">
+                          <p className="text-xs text-red-400 font-medium">Discount ({billDiscount}%)</p>
+                          <p className="text-lg font-bold text-red-600">-{currency} {Math.round(cartTotal * billDiscount / 100).toLocaleString()}</p>
+                        </div>
+                      )}
                       <div className="bg-white border border-2 border-emerald-200 rounded-lg px-6 py-3">
                         <p className="text-xs text-emerald-500 font-medium">Grand Total</p>
-                        <p className="text-2xl font-bold text-emerald-700">{currency} {cartTotal.toLocaleString()}</p>
+                        <p className="text-2xl font-bold text-emerald-700">{currency} {(cartTotal - Math.round(cartTotal * billDiscount / 100)).toLocaleString()}</p>
                       </div>
                     </div>
                     <div className="flex gap-2 w-full sm:w-auto">
@@ -2156,7 +2239,26 @@ export default function PharmacyPage() {
                       <input type="number" className="form-input" placeholder="e.g. 50" value={fPrice} onChange={e => setFPrice(e.target.value)} min={0} />
                     </div>
                     <div>
-                      <label className="form-label">Category *</label>
+                      <label className="form-label">Purchase/Cost Price ({currency})</label>
+                      <input type="number" className="form-input" placeholder="e.g. 35 (for profit calc)" value={fPurchasePrice} onChange={e => setFPurchasePrice(e.target.value)} min={0} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="form-label">Opening Stock</label>
+                      <input type="number" className="form-input" placeholder="0" value={fStock} onChange={e => setFStock(e.target.value)} min={0} />
+                    </div>
+                    <div>
+                      <label className="form-label">Min Stock Level</label>
+                      <input type="number" className="form-input" placeholder="10" value={fMinStock} onChange={e => setFMinStock(e.target.value)} min={0} />
+                    </div>
+                    <div>
+                      <label className="form-label">Expiry Date</label>
+                      <input type="date" className="form-input" value={fExpiryDate} onChange={e => setFExpiryDate(e.target.value)} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="form-label">Category *</label>
                       <select
                         className="form-input"
                         value={fCategory === '__new__' ? '__new__' : fCategory}
