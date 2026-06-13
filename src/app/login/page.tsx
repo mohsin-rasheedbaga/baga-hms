@@ -23,6 +23,7 @@ export default function LoginPage() {
   const [newLicenseKey, setNewLicenseKey] = useState('');
   const [changeLicenseStatus, setChangeLicenseStatus] = useState({ loading: false, error: '', success: '' });
   const [appVersion, setAppVersion] = useState('3.5.4');
+  const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -83,34 +84,35 @@ export default function LoginPage() {
             };
             localStorage.setItem('baga_session', JSON.stringify(sessionData));
             try { (window as any).bagaAPI.dbSetKV('baga_session', JSON.stringify(sessionData)); } catch (e) {}
+            setRedirecting(true);
             router.push('/dashboard');
             return;
           }
           
           // OFFLINE LOGIN: Check if there's a valid saved session — auto-redirect
           if (info.mode === 'licensed') {
+            // Helper to check session from a source
+            const tryParseSession = (raw: string | null | undefined): any => {
+              if (!raw) return null;
+              try { const p = JSON.parse(raw); return (p && p.userId) ? p : null; } catch { return null; }
+            };
+            // Check Electron SQLite first
+            let session = null;
             try {
-              const savedSession = (window as any).bagaAPI.dbGetKV('baga_session');
-              if (savedSession) {
-                const parsed = JSON.parse(savedSession);
-                if (parsed && parsed.userId) {
-                  // Session exists — redirect directly (offline login)
-                  router.push('/dashboard');
-                  return;
-                }
+              const result = (window as any).bagaAPI.dbGetKV('baga_session');
+              if (result?.success && result.data) {
+                session = tryParseSession(result.data);
               }
             } catch (e) {}
-            // Also check localStorage
-            try {
-              const lsSession = localStorage.getItem('baga_session');
-              if (lsSession) {
-                const parsed = JSON.parse(lsSession);
-                if (parsed && parsed.userId) {
-                  router.push('/dashboard');
-                  return;
-                }
-              }
-            } catch (e) {}
+            // Fallback to localStorage
+            if (!session) {
+              try { session = tryParseSession(localStorage.getItem('baga_session')); } catch (e) {}
+            }
+            if (session) {
+              // Session exists — redirect directly (offline login)
+              router.push('/dashboard');
+              return;
+            }
           }
         } catch (e) {
           console.error('License info error:', e);
@@ -202,6 +204,7 @@ export default function LoginPage() {
       try { (window as any).bagaAPI.dbSetKV('baga_session', JSON.stringify(sessionData)); } catch (e) {}
     }
 
+    setRedirecting(true);
     router.push('/dashboard');
     setLoading(false);
   };
@@ -248,8 +251,8 @@ export default function LoginPage() {
     }
   };
 
-  if (initLoading && isElectron) {
-    return null; // Don't show loading screen — prevents flash
+  if ((initLoading || redirecting) && isElectron) {
+    return null;
   }
 
   // Expired license screen

@@ -234,13 +234,24 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
+    // Try to get session — retry once in case of SQLite timing issue
+    let s = getSession();
+    if (!s) {
+      // Retry after a brief delay (SQLite sync can be slow on startup)
+      const timer = setTimeout(() => {
+        const retry = getSession();
+        if (!retry) { router.push('/login'); return; }
+        setSession(retry);
+        const h = getHospital();
+        setHospitalName(h.name);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+    setSession(s);
     try {
-      const s = getSession();
-      if (!s) { router.push('/login'); return; }
-      setSession(s);
       const h = getHospital();
       setHospitalName(h.name);
-    } catch { router.push('/login'); }
+    } catch {}
   }, [router]);
 
   useEffect(() => {
@@ -306,7 +317,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     // Pharmacy license: simplified POS only
     menuItems = [
       { label: 'Dashboard', path: '/pharmacy', icon: 'M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z' },
-      { label: 'Point of Sale', path: '/pharmacy', icon: 'M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z' },
+      { label: 'Point of Sale', path: '/pharmacy?tab=pos', icon: 'M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z' },
       { label: 'Return Medicine', path: '/pharmacy/returns', icon: 'M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6' },
       { label: 'Medicine Inventory', path: '/pharmacy/inventory', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
       { label: 'My Statement', path: '/pharmacy/statement', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
