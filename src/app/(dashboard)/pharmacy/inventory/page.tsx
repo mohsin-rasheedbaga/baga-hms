@@ -40,8 +40,11 @@ export default function InventoryPage() {
   const [fStrength, setFStrength] = useState('');
   const [fPacking, setFPacking] = useState('');
   const [fPrice, setFPrice] = useState('');
+  const [fPurchasePrice, setFPurchasePrice] = useState('');
   const [fCategory, setFCategory] = useState('');
   const [fNewCategory, setFNewCategory] = useState('');
+  const [fBatchNumber, setFBatchNumber] = useState('');
+  const [fManufacturingDate, setFManufacturingDate] = useState('');
 
   const loadInventory = useCallback(() => {
     const meds = getMedicines();
@@ -64,14 +67,16 @@ export default function InventoryPage() {
   const openAddMed = () => {
     setEditingMed(null);
     setFName(''); setFGeneric(''); setFForm('Tablet'); setFStrength('');
-    setFPacking(''); setFPrice(''); setFCategory(categories[0] || ''); setFNewCategory('');
+    setFPacking(''); setFPrice(''); setFPurchasePrice(''); setFCategory(categories[0] || ''); setFNewCategory('');
+    setFBatchNumber(''); setFManufacturingDate('');
     setShowMedModal(true);
   };
 
   const openEditMed = (m: MedicineItem) => {
     setEditingMed(m);
     setFName(m.name); setFGeneric(m.genericName); setFForm(m.form); setFStrength(m.strength);
-    setFPacking(m.packing); setFPrice(String(m.price)); setFCategory(m.category); setFNewCategory('');
+    setFPacking(m.packing); setFPrice(String(m.price)); setFPurchasePrice(String(m.purchasePrice || ''));
+    setFCategory(m.category); setFNewCategory(''); setFBatchNumber(m.batchNumber || ''); setFManufacturingDate(m.manufacturingDate || '');
     setShowMedModal(true);
   };
 
@@ -83,14 +88,22 @@ export default function InventoryPage() {
     if (editingMed) {
       updateMedicine(editingMed.id, {
         name: fName.trim(), genericName: fGeneric.trim(), form: fForm as MedicineItem['form'],
-        strength: fStrength.trim(), packing: fPacking.trim(), price: Number(fPrice), category: cat,
+        strength: fStrength.trim(), packing: fPacking.trim(), price: Number(fPrice),
+        purchasePrice: fPurchasePrice ? Number(fPurchasePrice) : undefined,
+        category: cat,
+        batchNumber: fBatchNumber.trim() || undefined,
+        manufacturingDate: fManufacturingDate || undefined,
       });
       showToast('Medicine updated successfully', 'success');
     } else {
       addMedicine({
         id: genId(), name: fName.trim(), genericName: fGeneric.trim(), form: fForm as MedicineItem['form'],
-        strength: fStrength.trim(), packing: fPacking.trim(), price: Number(fPrice), category: cat, active: true,
+        strength: fStrength.trim(), packing: fPacking.trim(), price: Number(fPrice),
+        purchasePrice: fPurchasePrice ? Number(fPurchasePrice) : undefined,
+        category: cat, active: true,
         stock: 0, expiryDate: '', minStock: 10,
+        batchNumber: fBatchNumber.trim() || undefined,
+        manufacturingDate: fManufacturingDate || undefined,
       });
       showToast('New medicine added successfully', 'success');
     }
@@ -183,64 +196,64 @@ export default function InventoryPage() {
       {/* Medicine Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-          <table className="data-table">
+          <table className="w-full border-collapse text-xs">
             <thead className="sticky top-0 bg-white z-10">
               <tr>
-                <th>Medicine Name</th>
-                <th>Generic Name</th>
-                <th>Form</th>
-                <th>Strength</th>
-                <th>Packing</th>
-                <th>Category</th>
-                <th className="text-right">Price</th>
-                <th>Stock</th>
-                <th>Expiry</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Medicine Name</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Generic Name</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Form</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Strength</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Packing</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Category</th>
+                <th className="px-2 py-2 text-right font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Price</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Stock</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Expiry</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Status</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredMedicines.map(m => (
-                <tr key={m.id} className={!m.active ? 'opacity-50' : ''}>
-                  <td className="font-semibold text-slate-800">{m.name}</td>
-                  <td className="text-sm text-slate-500">{m.genericName}</td>
-                  <td><span className="badge badge-blue">{m.form}</span></td>
-                  <td className="text-sm text-slate-600">{m.strength}</td>
-                  <td className="text-sm text-slate-500">{m.packing}</td>
-                  <td><span className="badge badge-amber">{m.category}</span></td>
-                  <td className="text-right">
+                <tr key={m.id} className={`${!m.active ? 'opacity-50' : ''} hover:bg-slate-50`}>
+                  <td className="px-2 py-2 font-semibold text-slate-800 whitespace-nowrap">{m.name}</td>
+                  <td className="px-2 py-2 text-slate-500 whitespace-nowrap">{m.genericName}</td>
+                  <td className="px-2 py-2 whitespace-nowrap"><span className="badge badge-blue">{m.form}</span></td>
+                  <td className="px-2 py-2 text-slate-600 whitespace-nowrap">{m.strength}</td>
+                  <td className="px-2 py-2 text-slate-500 whitespace-nowrap">{m.packing}</td>
+                  <td className="px-2 py-2 whitespace-nowrap"><span className="badge badge-amber">{m.category}</span></td>
+                  <td className="px-2 py-2 text-right whitespace-nowrap">
                     <button
                       onClick={() => { setEditPriceMed(m); setEditPriceVal(String(m.price)); }}
                       className="font-bold text-emerald-700 hover:text-emerald-600 hover:underline cursor-pointer"
                       title="Click to edit price"
                     >
                       {currency} {m.price.toLocaleString()}
-                      <svg className="w-3 h-3 inline ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                      <svg className="w-3 h-3 inline ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                     </button>
                   </td>
-                  <td>
+                  <td className="px-2 py-2 whitespace-nowrap">
                     <span className={`font-semibold ${m.stock <= 0 ? 'text-red-600' : m.stock <= (m.minStock || 10) ? 'text-amber-600' : 'text-emerald-600'}`}>
                       {m.stock}
                     </span>
-                    {m.stock <= 0 && <span className="badge badge-rose text-xs ml-1">OUT</span>}
-                    {m.stock > 0 && m.stock <= (m.minStock || 10) && <span className="badge badge-amber text-xs ml-1">LOW</span>}
+                    {m.stock <= 0 && <span className="badge badge-rose text-[10px] ml-0.5">OUT</span>}
+                    {m.stock > 0 && m.stock <= (m.minStock || 10) && <span className="badge badge-amber text-[10px] ml-0.5">LOW</span>}
                   </td>
-                  <td>
+                  <td className="px-2 py-2 whitespace-nowrap">
                     {m.expiryDate ? (
-                      <span className={`text-sm ${m.expiryDate < todayStr() ? 'text-red-600 font-bold' : 'text-slate-600'}`}>
+                      <span className={`${m.expiryDate < todayStr() ? 'text-red-600 font-bold' : 'text-slate-600'}`}>
                         {m.expiryDate}
-                        {m.expiryDate < todayStr() && <span className="badge badge-rose text-xs ml-1">EXPIRED</span>}
+                        {m.expiryDate < todayStr() && <span className="badge badge-rose text-[10px] ml-0.5">EXPIRED</span>}
                       </span>
                     ) : (
-                      <span className="text-slate-400 text-sm">Not set</span>
+                      <span className="text-slate-400">Not set</span>
                     )}
                   </td>
-                  <td>
+                  <td className="px-2 py-2 whitespace-nowrap">
                     <span className={`badge ${m.active ? 'badge-green' : 'badge-rose'}`}>
                       {m.active ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  <td>
+                  <td className="px-2 py-2 whitespace-nowrap">
                     <div className="flex gap-1 flex-wrap">
                       <button onClick={() => openEditMed(m)} className="btn btn-outline btn-sm">Edit</button>
                       <button
@@ -249,7 +262,7 @@ export default function InventoryPage() {
                       >
                         {m.active ? 'Disable' : 'Enable'}
                       </button>
-                      <button onClick={() => setDeleteConfirm(m)} className="btn btn-sm btn-danger">Delete</button>
+                      <button onClick={() => setDeleteConfirm(m)} className="btn btn-sm btn-danger">Del</button>
                     </div>
                   </td>
                 </tr>
@@ -365,8 +378,22 @@ export default function InventoryPage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="form-label">Price ({currency}) *</label>
+                  <label className="form-label">Selling Price ({currency}) *</label>
                   <input type="number" className="form-input" placeholder="e.g. 50" value={fPrice} onChange={e => setFPrice(e.target.value)} min={0} />
+                </div>
+                <div>
+                  <label className="form-label">Purchase Price ({currency})</label>
+                  <input type="number" className="form-input" placeholder="e.g. 30 (cost price)" value={fPurchasePrice} onChange={e => setFPurchasePrice(e.target.value)} min={0} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="form-label">Batch Number</label>
+                  <input type="text" className="form-input" placeholder="e.g. BAT-2025-001" value={fBatchNumber} onChange={e => setFBatchNumber(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label">Manufacturing Date</label>
+                  <input type="date" className="form-input" value={fManufacturingDate} onChange={e => setFManufacturingDate(e.target.value)} />
                 </div>
                 <div>
                   <label className="form-label">Category *</label>

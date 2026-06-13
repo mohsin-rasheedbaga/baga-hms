@@ -280,6 +280,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     router.push('/login');
   };
 
+  // Dynamic role label based on license type
+  const getLicenseRoleLabel = () => {
+    const lt = licenseInfo?.licenseType || session?.licenseType;
+    if (lt === 'pharmacy') return 'Pharmacy Admin';
+    if (lt === 'lab') return 'Lab Admin';
+    if (lt === 'clinic') return 'Clinic Admin';
+    if (lt === 'reception') return 'Reception Admin';
+    return session?.name || 'Admin';
+  };
+
   const toggleMenu = (label: string) => {
     setExpandedMenus(prev =>
       prev.includes(label) ? prev.filter(m => m !== label) : [...prev, label]
@@ -385,7 +395,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </div>
             <div>
               <h2 className="text-white font-bold text-sm leading-tight">{hospitalName}</h2>
-              <p className="text-slate-400 text-xs">{licenseInfo?.licenseType === 'pharmacy' ? 'Pharmacy Admin' : roleLabels[session.role]}</p>
+              <p className="text-slate-400 text-xs">{getLicenseRoleLabel()}</p>
             </div>
           </div>
         </div>
@@ -457,7 +467,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-white text-sm font-medium truncate">{session.name}</p>
-              <p className="text-slate-400 text-xs">{licenseInfo?.licenseType === 'pharmacy' ? 'Pharmacy Admin' : session.department}</p>
+              <p className="text-slate-400 text-xs">{getLicenseRoleLabel()}</p>
             </div>
           </div>
           <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 text-red-400 hover:bg-red-500/10 rounded-lg text-sm transition-colors">
@@ -482,7 +492,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
           <div className="flex items-center gap-3">
             <span className={`badge ${roleColors[session.role] ? roleColors[session.role].replace('bg-', 'bg-') : ''}`} style={{background: 'var(--sidebar-active)', color: 'white'}}>
-              {roleLabels[session.role]}
+              {getLicenseRoleLabel()}
             </span>
             {session?.mode === 'demo' && licenseInfo?.demo && (
               <span className="badge" style={{ background: '#d97706', color: 'white' }}>

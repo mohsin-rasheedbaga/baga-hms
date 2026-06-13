@@ -63,6 +63,9 @@ interface PharmacySale {
   time: string;
   servedBy: string;
   paymentMethod: 'Cash' | 'Card' | 'Online';
+  discountPercent?: number;
+  discountAmount?: number;
+  discountType?: 'patient' | 'prescriber';
 }
 
 /* ==================== LOCAL STORAGE HELPERS ==================== */
@@ -175,6 +178,13 @@ export default function PharmacyPage() {
   const [billDiscount, setBillDiscount] = useState(0);
   const [discountType, setDiscountType] = useState<'patient' | 'prescriber'>('patient');
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'Online'>('Cash');
+  const [receiptHeader, setReceiptHeader] = useState<{ hospitalName: string; hospitalLogo: string; hospitalAddress: string; hospitalPhone: string } | null>(null);
+
+  useEffect(() => {
+    if (saleBill) {
+      getPrintHeader().then(setReceiptHeader);
+    }
+  }, [saleBill]);
 
   // Code (Prescription Builder)
   const [codeItems, setCodeItems] = useState<CodeItem[]>([]);
@@ -411,6 +421,9 @@ export default function PharmacyPage() {
       setOutdoorNo(`OUT-${String(counter + 1).padStart(4, '0')}`);
     }
 
+    const discountAmt = Math.round(cartTotal * billDiscount / 100);
+    const grandTotal = cartTotal - discountAmt;
+
     const sale: PharmacySale = {
       id: genId(),
       patientNo,
@@ -418,11 +431,14 @@ export default function PharmacyPage() {
       patientMobile,
       type: patientMode,
       items: [...cart],
-      totalAmount: cartTotal,
+      totalAmount: grandTotal,
       date: todayStr(),
       time: timeStr(),
       servedBy: (typeof window !== 'undefined' && localStorage.getItem('baga_session')) ? JSON.parse(localStorage.getItem('baga_session')!).name || 'Pharmacist' : 'Pharmacist',
       paymentMethod,
+      discountPercent: billDiscount > 0 ? billDiscount : undefined,
+      discountAmount: discountAmt > 0 ? discountAmt : undefined,
+      discountType: billDiscount > 0 ? discountType : undefined,
     };
 
     addPharmacySale(sale);
@@ -435,8 +451,10 @@ export default function PharmacyPage() {
       }
     }
     loadInventory();
-    showToast(`Sale completed! ${currency} ${cartTotal.toLocaleString()}`, 'success');
+    showToast(`Sale completed! ${currency} ${grandTotal.toLocaleString()}`, 'success');
     setSaleBill(sale);
+    // Auto-print after a small delay, but keep the modal open so user can see & re-print
+    setTimeout(() => { printBillSlip(); }, 500);
     setBillDiscount(0);
     setDiscountType('patient');
     loadSales();
@@ -453,8 +471,11 @@ export default function PharmacyPage() {
   const printBillSlip = async () => {
     if (!saleBill) return;
     try {
-      const discountAmt = Math.round(saleBill.totalAmount * billDiscount / 100);
-      const grandTotal = saleBill.totalAmount - discountAmt;
+      const subtotal = saleBill.items.reduce((a, c) => a + c.total, 0);
+      const discountPct = saleBill.discountPercent ?? billDiscount;
+      const discountAmt = saleBill.discountAmount ?? Math.round(subtotal * discountPct / 100);
+      const dType = saleBill.discountType ?? discountType;
+      const grandTotal = saleBill.totalAmount;
       const { hospitalName, hospitalLogo, hospitalAddress, hospitalPhone } = await getPrintHeader();
       const cur = currency;
       const itemRows = saleBill.items.map((it, i) => {
@@ -519,8 +540,8 @@ export default function PharmacyPage() {
           <tbody>${itemRows}</tbody>
         </table>
         <div class="totals">
-          <div class="total-row"><span>Subtotal (${saleBill.items.length} items)</span><span>${cur} ${saleBill.totalAmount.toLocaleString()}</span></div>
-          ${billDiscount > 0 ? `<div class="total-row discount"><span>Discount (${billDiscount}% ${discountType === 'patient' ? '- Patient' : '- Prescriber'})</span><span>-${cur} ${discountAmt.toLocaleString()}</span></div>` : ''}
+          <div class="total-row"><span>Subtotal (${saleBill.items.length} items)</span><span>${cur} ${subtotal.toLocaleString()}</span></div>
+          ${discountPct > 0 ? `<div class="total-row discount"><span>Discount (${discountPct}% ${dType === 'patient' ? '- Patient' : '- Prescriber'})</span><span>-${cur} ${discountAmt.toLocaleString()}</span></div>` : ''}
           <div class="grand-total"><span>GRAND TOTAL</span><span>${cur} ${grandTotal.toLocaleString()}</span></div>
         </div>
         <div class="footer">
@@ -679,104 +700,122 @@ export default function PharmacyPage() {
     <div className="space-y-5">
       {toast && <div className={`toast ${toast.type === 'success' ? 'toast-success' : 'toast-error'}`}>{toast.msg}</div>}
 
-      {/* Sale Bill Modal */}
-      {saleBill && (
-        <div className="modal-overlay" onClick={closeBill}>
-          <div className="modal-content" style={{ maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-slate-800">Sale Bill</h3>
-              <button onClick={closeBill} className="btn btn-outline btn-sm">Close</button>
-            </div>
-
-            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div><span className="text-slate-500">Patient ID:</span> <span className="font-mono font-bold text-blue-600">{saleBill.patientNo}</span></div>
-                <div><span className="text-slate-500">Name:</span> <span className="font-semibold">{saleBill.patientName}</span></div>
-                <div><span className="text-slate-500">Mobile:</span> <span>{saleBill.patientMobile}</span></div>
-                <div><span className="text-slate-500">Date:</span> <span>{saleBill.date} {saleBill.time}</span></div>
-                <div><span className="text-slate-500">Served By:</span> <span>{saleBill.servedBy}</span></div>
+      {/* Sale Bill Modal — Receipt Preview */}
+      {saleBill && (() => {
+        const subtotal = saleBill.items.reduce((a, c) => a + c.total, 0);
+        const discPct = saleBill.discountPercent ?? 0;
+        const discAmt = saleBill.discountAmount ?? 0;
+        const discTypeLabel = (saleBill.discountType ?? 'patient') === 'patient' ? 'Patient' : 'Prescriber';
+        const hdr = receiptHeader;
+        return (
+          <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={closeBill}>
+            <div onClick={e => e.stopPropagation()} style={{
+              maxWidth: 320, width: '100%', maxHeight: '90vh', overflowY: 'auto',
+              background: '#fff', borderRadius: 8, boxShadow: '0 8px 40px rgba(0,0,0,0.25)',
+              padding: '16px 12px', fontFamily: "'Segoe UI', Arial, sans-serif", fontSize: 11, color: '#1e293b',
+            }}>
+              {/* Header */}
+              <div style={{ textAlign: 'center', paddingBottom: 8, borderBottom: '2px dashed #cbd5e1' }}>
+                {hdr?.hospitalLogo && <img src={hdr.hospitalLogo} alt="" style={{ width: 40, height: 40, objectFit: 'contain', display: 'block', margin: '0 auto 4px' }} />}
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#0c2340', letterSpacing: 1 }}>{hdr?.hospitalName || 'BAGA HOSPITAL'}</div>
+                {hdr?.hospitalAddress && <div style={{ fontSize: 8, color: '#64748b', marginTop: 1 }}>{hdr.hospitalAddress}</div>}
+                {hdr?.hospitalPhone && <div style={{ fontSize: 8, color: '#64748b' }}>{hdr.hospitalPhone}</div>}
+                <div style={{ fontSize: 8, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>Pharmacy Department</div>
               </div>
-            </div>
 
-            <div className="border border-slate-200 rounded-lg overflow-hidden mb-4">
-              <table className="data-table">
-                <thead><tr><th>#</th><th>Medicine</th><th>Form</th><th>Strength</th><th className="text-right">Price</th><th className="text-center">Qty</th><th className="text-right">Total</th></tr></thead>
+              {/* Bill Info */}
+              <div style={{ padding: '6px 0', borderBottom: '1px dashed #e2e8f0' }}>
+                {[
+                  ['Bill No', saleBill.id.slice(-6).toUpperCase()],
+                  ['Patient', saleBill.patientName],
+                  ['ID', saleBill.patientNo],
+                  ['Mobile', saleBill.patientMobile || '-'],
+                  ['Date', `${saleBill.date} ${saleBill.time}`],
+                  ['Served By', saleBill.servedBy],
+                  ['Payment', saleBill.paymentMethod],
+                ].map(([label, value]) => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, padding: '1px 0' }}>
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>{label}:</span>
+                    <span style={{ color: '#1e293b', fontWeight: 500 }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Title */}
+              <div style={{ textAlign: 'center', padding: '4px 0', borderBottom: '1px dashed #e2e8f0', borderTop: '1px dashed #e2e8f0' }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#0c2340', letterSpacing: 1 }}>Medicine Bill / Slip</span>
+              </div>
+
+              {/* Items Table — compact */}
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 4 }}>
+                <thead>
+                  <tr>
+                    {['#', 'Name', 'Qty', 'Total'].map(h => (
+                      <th key={h} style={{
+                        padding: '2px 4px', fontSize: 8, fontWeight: 700, textTransform: 'uppercase',
+                        letterSpacing: 0.5, color: '#0c2340', background: '#f1f5f9',
+                        borderBottom: '2px solid #0c2340', textAlign: h === 'Total' ? 'right' : h === 'Qty' ? 'center' : 'left',
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
                 <tbody>
                   {saleBill.items.map((it, i) => (
-                    <tr key={i}>
-                      <td className="text-sm text-slate-400">{i + 1}</td>
-                      <td><p className="font-semibold text-sm">{it.name}</p><p className="text-xs text-slate-400">{it.genericName}</p></td>
-                      <td><span className="badge badge-blue text-xs">{it.form}</span></td>
-                      <td className="text-sm">{it.strength}</td>
-                      <td className="text-right text-sm">{currency} {it.price.toLocaleString()}</td>
-                      <td className="text-center text-sm font-semibold">{it.quantity}</td>
-                      <td className="text-right text-sm font-bold">{currency} {it.total.toLocaleString()}</td>
+                    <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                      <td style={{ padding: '2px 4px', fontSize: 10, borderBottom: '1px solid #f1f5f9' }}>{i + 1}</td>
+                      <td style={{ padding: '2px 4px', fontSize: 10, borderBottom: '1px solid #f1f5f9', fontWeight: 600 }}>{it.name}</td>
+                      <td style={{ padding: '2px 4px', fontSize: 10, borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>{it.quantity}</td>
+                      <td style={{ padding: '2px 4px', fontSize: 10, borderBottom: '1px solid #f1f5f9', textAlign: 'right', fontWeight: 700 }}>{currency} {it.total.toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
 
-            <div className="space-y-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600">Subtotal ({saleBill.items.length} items)</span>
-                <span className="font-semibold">{currency} {saleBill.totalAmount.toLocaleString()}</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm text-slate-600">Discount Type</span>
-                <div className="flex bg-slate-100 rounded-lg p-0.5">
-                  <button
-                    onClick={() => setDiscountType('patient')}
-                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${discountType === 'patient' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
-                  >
-                    Patient
-                  </button>
-                  <button
-                    onClick={() => setDiscountType('prescriber')}
-                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${discountType === 'prescriber' ? 'bg-white shadow-sm text-purple-700' : 'text-slate-500 hover:text-slate-700'}`}
-                  >
-                    Prescriber
-                  </button>
+              {/* Totals */}
+              <div style={{ padding: '6px 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '2px 0' }}>
+                  <span>Subtotal ({saleBill.items.length} items)</span>
+                  <span>{currency} {subtotal.toLocaleString()}</span>
+                </div>
+                {discPct > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '2px 0', color: '#dc2626' }}>
+                    <span>Discount ({discPct}% - {discTypeLabel})</span>
+                    <span>-{currency} {discAmt.toLocaleString()}</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 900, color: '#0c2340', padding: '4px 0', borderTop: '2px solid #0c2340', borderBottom: '2px solid #0c2340', marginTop: 4 }}>
+                  <span>GRAND TOTAL</span>
+                  <span>{currency} {saleBill.totalAmount.toLocaleString()}</span>
                 </div>
               </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm text-slate-600">Payment Method</span>
-                <span className="font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg text-sm">{saleBill.paymentMethod}</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm text-slate-600">Discount (%)</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={billDiscount}
-                  onChange={e => setBillDiscount(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
-                  className="w-20 h-9 text-right border border-slate-300 rounded-lg px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
-                  placeholder="0"
-                />
-              </div>
-              {billDiscount > 0 && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-red-500">Discount Amount ({billDiscount}% - {discountType === 'patient' ? 'Patient' : 'Prescriber'})</span>
-                  <span className="font-semibold text-red-500">-{currency} {Math.round(saleBill.totalAmount * billDiscount / 100).toLocaleString()}</span>
-                </div>
-              )}
-              <div className="flex items-center justify-between pt-3 border-t-2 border-slate-300">
-                <span className="text-lg font-bold text-slate-800">Grand Total</span>
-                <span className="text-2xl font-black text-emerald-700">{currency} {(saleBill.totalAmount - Math.round(saleBill.totalAmount * billDiscount / 100)).toLocaleString()}</span>
-              </div>
-            </div>
 
-            <div className="flex gap-2 mt-4">
-              <button onClick={printBillSlip} className="btn btn-primary flex-1">
-                <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                Print Slip
-              </button>
-              <button onClick={closeBill} className="btn btn-outline flex-1">Close</button>
+              {/* Footer */}
+              <div style={{ textAlign: 'center', padding: '6px 0', marginTop: 4, borderTop: '2px dashed #cbd5e1' }}>
+                <div style={{ fontSize: 9, color: '#64748b', fontStyle: 'italic' }}>Thank you for visiting {hdr?.hospitalName || 'BAGA HOSPITAL'}!</div>
+                <div style={{ fontSize: 7, color: '#94a3b8' }}>Computer Generated Bill | {saleBill.date} {saleBill.time}</div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <button onClick={printBillSlip} style={{
+                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                  padding: '8px 0', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6,
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}>
+                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                  Re-Print
+                </button>
+                <button onClick={closeBill} style={{
+                  flex: 1, padding: '8px 0', background: '#fff', color: '#475569', border: '1px solid #cbd5e1',
+                  borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}>
+                  Close
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Header */}
       <div>

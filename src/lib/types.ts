@@ -243,11 +243,14 @@ export interface MedicineItem {
   strength: string; // e.g. "500mg", "250mg/5ml"
   packing: string;  // e.g. "10 tablets", "100ml bottle"
   price: number;
+  purchasePrice?: number; // cost/purchase price per unit
   category: string; // e.g. "Pain Relief", "Antibiotic"
   active: boolean;
   stock: number;         // current stock quantity
   expiryDate: string;   // YYYY-MM-DD format
   minStock: number;     // minimum stock level for alerts
+  batchNumber?: string;  // batch number
+  manufacturingDate?: string; // YYYY-MM-DD format
 }
 
 export interface LabTestCatalog {

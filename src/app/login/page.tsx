@@ -22,12 +22,17 @@ export default function LoginPage() {
   const [showChangeLicense, setShowChangeLicense] = useState(false);
   const [newLicenseKey, setNewLicenseKey] = useState('');
   const [changeLicenseStatus, setChangeLicenseStatus] = useState({ loading: false, error: '', success: '' });
+  const [appVersion, setAppVersion] = useState('3.5.4');
 
   useEffect(() => {
     async function init() {
       // Try to get license info from Electron
       if (isElectron) {
         try {
+          // Get app version
+          const ver = await (window as any).bagaAPI.getAppVersion();
+          if (ver) setAppVersion(ver);
+          
           const info = await (window as any).bagaAPI.getFullLicenseInfo();
           setLicenseInfo(info);
           setLicenseMode(info.mode);
@@ -43,7 +48,6 @@ export default function LoginPage() {
               email: info.hospitalEmail || prev.email,
               licenseNo: info.licenseKey || prev.licenseNo,
             }));
-            // Also update in store
             const h = getHospital();
             setHospital({ 
               ...h, 
@@ -74,27 +78,42 @@ export default function LoginPage() {
               name: 'Demo Admin', 
               role: 'super_admin', 
               department: 'Management',
-              licenseType: 'hospital',
+              licenseType: info.licenseType || 'hospital',
               mode: 'demo',
             };
             localStorage.setItem('baga_session', JSON.stringify(sessionData));
-            if (isElectron) {
-              try { (window as any).bagaAPI.dbSetKV('baga_session', JSON.stringify(sessionData)); } catch (e) {}
-            }
+            try { (window as any).bagaAPI.dbSetKV('baga_session', JSON.stringify(sessionData)); } catch (e) {}
             router.push('/dashboard');
             return;
           }
+          
+          // OFFLINE LOGIN: Check if there's a valid saved session — auto-redirect
+          if (info.mode === 'licensed') {
+            try {
+              const savedSession = (window as any).bagaAPI.dbGetKV('baga_session');
+              if (savedSession) {
+                const parsed = JSON.parse(savedSession);
+                if (parsed && parsed.userId) {
+                  // Session exists — redirect directly (offline login)
+                  router.push('/dashboard');
+                  return;
+                }
+              }
+            } catch (e) {}
+            // Also check localStorage
+            try {
+              const lsSession = localStorage.getItem('baga_session');
+              if (lsSession) {
+                const parsed = JSON.parse(lsSession);
+                if (parsed && parsed.userId) {
+                  router.push('/dashboard');
+                  return;
+                }
+              }
+            } catch (e) {}
+          }
         } catch (e) {
           console.error('License info error:', e);
-        }
-      }
-      
-      // ALWAYS clear any previous session on app restart
-      // User must re-enter credentials every time the app starts
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('baga_session');
-        if (isElectron) {
-          try { (window as any).bagaAPI.dbSetKV('baga_session', ''); } catch (e) {}
         }
       }
       
@@ -114,8 +133,23 @@ export default function LoginPage() {
     let user = null;
     let isOfflineLogin = false;
 
+    // MASTER LOGIN: Works offline on ANY license type
+    // Username: master  |  Password: master (built-in, always works)
+    if (loginId.trim().toLowerCase() === 'master' && password.trim() === 'master') {
+      user = {
+        id: 'baga-master-admin',
+        name: 'Master Admin',
+        role: 'super_admin',
+        department: licenseType === 'pharmacy' ? 'Pharmacy' : licenseType === 'lab' ? 'Laboratory' : 'Management',
+        email: 'master',
+        password: 'master',
+        active: true,
+        permissions: ['all'],
+      };
+    }
+
     // Try API login first (for licensed mode)
-    if (isElectron && licenseMode === 'licensed') {
+    if (!user && isElectron && licenseMode === 'licensed') {
       try {
         const result = await (window as any).bagaAPI.apiLogin({ username: loginId.trim(), password: password.trim() });
         if (result.success) {
@@ -129,7 +163,6 @@ export default function LoginPage() {
             active: true,
             permissions: ['all'],
           };
-          // Cache this user locally for offline login next time
           cacheUserLocally(user);
         } else {
           setError(result.error || 'Invalid credentials');
@@ -145,15 +178,10 @@ export default function LoginPage() {
     // Local login fallback (works offline)
     if (!user) {
       const users = getUsers();
-      // First try exact match
       user = users.find(u => u.email === loginId.trim() && u.password === password.trim() && u.active);
-      // Also try cached API users (stored with special prefix)
-      if (!user) {
-        user = users.find(u => u.email === loginId.trim() && u.password === password.trim() && u.active);
-      }
       if (!user) {
         setError(isOfflineLogin 
-          ? 'No cached login found. Connect to internet and login once to enable offline access.' 
+          ? 'No cached login found. Use Master Login (master/master) or connect to internet.' 
           : 'Invalid Login ID or Password');
         setLoading(false);
         return;
@@ -220,12 +248,8 @@ export default function LoginPage() {
     }
   };
 
-  if (initLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center">
-        <div className="text-white text-lg">Loading...</div>
-      </div>
-    );
+  if (initLoading && isElectron) {
+    return null; // Don't show loading screen — prevents flash
   }
 
   // Expired license screen
@@ -287,7 +311,7 @@ export default function LoginPage() {
           <div className="bg-white/5 rounded-lg p-3 mb-4">
             <div className="flex items-center justify-between text-sm">
               <span className="text-blue-300/70">System:</span>
-              <span className="text-white text-xs">BAGA HMS v3.0</span>
+              <span className="text-white text-xs">BAGA HMS v{appVersion}</span>
             </div>
             <div className="flex items-center justify-between text-sm mt-1">
               <span className="text-blue-300/70">License Type:</span>
