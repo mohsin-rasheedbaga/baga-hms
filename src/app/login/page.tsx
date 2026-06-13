@@ -5,6 +5,14 @@ import { getHospital, getUsers, setHospital, addUser, updateUser } from '@/lib/s
 
 const isElectron = typeof window !== 'undefined' && !!(window as any).bagaAPI;
 
+// Redirect to the correct home page based on license type
+function getHomePath(lt: string): string {
+  if (lt === 'pharmacy') return '/pharmacy';
+  if (lt === 'lab') return '/lab';
+  if (lt === 'reception') return '/reception';
+  return '/dashboard';
+}
+
 export default function LoginPage() {
   const [hospital, setH] = useState({ name: 'BAGA Hospital', address: '', phone: '', email: '', licenseNo: 'BAGA-LIC-0001' });
   const [loginId, setLoginId] = useState('');
@@ -22,7 +30,7 @@ export default function LoginPage() {
   const [showChangeLicense, setShowChangeLicense] = useState(false);
   const [newLicenseKey, setNewLicenseKey] = useState('');
   const [changeLicenseStatus, setChangeLicenseStatus] = useState({ loading: false, error: '', success: '' });
-  const [appVersion, setAppVersion] = useState('3.5.6');
+  const [appVersion, setAppVersion] = useState('3.5.7');
   const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
@@ -85,7 +93,7 @@ export default function LoginPage() {
             localStorage.setItem('baga_session', JSON.stringify(sessionData));
             try { (window as any).bagaAPI.dbSetKV('baga_session', JSON.stringify(sessionData)); } catch (e) {}
             setRedirecting(true);
-            router.push('/dashboard');
+            router.push(getHomePath(info.licenseType || 'hospital'));
             return;
           }
           
@@ -110,7 +118,7 @@ export default function LoginPage() {
             }
             if (session) {
               // Session exists — redirect directly (offline login)
-              router.push('/dashboard');
+              router.push(getHomePath(session.licenseType || 'hospital'));
               return;
             }
           }
@@ -205,7 +213,7 @@ export default function LoginPage() {
     }
 
     setRedirecting(true);
-    router.push('/dashboard');
+    router.push(getHomePath(licenseType));
     setLoading(false);
   };
 

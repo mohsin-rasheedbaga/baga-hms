@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   searchPatients, searchMedicines, getMedicines, addMedicine, updateMedicine, deleteMedicine,
   getMedicineCategories, getActivePrescriptions, updatePrescription, addDispense,
@@ -113,9 +114,9 @@ async function getPrintHeader(): Promise<{ hospitalName: string; hospitalLogo: s
 }
 
 export default function PharmacyPage() {
-  const [initialTab, setInitialTab] = useState<'dashboard' | 'pos' | 'prescriptions' | 'inventory' | 'reports'>('dashboard');
   const [mainTab, setMainTab] = useState<'dashboard' | 'pos' | 'prescriptions' | 'inventory' | 'reports'>('dashboard');
   const [licenseType, setLicenseType] = useState<string>('');
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     try {
@@ -127,18 +128,15 @@ export default function PharmacyPage() {
     } catch {}
   }, []);
 
+  // Read tab from URL query params — reactive to URL changes
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const tab = params.get('tab');
-      if (tab === 'inventory') setInitialTab('inventory');
-      else if (tab === 'reports') setInitialTab('reports');
-      else if (tab === 'prescriptions') setInitialTab('prescriptions');
-      else if (tab === 'pos') setInitialTab('pos');
-      else setInitialTab('dashboard');
-    }
-  }, []);
-  useEffect(() => { setMainTab(initialTab); }, [initialTab]);
+    const tab = searchParams.get('tab');
+    if (tab === 'pos') setMainTab('pos');
+    else if (tab === 'inventory') setMainTab('inventory');
+    else if (tab === 'reports') setMainTab('reports');
+    else if (tab === 'prescriptions') setMainTab('prescriptions');
+    else setMainTab('dashboard');
+  }, [searchParams]);
 
   /* ==================== SHARED ==================== */
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
