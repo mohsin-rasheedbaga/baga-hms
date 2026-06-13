@@ -171,6 +171,7 @@ export default function PharmacyPage() {
   const outdoorNameRef = useRef<HTMLInputElement>(null);
   const outdoorMobileRef = useRef<HTMLInputElement>(null);
   const outdoorAgeRef = useRef<HTMLInputElement>(null);
+  const [highlightedMedIdx, setHighlightedMedIdx] = useState(-1);
 
   // Bill modal
   const [saleBill, setSaleBill] = useState<PharmacySale | null>(null);
@@ -285,6 +286,7 @@ export default function PharmacyPage() {
   // Medicine search handler
   const handleMedSearch = (q: string) => {
     setMedQuery(q);
+    setHighlightedMedIdx(-1);
     if (q.length < 1) { setMedResults([]); setShowMedDropdown(false); return; }
     setMedResults(searchMedicines(q));
     setShowMedDropdown(true);
@@ -578,8 +580,12 @@ export default function PharmacyPage() {
   };
 
   const handleMedSearchEnter = () => {
-    if (medResults.length >= 1) {
+    if (highlightedMedIdx >= 0 && medResults[highlightedMedIdx]) {
+      addToCartDirect(medResults[highlightedMedIdx]);
+      setHighlightedMedIdx(-1);
+    } else if (medResults.length >= 1) {
       addToCartDirect(medResults[0]);
+      setHighlightedMedIdx(-1);
     }
   };
 
@@ -1063,145 +1069,6 @@ export default function PharmacyPage() {
             )}
           </div>
 
-          {/* Patient Mode Toggle + Selection */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
-            {/* Mode Toggle - hidden for pharmacy license */}
-            {licenseType !== 'pharmacy' && (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                <span className="font-semibold text-slate-700">Patient</span>
-              </div>
-              <div className="flex bg-slate-100 rounded-lg p-1">
-                <button
-                  onClick={() => { setPatientMode('Indoor'); clearPatient(); }}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${patientMode === 'Indoor' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                  Indoor Patient (Card Holder)
-                </button>
-                <button
-                  onClick={() => { setPatientMode('Outdoor'); clearPatient(); }}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${patientMode === 'Outdoor' ? 'bg-white shadow-sm text-amber-700' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                  Outdoor Patient (Walk-in)
-                </button>
-              </div>
-            </div>
-            )}
-
-            {/* Indoor Patient Search */}
-            {patientMode === 'Indoor' && (
-              <>
-                {!selectedPatient ? (
-                  <div className="relative">
-                    <div className="flex gap-2">
-                      <div className="flex-1 relative">
-                        <svg className="w-5 h-5 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                        <input
-                          type="text"
-                          className="form-input pl-10"
-                          placeholder="Search by card number (BAGA-0001) or mobile number..."
-                          value={patientQuery}
-                          onChange={e => handlePatientSearch(e.target.value)}
-                          autoFocus
-                        />
-                      </div>
-                    </div>
-                    {patientResults.length > 0 && (
-                      <div className="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg bg-white shadow-lg max-h-64 overflow-y-auto">
-                        {patientResults.map(p => (
-                          <button
-                            key={p.id}
-                            onClick={() => selectPatient(p)}
-                            className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-slate-100 last:border-0 transition-colors"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <span className="font-mono font-bold text-blue-600">{p.patientNo}</span>
-                                <span className="ml-3 font-medium text-slate-700">{p.name}</span>
-                                <span className="ml-2 text-xs text-slate-400">{p.gender} | {p.age} yrs</span>
-                              </div>
-                              <span className="text-sm text-slate-400">{p.mobile}</span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {patientQuery.length >= 1 && patientResults.length === 0 && (
-                      <div className="mt-2 text-center py-4 text-sm text-slate-400 bg-slate-50 rounded-lg border border-slate-100">
-                        No patients found matching &ldquo;{patientQuery}&rdquo;
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
-                          {selectedPatient.name.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-bold text-slate-800">{selectedPatient.name}</p>
-                          <p className="text-sm text-slate-500">
-                            <span className="font-mono text-blue-600 font-semibold">{selectedPatient.patientNo}</span>
-                            <span className="mx-2 text-slate-300">|</span>
-                            {selectedPatient.gender}
-                            <span className="mx-2 text-slate-300">|</span>
-                            {selectedPatient.age} yrs
-                            <span className="mx-2 text-slate-300">|</span>
-                            {selectedPatient.mobile}
-                          </p>
-                          <p className="text-xs text-slate-400">
-                            <span className={`badge ${selectedPatient.cardStatus === 'Active' ? 'badge-green' : 'badge-rose'} text-xs`}>{selectedPatient.cardStatus}</span>
-                            <span className="ml-2">Visits: {selectedPatient.totalVisits}</span>
-                          </p>
-                        </div>
-                      </div>
-                      <button onClick={clearPatient} className="btn btn-outline btn-sm">Change Patient</button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* Outdoor Patient Form */}
-            {patientMode === 'Outdoor' && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                    #
-                  </div>
-                  <div>
-                    <p className="font-bold text-slate-800 text-sm">Walk-in Patient — <span className="font-mono font-bold text-amber-700">{outdoorNo}</span></p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  <div>
-                    <label className="form-label">Full Name *</label>
-                    <input ref={outdoorNameRef} type="text" className="form-input" placeholder="Patient name" value={outdoorName} onChange={e => setOutdoorName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('name'); } }} />
-                  </div>
-                  <div>
-                    <label className="form-label">Mobile Number</label>
-                    <input ref={outdoorMobileRef} type="text" className="form-input" maxLength={11} inputMode="numeric" placeholder="03XX-XXXXXXX" value={outdoorMobile.replace(/[^0-9]/g,'')} onChange={e => setOutdoorMobile(e.target.value.replace(/[^0-9]/g,''))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('mobile'); } }} />
-                  </div>
-                  <div>
-                    <label className="form-label">Age</label>
-                    <input ref={outdoorAgeRef} type="text" className="form-input" maxLength={2} inputMode="numeric" placeholder="e.g. 35" value={outdoorAge.replace(/[^0-9]/g,'')} onChange={e => setOutdoorAge(e.target.value.replace(/[^0-9]/g,''))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('age'); } }} />
-                  </div>
-                  <div>
-                    <label className="form-label">Gender</label>
-                    <select className="form-input" value={outdoorGender} onChange={e => setOutdoorGender(e.target.value)}>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
           {/* Medicine Search */}
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-2">
@@ -1223,7 +1090,25 @@ export default function PharmacyPage() {
                     value={medQuery}
                     onChange={e => handleMedSearch(e.target.value)}
                     onFocus={() => { if (medResults.length > 0) setShowMedDropdown(true); }}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleMedSearchEnter(); } }}
+                    autoFocus
+                    onKeyDown={e => {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setHighlightedMedIdx(prev => Math.min(prev + 1, medResults.length - 1));
+                      if (!showMedDropdown && medResults.length > 0) setShowMedDropdown(true);
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setHighlightedMedIdx(prev => Math.max(prev - 1, -1));
+                    } else if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleMedSearchEnter();
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setShowMedDropdown(false);
+                      setMedResults([]);
+                      setHighlightedMedIdx(-1);
+                    }
+                  }}
                   />
                 </div>
                 {showMedDropdown && (
@@ -1234,10 +1119,10 @@ export default function PharmacyPage() {
               </div>
               {showMedDropdown && medResults.length > 0 && (
                 <div className="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg bg-white shadow-lg max-h-72 overflow-y-auto">
-                  {medResults.map(m => (
+                  {medResults.map((m, idx) => (
                     <div
                       key={m.id}
-                      className="flex items-center px-4 py-3 hover:bg-emerald-50 border-b border-slate-100 last:border-0 transition-colors group cursor-pointer"
+                      className={`flex items-center px-4 py-3 border-b border-slate-100 last:border-0 transition-colors group cursor-pointer ${idx === highlightedMedIdx ? 'bg-emerald-100' : 'hover:bg-emerald-50'}`}
                       onClick={() => addToCartDirect(m)}
                     >
                       <div className="flex-1">
@@ -1378,6 +1263,144 @@ export default function PharmacyPage() {
               </button>
             </div>
           )}
+
+          {/* Patient Mode Toggle + Selection */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
+            {/* Mode Toggle - hidden for pharmacy license */}
+            {licenseType !== 'pharmacy' && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                <span className="font-semibold text-slate-700">Patient</span>
+              </div>
+              <div className="flex bg-slate-100 rounded-lg p-1">
+                <button
+                  onClick={() => { setPatientMode('Indoor'); clearPatient(); }}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${patientMode === 'Indoor' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                  Indoor Patient (Card Holder)
+                </button>
+                <button
+                  onClick={() => { setPatientMode('Outdoor'); clearPatient(); }}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${patientMode === 'Outdoor' ? 'bg-white shadow-sm text-amber-700' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  Outdoor Patient (Walk-in)
+                </button>
+              </div>
+            </div>
+            )}
+
+            {/* Indoor Patient Search */}
+            {patientMode === 'Indoor' && (
+              <>
+                {!selectedPatient ? (
+                  <div className="relative">
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative">
+                        <svg className="w-5 h-5 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        <input
+                          type="text"
+                          className="form-input pl-10"
+                          placeholder="Search by card number (BAGA-0001) or mobile number..."
+                          value={patientQuery}
+                          onChange={e => handlePatientSearch(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    {patientResults.length > 0 && (
+                      <div className="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg bg-white shadow-lg max-h-64 overflow-y-auto">
+                        {patientResults.map(p => (
+                          <button
+                            key={p.id}
+                            onClick={() => selectPatient(p)}
+                            className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-slate-100 last:border-0 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="font-mono font-bold text-blue-600">{p.patientNo}</span>
+                                <span className="ml-3 font-medium text-slate-700">{p.name}</span>
+                                <span className="ml-2 text-xs text-slate-400">{p.gender} | {p.age} yrs</span>
+                              </div>
+                              <span className="text-sm text-slate-400">{p.mobile}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {patientQuery.length >= 1 && patientResults.length === 0 && (
+                      <div className="mt-2 text-center py-4 text-sm text-slate-400 bg-slate-50 rounded-lg border border-slate-100">
+                        No patients found matching &ldquo;{patientQuery}&rdquo;
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                          {selectedPatient.name.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-800">{selectedPatient.name}</p>
+                          <p className="text-sm text-slate-500">
+                            <span className="font-mono text-blue-600 font-semibold">{selectedPatient.patientNo}</span>
+                            <span className="mx-2 text-slate-300">|</span>
+                            {selectedPatient.gender}
+                            <span className="mx-2 text-slate-300">|</span>
+                            {selectedPatient.age} yrs
+                            <span className="mx-2 text-slate-300">|</span>
+                            {selectedPatient.mobile}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            <span className={`badge ${selectedPatient.cardStatus === 'Active' ? 'badge-green' : 'badge-rose'} text-xs`}>{selectedPatient.cardStatus}</span>
+                            <span className="ml-2">Visits: {selectedPatient.totalVisits}</span>
+                          </p>
+                        </div>
+                      </div>
+                      <button onClick={clearPatient} className="btn btn-outline btn-sm">Change Patient</button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Outdoor Patient Form */}
+            {patientMode === 'Outdoor' && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                    #
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-800 text-sm">Walk-in Patient — <span className="font-mono font-bold text-amber-700">{outdoorNo}</span></p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="form-label">Full Name *</label>
+                    <input ref={outdoorNameRef} type="text" className="form-input" placeholder="Patient name" value={outdoorName} onChange={e => setOutdoorName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('name'); } }} />
+                  </div>
+                  <div>
+                    <label className="form-label">Mobile Number</label>
+                    <input ref={outdoorMobileRef} type="text" className="form-input" maxLength={11} inputMode="numeric" placeholder="03XX-XXXXXXX" value={outdoorMobile.replace(/[^0-9]/g,'')} onChange={e => setOutdoorMobile(e.target.value.replace(/[^0-9]/g,''))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('mobile'); } }} />
+                  </div>
+                  <div>
+                    <label className="form-label">Age</label>
+                    <input ref={outdoorAgeRef} type="text" className="form-input" maxLength={2} inputMode="numeric" placeholder="e.g. 35" value={outdoorAge.replace(/[^0-9]/g,'')} onChange={e => setOutdoorAge(e.target.value.replace(/[^0-9]/g,''))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleOutdoorFieldEnter('age'); } }} />
+                  </div>
+                  <div>
+                    <label className="form-label">Gender</label>
+                    <select className="form-input" value={outdoorGender} onChange={e => setOutdoorGender(e.target.value)}>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Cart / Sale Table */}
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">

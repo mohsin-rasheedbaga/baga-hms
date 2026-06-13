@@ -30,7 +30,7 @@ export default function LoginPage() {
   const [showChangeLicense, setShowChangeLicense] = useState(false);
   const [newLicenseKey, setNewLicenseKey] = useState('');
   const [changeLicenseStatus, setChangeLicenseStatus] = useState({ loading: false, error: '', success: '' });
-  const [appVersion, setAppVersion] = useState('3.5.8');
+  const [appVersion, setAppVersion] = useState('3.5.9');
   const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
