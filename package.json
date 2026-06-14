@@ -1,6 +1,6 @@
 {
   "name": "baga-hms",
-  "version": "3.6.2",
+  "version": "3.6.3",
   "private": true,
   "description": "BAGA Hospital Management System - Desktop Edition",
   "main": "electron/main.js",
@@ -63,11 +63,15 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icon.ico",
