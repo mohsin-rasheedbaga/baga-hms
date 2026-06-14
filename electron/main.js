@@ -482,8 +482,8 @@ function startServer() {
   });
 
   return new Promise((resolve, reject) => {
-    server.listen(SERVER_PORT, '127.0.0.1', () => {
-      console.log(`[Server] Running on http://127.0.0.1:${SERVER_PORT}`);
+    server.listen(SERVER_PORT, '0.0.0.0', () => {
+      console.log(`[Server] Running on http://0.0.0.0:${SERVER_PORT}`);
       console.log(`[Server] Serving from: ${outDir}`);
       resolve(server);
     });
@@ -963,6 +963,28 @@ ipcMain.handle('api-login', async (event, { username, password }) => {
 ipcMain.handle('get-app-version', () => APP_VERSION);
 ipcMain.handle('get-machine-id', () => getMachineId());
 ipcMain.handle('get-api-base', () => API_BASE);
+
+// Get local IP address for LAN sharing
+function getLocalIP() {
+  const { networkInterfaces } = require('os');
+  const nets = networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return '127.0.0.1';
+}
+
+ipcMain.handle('get-lan-info', () => {
+  return {
+    port: SERVER_PORT,
+    localIP: getLocalIP(),
+    lanURL: `http://${getLocalIP()}:${SERVER_PORT}`,
+  };
+});
 ipcMain.handle('check-update', () => {
   updateLog('CHECK-UPDATE IPC INVOKED');
   checkForUpdates();

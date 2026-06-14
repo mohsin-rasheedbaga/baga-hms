@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('bagaAPI', {
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   getMachineId: () => ipcRenderer.invoke('get-machine-id'),
   getApiBase: () => ipcRenderer.invoke('get-api-base'),
+  getLanInfo: () => ipcRenderer.invoke('get-lan-info'),
   
   // License Management
   getLicenseInfo: () => ipcRenderer.invoke('license-get-info'),

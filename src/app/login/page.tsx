@@ -176,6 +176,10 @@ export default function LoginPage() {
             permissions: ['all'],
           };
           cacheUserLocally(user);
+        } else if (result.error && result.error.toLowerCase().includes('connection')) {
+          // Network/connection error — try local cache instead of showing error
+          console.log('API connection error, falling back to local cache');
+          isOfflineLogin = true;
         } else {
           setError(result.error || 'Invalid credentials');
           setLoading(false);
