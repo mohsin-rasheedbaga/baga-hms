@@ -197,7 +197,7 @@ export default function LoginPage() {
       user = users.find(u => u.email === loginId.trim() && u.password === password.trim() && u.active);
       if (!user) {
         setError(isOfflineLogin 
-          ? 'No cached login found. Use Master Login (master/master) or connect to internet.' 
+          ? 'Invalid Login ID or Password. Please connect to internet and try again.' 
           : 'Invalid Login ID or Password');
         setLoading(false);
         return;

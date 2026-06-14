@@ -298,3 +298,22 @@ body {
   .sidebar.open { transform: translateX(0); }
   .main-content { margin-left: 0; }
 }
+
+/* Notification Bell Animations */
+@keyframes bellShake {
+  0%, 100% { transform: rotate(0deg); }
+  10% { transform: rotate(14deg); }
+  20% { transform: rotate(-12deg); }
+  30% { transform: rotate(10deg); }
+  40% { transform: rotate(-8deg); }
+  50% { transform: rotate(6deg); }
+  60% { transform: rotate(-4deg); }
+  70% { transform: rotate(2deg); }
+  80% { transform: rotate(0deg); }
+}
+@keyframes bellPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.25); opacity: 0.85; }
+}
+.animate-bell-shake { animation: bellShake 2s ease-in-out infinite; }
+.animate-bell-pulse { animation: bellPulse 1.5s ease-in-out infinite; }

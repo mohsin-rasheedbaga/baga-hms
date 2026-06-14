@@ -144,7 +144,21 @@ export default function UsersPage() {
     }).catch(() => {});
   }, []);
 
-  // Add User Wizard State
+  // License-aware default department based on license module
+  const getDefaultDept = useCallback(() => {
+    if (licenseType === 'pharmacy') return 'Pharmacy';
+    if (licenseType === 'lab') return 'Laboratory';
+    if (licenseType === 'clinic') return 'Reception';
+    return 'Reception'; // hospital default
+  }, [licenseType]);
+
+  const getDefaultRole = useCallback(() => {
+    if (licenseType === 'pharmacy') return 'pharmacy';
+    if (licenseType === 'lab') return 'lab';
+    if (licenseType === 'clinic') return 'reception';
+    return 'reception'; // hospital default
+  }, [licenseType]);
+
   const [addStep, setAddStep] = useState<1 | 2 | 3>(1);
   const [empCode, setEmpCode] = useState('');
   const [empLookupStatus, setEmpLookupStatus] = useState<'idle' | 'searching' | 'found' | 'not_found'>('idle');
@@ -154,6 +168,14 @@ export default function UsersPage() {
   const [selectedRole, setSelectedRole] = useState('reception');
   const [selectedDept, setSelectedDept] = useState('Reception');
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+
+  // Auto-set role and department when license type loads or when opening add modal
+  useEffect(() => {
+    if (licenseType) {
+      setSelectedRole(getDefaultRole());
+      setSelectedDept(getDefaultDept());
+    }
+  }, [licenseType, getDefaultRole, getDefaultDept]);
 
   const showToast = (msg: string, type: 'success' | 'error') => {
     setToast({ msg, type });
@@ -281,10 +303,10 @@ export default function UsersPage() {
       name: foundEmployee.name,
       email: loginId.trim(),
       password: loginPassword,
-      role: selectedRole as User['role'],
+      role: 'super_admin' as User['role'],
       department: selectedDept,
       active: true,
-      permissions: selectedPermissions,
+      permissions: selectedPermissions.length > 0 ? selectedPermissions : ['all'],
     };
     addUser(newUser);
     loadData();

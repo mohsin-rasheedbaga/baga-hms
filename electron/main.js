@@ -384,14 +384,24 @@ async function checkForUpdates() {
     updateLog('Stack: ' + (err.stack || 'N/A'));
     sendToAllWindows('update-status', { status: 'error', message: err.message });
 
-    // Show error notification to user
-    try {
-      new Notification({
-        title: 'BAGA HMS — Update Check Failed',
-        body: err.message,
-        silent: false,
-      }).show();
-    } catch (e) {}
+    // Only show error notification for non-network errors (e.g., GitHub auth issues)
+    // Silently ignore network/offline errors to avoid annoying the user
+    const isNetworkError = err.code === 'ENOTFOUND' || err.code === 'ECONNREFUSED' ||
+                           err.code === 'ENETUNREACH' || err.code === 'ETIMEDOUT' ||
+                           err.code === 'ECONNRESET' || err.code === 'ESOCKETTIMEDOUT' ||
+                           (err.message && err.message.includes('network')) ||
+                           (err.message && err.message.includes('ENOTFOUND'));
+    if (!isNetworkError) {
+      try {
+        new Notification({
+          title: 'BAGA HMS — Update Check Failed',
+          body: err.message,
+          silent: false,
+        }).show();
+      } catch (e) {}
+    } else {
+      updateLog('Silently ignoring network error (user is likely offline)');
+    }
   }
 }
 
@@ -415,6 +425,16 @@ function startServer() {
 
   const server = http.createServer((req, res) => {
     try {
+      // Add headers for LAN sharing support
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
       // Decode the URL to handle encoded characters
       const decodedUrl = decodeURIComponent(req.url.split('?')[0]);
       let filePath = path.join(outDir, decodedUrl === '/' ? 'index.html' : decodedUrl);
@@ -1278,6 +1298,21 @@ app.whenReady().then(async () => {
   // 2. Start HTTP server (non-fatal if it fails)
   try {
     serverInstance = await startServer();
+    // Auto-configure Windows Firewall for LAN sharing
+    try {
+      const { execSync } = require('child_process');
+      if (process.platform === 'win32') {
+        try {
+          execSync(`netsh advfirewall firewall add rule name="BAGA HMS Server" dir=in action=allow protocol=TCP localport=${SERVER_PORT}`, { stdio: 'ignore' });
+          console.log('[Firewall] Rule added for LAN sharing on port', SERVER_PORT);
+        } catch (fe) {
+          // Rule may already exist - that's fine
+          console.log('[Firewall] Firewall rule setup:', fe.message?.substring(0, 80) || 'skipped');
+        }
+      }
+    } catch (fwErr) {
+      console.log('[Firewall] Could not auto-configure firewall:', fwErr.message);
+    }
   } catch (serverErr) {
     console.error('[BAGA HMS] HTTP Server failed:', serverErr.message);
     // Try alternative port
