@@ -884,6 +884,7 @@ ipcMain.handle('license-get-full-info', async () => {
     licenseKey: license ? license.key : null,
     expiryDate: license ? license.expiryDate : null,
     licenseDuration: license ? license.licenseDuration : null,
+    activatedAt: license ? license.activatedAt : null,
     demo: mode === 'demo' ? {
       remaining: Math.ceil((new Date(demo.expiresAt) - new Date()) / (1000 * 60 * 60 * 24)),
       expiresAt: demo.expiresAt,

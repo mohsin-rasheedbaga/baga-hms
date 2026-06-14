@@ -158,10 +158,12 @@ export default function LoginPage() {
       };
     }
 
-    // Try API login first (for licensed mode)
+    // Try API login first (for licensed mode) with 5s timeout for offline fallback
     if (!user && isElectron && licenseMode === 'licensed') {
       try {
-        const result = await (window as any).bagaAPI.apiLogin({ username: loginId.trim(), password: password.trim() });
+        const loginPromise = (window as any).bagaAPI.apiLogin({ username: loginId.trim(), password: password.trim() });
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000));
+        const result = await Promise.race([loginPromise, timeoutPromise]) as any;
         if (result.success) {
           user = {
             id: result.user.id || result.user.user?.id || 'api-user',

@@ -136,16 +136,7 @@ export function updateHospitalSettings(data: Partial<HospitalSettings>): void {
 }
 
 /* ========== USERS ========== */
-const defaultUsers: User[] = [
-  { id: 'u1', email: 'admin', password: 'admin', name: 'Hospital Admin', role: 'super_admin', department: 'Management', active: true, permissions: ['all'] },
-  { id: 'u2', email: 'reception', password: 'reception', name: 'Reception Staff', role: 'reception', department: 'Reception', active: true, permissions: ['register_patient', 'new_visit', 'search_patient', 'card_renewal', 'print_card'] },
-  { id: 'u3', email: 'doctor', password: 'doctor', name: 'Dr. Ahmed Hassan', role: 'doctor', department: 'Emergency', active: true, permissions: ['search_patient', 'order_lab', 'prescribe', 'order_xray', 'order_ultrasound', 'write_notes', 'discharge', 'view_reports'] },
-  { id: 'u4', email: 'lab', password: 'lab', name: 'Lab Technician', role: 'lab', department: 'Laboratory', active: true, permissions: ['view_lab_orders', 'enter_results', 'print_report'] },
-  { id: 'u5', email: 'pharmacy', password: 'pharmacy', name: 'Pharmacist', role: 'pharmacy', department: 'Pharmacy', active: true, permissions: ['view_prescriptions', 'dispense_medicine'] },
-  { id: 'u6', email: 'xray', password: 'xray', name: 'Radiologist', role: 'xray', department: 'X-Ray', active: true, permissions: ['view_xray_orders', 'enter_report'] },
-  { id: 'u7', email: 'ultrasound', password: 'ultrasound', name: 'USG Technician', role: 'ultrasound', department: 'Ultrasound', active: true, permissions: ['view_usg_orders', 'enter_report'] },
-  { id: 'u8', email: 'accounts', password: 'accounts', name: 'Accountant', role: 'accounts', department: 'Accounts', active: true, permissions: ['view_bills', 'collect_payment', 'daily_report'] },
-];
+const defaultUsers: User[] = [];
 
 export function getUsers(): User[] { return get(KEYS.users, defaultUsers); }
 export function setUsers(u: User[]): void { set(KEYS.users, u); }

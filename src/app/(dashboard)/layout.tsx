@@ -2,9 +2,9 @@
 import { useState, useEffect, ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { getHospital, getMedicines, getExpiredMedicines, getLowStockMedicines, getEmployees, addEmployee, generateEmployeeCode, genId } from '@/lib/store';
+import { getHospital, getMedicines, getExpiredMedicines, getLowStockMedicines } from '@/lib/store';
 import { getSession, clearSession, fetchLicenseInfo } from '@/lib/db-bridge';
-import type { User, Employee } from '@/lib/types';
+import type { User } from '@/lib/types';
 
 interface MenuItem {
   label: string;
@@ -231,13 +231,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   // Notification state
   const [showNotif, setShowNotif] = useState(false);
   const [notifItems, setNotifItems] = useState<{ type: string; msg: string; color: string }[]>([]);
+  const [notifViewed, setNotifViewed] = useState(false);
 
   // Dark mode state
   const [darkMode, setDarkMode] = useState(false);
-
-  // Employee modal state
-  const [showEmpModal, setShowEmpModal] = useState(false);
-  const [empForm, setEmpForm] = useState({ name: '', fatherName: '', cnic: '', mobile: '', gender: 'Male', age: '', address: '', designation: '', department: '', salary: 0, education: '' });
 
   // Load dark mode preference
   useEffect(() => {
@@ -261,6 +258,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       expired.forEach(m => items.push({ type: 'expired', msg: `${m.name} (${m.strength}) expired`, color: 'rose' }));
       lowStock.filter(m => !expired.find(e => e.id === m.id)).slice(0, 5).forEach(m => items.push({ type: 'low_stock', msg: `${m.name} stock: ${m.stock}`, color: 'amber' }));
     } catch {}
+    if (items.length > 0) setNotifViewed(false);
     setNotifItems(items);
   };
 
@@ -312,43 +310,26 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     loadNotifications();
     // Refresh notifications every 60 seconds
     const notifInterval = setInterval(loadNotifications, 60000);
+    // Check for software update notification
+    const isEl = typeof window !== 'undefined' && !!(window as any).bagaAPI;
+    if (isEl) {
+      try {
+        const unsub = (window as any).bagaAPI.onUpdateStatus((data: any) => {
+          if (data && data.status === 'available') {
+            setNotifItems(prev => {
+              if (!prev.find(n => n.type === 'update')) {
+                return [...prev, { type: 'update', msg: `Software update v${data.version || ''} available!`, color: 'blue' }];
+              }
+              return prev;
+            });
+          }
+        });
+        (window as any).bagaAPI.manualCheckUpdate().catch(() => {});
+        return () => { clearInterval(notifInterval); if (typeof unsub === 'function') unsub(); };
+      } catch {}
+    }
     return () => clearInterval(notifInterval);
   }, []);
-
-  // Employee save handler
-  const handleSaveEmployee = () => {
-    if (!empForm.name.trim() || !empForm.mobile.trim() || !empForm.designation.trim() || !empForm.department.trim()) {
-      alert('Name, Mobile, Designation and Department are required');
-      return;
-    }
-    const code = generateEmployeeCode();
-    const newEmp: Employee = {
-      id: genId(),
-      employeeCode: code,
-      name: empForm.name.trim(),
-      fatherName: empForm.fatherName.trim(),
-      cnic: empForm.cnic.trim(),
-      mobile: empForm.mobile.trim(),
-      gender: empForm.gender,
-      age: empForm.age || '-',
-      address: empForm.address.trim(),
-      designation: empForm.designation.trim(),
-      department: empForm.department.trim(),
-      salary: empForm.salary || 0,
-      joinDate: new Date().toISOString().split('T')[0],
-      status: 'Active',
-      education: empForm.education ? [{ degree: empForm.education, institution: '', year: new Date().getFullYear().toString(), grade: '' }] : [],
-      experience: [],
-      documents: [],
-      equipment: [],
-      bankAccount: '',
-      emergencyContact: '',
-    };
-    addEmployee(newEmp);
-    setShowEmpModal(false);
-    setEmpForm({ name: '', fatherName: '', cnic: '', mobile: '', gender: 'Male', age: '', address: '', designation: '', department: '', salary: 0, education: '' });
-    alert(`Employee ${newEmp.name} added! Code: ${code}`);
-  };
 
   // Auto-expand submenus when on sub-paths
   useEffect(() => {
@@ -395,6 +376,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       { label: 'Return Medicine', path: '/pharmacy/returns', icon: 'M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6' },
       { label: 'Medicine Inventory', path: '/pharmacy/inventory', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
       { label: 'My Statement', path: '/pharmacy/statement', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+      { label: 'Employees', path: '/hr/employees', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
       { label: 'User Management', path: '/users', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
       { label: 'Settings', path: '/settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
     ];
@@ -416,6 +398,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           { label: 'Expenses', path: '/lab/expenses', icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
         ],
       },
+      { label: 'Employees', path: '/hr/employees', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
       { label: 'User Management', path: '/users', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
       { label: 'Settings', path: '/settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
     ];
@@ -428,6 +411,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       { label: 'Appointment', path: '/appointment', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
       { label: 'Laboratory', path: '/lab', icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
       { label: 'Pharmacy', path: '/pharmacy', icon: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z' },
+      { label: 'Employees', path: '/hr/employees', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
       { label: 'User Management', path: '/users', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
       { label: 'Settings', path: '/settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
     ];
@@ -441,6 +425,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     );
     if (!hasUserMgmt) {
       menuItems.push({ label: 'User Management', path: '/users', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' });
+    }
+    // Ensure Employees is included for all roles in hospital mode
+    const hasEmployees = menuItems.some(item => 
+      ('children' in item && item.children.some(c => c.path === '/hr/employees')) || 
+      (!('children' in item) && item.path === '/hr/employees')
+    );
+    if (!hasEmployees) {
+      menuItems.push({ label: 'Employees', path: '/hr/employees', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' });
     }
   }
   const currentLabel = getPageTitle(pathname, menuItems, searchStr);
@@ -586,9 +578,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
             {/* Notification Bell */}
             <div className="relative">
-              <button onClick={() => { setShowNotif(!showNotif); loadNotifications(); }} className="p-2 rounded-lg hover:bg-slate-100 transition relative">
+              <button onClick={() => { setShowNotif(!showNotif); if (!showNotif) { setNotifViewed(true); } loadNotifications(); }} className="p-2 rounded-lg hover:bg-slate-100 transition relative">
                 <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-                {notifItems.length > 0 && (
+                {notifItems.length > 0 && !notifViewed && (
                   <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{notifItems.length > 9 ? '9+' : notifItems.length}</span>
                 )}
               </button>
@@ -600,8 +592,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   ) : (
                     <div className="max-h-60 overflow-y-auto">
                       {notifItems.map((n, i) => (
-                        <div key={i} className={`px-4 py-2 text-xs border-b border-slate-50 flex items-center gap-2 ${n.color === 'rose' ? 'bg-red-50' : 'bg-amber-50'}`}>
-                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${n.color === 'rose' ? 'bg-red-500' : 'bg-amber-500'}`} />
+                        <div key={i} className={`px-4 py-2 text-xs border-b border-slate-50 flex items-center gap-2 ${n.color === 'rose' ? 'bg-red-50' : n.color === 'blue' ? 'bg-blue-50' : 'bg-amber-50'}`}>
+                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${n.color === 'rose' ? 'bg-red-500' : n.color === 'blue' ? 'bg-blue-500' : 'bg-amber-500'}`} />
                           <span className="text-slate-700">{n.msg}</span>
                         </div>
                       ))}
@@ -610,11 +602,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 </div>
               )}
             </div>
-
-            {/* Add Employee Button */}
-            <button onClick={() => setShowEmpModal(true)} className="p-2 rounded-lg hover:bg-slate-100 transition" title="Add Employee">
-              <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
-            </button>
 
             <span className={`badge ${roleColors[session.role] ? roleColors[session.role].replace('bg-', 'bg-') : ''}`} style={{background: 'var(--sidebar-active)', color: 'white'}}>
               {getLicenseRoleLabel()}
@@ -632,35 +619,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        {/* Add Employee Modal */}
-        {showEmpModal && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={() => setShowEmpModal(false)}>
-            <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-slate-800">Add Employee</h3>
-                <button onClick={() => setShowEmpModal(false)} className="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="form-label">Full Name *</label><input className="form-input" value={empForm.name} onChange={e => setEmpForm({...empForm, name: e.target.value})} placeholder="Employee name" /></div>
-                <div><label className="form-label">Father Name</label><input className="form-input" value={empForm.fatherName} onChange={e => setEmpForm({...empForm, fatherName: e.target.value})} /></div>
-                <div><label className="form-label">CNIC</label><input className="form-input" value={empForm.cnic} onChange={e => setEmpForm({...empForm, cnic: e.target.value})} placeholder="XXXXX-XXXXXXX-X" /></div>
-                <div><label className="form-label">Mobile *</label><input className="form-input" value={empForm.mobile} onChange={e => setEmpForm({...empForm, mobile: e.target.value})} placeholder="03XX-XXXXXXX" /></div>
-                <div><label className="form-label">Gender</label><select className="form-input" value={empForm.gender} onChange={e => setEmpForm({...empForm, gender: e.target.value})}><option>Male</option><option>Female</option></select></div>
-                <div><label className="form-label">Age</label><input className="form-input" value={empForm.age} onChange={e => setEmpForm({...empForm, age: e.target.value})} /></div>
-                <div><label className="form-label">Designation *</label><input className="form-input" value={empForm.designation} onChange={e => setEmpForm({...empForm, designation: e.target.value})} placeholder="e.g. Pharmacist" /></div>
-                <div><label className="form-label">Department *</label><input className="form-input" value={empForm.department} onChange={e => setEmpForm({...empForm, department: e.target.value})} placeholder="e.g. Pharmacy" /></div>
-                <div><label className="form-label">Salary</label><input type="number" className="form-input" value={empForm.salary || ''} onChange={e => setEmpForm({...empForm, salary: Number(e.target.value) || 0})} /></div>
-                <div><label className="form-label">Education</label><input className="form-input" value={empForm.education} onChange={e => setEmpForm({...empForm, education: e.target.value})} placeholder="e.g. B.Pharm" /></div>
-                <div className="col-span-2"><label className="form-label">Address</label><input className="form-input" value={empForm.address} onChange={e => setEmpForm({...empForm, address: e.target.value})} /></div>
-              </div>
-              <div className="flex gap-3 mt-5">
-                <button onClick={() => setShowEmpModal(false)} className="btn btn-outline flex-1">Cancel</button>
-                <button onClick={handleSaveEmployee} className="btn btn-primary flex-1">Add Employee</button>
-              </div>
-              <p className="text-xs text-slate-400 mt-2">Employee ID will be auto-generated. For full details, manage in HR Department.</p>
-            </div>
-          </div>
-        )}
         <main className="p-6">{children}</main>
       </div>
     </div>

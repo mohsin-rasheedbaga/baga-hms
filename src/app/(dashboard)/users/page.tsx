@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getUsers, addUser, updateUser, deleteUser, genId, getEmployees } from '@/lib/store';
 import type { User, Employee } from '@/lib/types';
+import { fetchLicenseInfo } from '@/lib/db-bridge';
 
 const ROLES = [
   { value: 'reception', label: 'Reception', dept: 'Reception' },
@@ -135,6 +136,13 @@ export default function UsersPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [licenseType, setLicenseType] = useState('hospital');
+
+  useEffect(() => {
+    fetchLicenseInfo().then(info => {
+      if (info?.licenseType) setLicenseType(info.licenseType);
+    }).catch(() => {});
+  }, []);
 
   // Add User Wizard State
   const [addStep, setAddStep] = useState<1 | 2 | 3>(1);
@@ -194,6 +202,25 @@ export default function UsersPage() {
     }
   };
 
+  // ---- Module-Aware Permissions ----
+  const getModulePermissions = () => {
+    if (licenseType === 'pharmacy') {
+      const perms = ['view_prescriptions', 'dispense_medicine', 'view_bills', 'collect_payment', 'daily_report', 'return_medicine', 'view_profit', 'add_inventory', 'view_statement'];
+      return {
+        groups: PERMISSION_GROUPS.filter(g => g.perms.some(p => perms.includes(p))),
+        all: ALL_PERMISSIONS.filter(p => perms.includes(p)),
+      };
+    }
+    if (licenseType === 'lab') {
+      const perms = ['view_lab_orders', 'enter_results', 'print_report', 'view_reports', 'add_inventory', 'view_statement'];
+      return {
+        groups: PERMISSION_GROUPS.filter(g => g.perms.some(p => perms.includes(p))),
+        all: ALL_PERMISSIONS.filter(p => perms.includes(p)),
+      };
+    }
+    return { groups: PERMISSION_GROUPS, all: ALL_PERMISSIONS };
+  };
+
   // ---- Permission Toggles (Add Modal) ----
   const toggleAddPermission = (perm: string) => {
     setSelectedPermissions((prev) =>
@@ -202,7 +229,7 @@ export default function UsersPage() {
   };
 
   const selectAllPermissions = () => {
-    setSelectedPermissions(ALL_PERMISSIONS);
+    setSelectedPermissions(getModulePermissions().all);
   };
 
   const clearAllPermissions = () => {
@@ -732,7 +759,7 @@ export default function UsersPage() {
                   </div>
 
                   <div className="space-y-3">
-                    {PERMISSION_GROUPS.map((group) => {
+                    {getModulePermissions().groups.map((group) => {
                       const allGroupSelected = group.perms.every((p) =>
                         selectedPermissions.includes(p)
                       );
@@ -799,7 +826,7 @@ export default function UsersPage() {
                   <div className="mt-2 text-xs text-slate-400">
                     {selectedPermissions.length === 0
                       ? 'No permissions selected'
-                      : `${selectedPermissions.length} of ${ALL_PERMISSIONS.length} permissions granted`}
+                      : `${selectedPermissions.length} of ${getModulePermissions().all.length} permissions granted`}
                   </div>
                 </div>
 
@@ -897,7 +924,7 @@ export default function UsersPage() {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => setEditingUser({ ...editingUser, permissions: [...ALL_PERMISSIONS] })}
+                      onClick={() => setEditingUser({ ...editingUser, permissions: [...getModulePermissions().all] })}
                       className="btn btn-outline btn-sm text-xs"
                     >
                       Select All
@@ -912,7 +939,7 @@ export default function UsersPage() {
                   </div>
                 </div>
                 <div className="space-y-3">
-                  {PERMISSION_GROUPS.map((group) => {
+                  {getModulePermissions().groups.map((group) => {
                     const allGroupSelected = group.perms.every((p) =>
                       editingUser.permissions.includes(p)
                     );

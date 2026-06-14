@@ -512,6 +512,12 @@ export default function SettingsPage() {
                   </p>
                 </div>
                 <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wide">License Activated</p>
+                  <p className="font-semibold text-slate-800">
+                    {licenseInfo.activatedAt ? new Date(licenseInfo.activatedAt).toLocaleDateString() : 'N/A'}
+                  </p>
+                </div>
+                <div>
                   <p className="text-slate-400 text-xs uppercase tracking-wide">Phone / Mobile</p>
                   <p className="font-semibold text-slate-800">
                     {licenseInfo.hospitalPhone || '-'}{licenseInfo.hospitalMobile ? ` / ${licenseInfo.hospitalMobile}` : ''}
