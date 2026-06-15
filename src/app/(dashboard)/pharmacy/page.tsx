@@ -497,6 +497,21 @@ export default function PharmacyPage() {
         </div>
         <div class="info">
           <div class="info-row"><span class="label">Bill No:</span><span class="value">${saleBill.id.slice(-6).toUpperCase()}</span></div>
+          <div style="text-align:center;padding:6px 0 2px;">
+            <svg viewBox="0 0 200 30" style="width:160px;height:30px;">
+              ${saleBill.id.split('').map((ch, idx) => {
+                const code = ch.charCodeAt(0);
+                const bars = [];
+                for (let b = 0; b < 8; b++) {
+                  const w = (code >> b) & 1 ? 1.5 : 0.5;
+                  const x = (idx * 10 + b * 1.5) % 200;
+                  bars.push(`<rect x="${x}" y="0" width="${w}" height="28" fill="#000"/>`);
+                }
+                return bars.join('');
+              }).join('')}
+            </svg>
+            <div style="font-size:8px;font-family:'Courier New',monospace;color:#333;margin-top:1px;">${saleBill.id.slice(-10).toUpperCase()}</div>
+          </div>
           <div class="info-row"><span class="label">Patient:</span><span class="value">${saleBill.patientName}</span></div>
           <div class="info-row"><span class="label">ID:</span><span class="value">${saleBill.patientNo}</span></div>
           <div class="info-row"><span class="label">Mobile:</span><span class="value">${saleBill.patientMobile || '-'}</span></div>

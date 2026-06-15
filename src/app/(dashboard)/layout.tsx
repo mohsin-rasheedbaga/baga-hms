@@ -331,6 +331,19 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     return () => clearInterval(notifInterval);
   }, []);
 
+  // Auto-close notification dropdown on outside click
+  useEffect(() => {
+    if (!showNotif) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.notification-container')) {
+        setShowNotif(false);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showNotif]);
+
   // Auto-expand submenus when on sub-paths
   useEffect(() => {
     if (pathname.startsWith('/lab/')) {
@@ -578,7 +591,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </button>
 
             {/* Notification Bell */}
-            <div className="relative">
+            <div className="relative notification-container">
               <button onClick={() => { setShowNotif(!showNotif); if (!showNotif) { setNotifViewed(true); } loadNotifications(); }} className={`p-2 rounded-lg hover:bg-slate-100 transition relative ${notifItems.length > 0 && !notifViewed ? 'animate-bell-shake' : ''}`}>
                 <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
                 {notifItems.length > 0 && !notifViewed && (

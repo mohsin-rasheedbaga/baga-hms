@@ -3,8 +3,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { getEmployees, addEmployee, updateEmployee, deleteEmployee, searchEmployees, genId, todayStr, generateEmployeeCode, getAttendanceRecords, getHospital } from '@/lib/store';
 import type { Employee, EducationRecord, ExperienceRecord, DocumentRecord, EquipmentRecord, AttendanceRecord } from '@/lib/types';
 import { triggerPrint } from '@/lib/print-utils';
+import { fetchLicenseInfo } from '@/lib/db-bridge';
 
-const DEPARTMENTS = ['Emergency', 'Cardiology', 'Gynecology', 'Orthopedic', 'Pediatrician', 'ENT', 'General Medicine', 'Skin Specialist', 'Eye Specialist', 'Dental', 'Physiotherapy', 'Surgery', 'Laboratory', 'Pharmacy', 'Radiology', 'Ultrasound', 'Reception', 'Management', 'Administration', 'General Ward', 'ICU', 'Accounts', 'IT', 'Security', 'Housekeeping'];
+const ALL_DEPARTMENTS: Record<string, string[]> = {
+  pharmacy: ['Pharmacy', 'Cash Counter', 'Store', 'Dispensary'],
+  lab: ['Laboratory', 'Pathology', 'Sample Collection', 'Radiology', 'Administration'],
+  clinic: ['Reception', 'Pharmacy', 'Laboratory', 'General Medicine', 'Dental', 'Eye', 'Physiotherapy', 'Administration'],
+  hospital: ['Emergency', 'Cardiology', 'Gynecology', 'Orthopedic', 'Pediatrician', 'ENT', 'General Medicine', 'Skin Specialist', 'Eye Specialist', 'Dental', 'Physiotherapy', 'Surgery', 'Laboratory', 'Pharmacy', 'Radiology', 'Ultrasound', 'Reception', 'Management', 'Administration', 'General Ward', 'ICU', 'Accounts', 'IT', 'Security', 'Housekeeping'],
+};
 const DOC_TYPES: DocumentRecord['type'][] = ['CNIC', 'CV', 'Degree', 'Certificate', 'Experience Letter', 'Photo', 'Other'];
 const EQUIP_CATEGORIES: EquipmentRecord['category'][] = ['Laptop', 'Mobile', 'Uniform', 'ID Card', 'Badge', 'Vehicle', 'Medical Kit', 'Tools', 'Keys', 'Other'];
 const EQUIP_CONDITIONS: EquipmentRecord['condition'][] = ['New', 'Good', 'Fair', 'Damaged'];
@@ -39,9 +45,18 @@ export default function EmployeesPage() {
   const [empCode, setEmpCode] = useState('');
   const [empAttendance, setEmpAttendance] = useState<AttendanceRecord[]>([]);
   const [joiningLetter, setJoiningLetter] = useState<Employee | null>(null);
+  const [licenseType, setLicenseType] = useState('hospital');
 
   const loadData = useCallback(() => { setEmployees(getEmployees()); }, []);
   useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    fetchLicenseInfo().then(info => {
+      if (info?.licenseType) setLicenseType(info.licenseType);
+    }).catch(() => {});
+  }, []);
+
+  const departments = ALL_DEPARTMENTS[licenseType] || ALL_DEPARTMENTS.hospital;
 
   const filtered = search ? searchEmployees(search) : employees;
   const displayed = filtered
@@ -202,7 +217,7 @@ export default function EmployeesPage() {
         <input className="form-input w-64" placeholder="Search by name, code, department..." value={search} onChange={e => setSearch(e.target.value)} />
         <select className="form-input w-44" value={filterDept} onChange={e => setFilterDept(e.target.value)}>
           <option value="">All Departments</option>
-          {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+          {departments.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
         <select className="form-input w-36" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
           <option value="">All Status</option>
@@ -291,7 +306,7 @@ export default function EmployeesPage() {
                 <div><label className="form-label">Age</label><input className="form-input" value={form.age} onChange={e => updateField('age', e.target.value)} placeholder="30" /></div>
                 <div className="sm:col-span-2"><label className="form-label">Address</label><input className="form-input" value={form.address} onChange={e => updateField('address', e.target.value)} placeholder="Full address" /></div>
                 <div><label className="form-label">Designation *</label><input className="form-input" value={form.designation} onChange={e => updateField('designation', e.target.value)} placeholder="e.g. Staff Nurse" /></div>
-                <div><label className="form-label">Department *</label><select className="form-input" value={form.department} onChange={e => updateField('department', e.target.value)}><option value="">Select Department</option>{DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
+                <div><label className="form-label">Department *</label><select className="form-input" value={form.department} onChange={e => updateField('department', e.target.value)}><option value="">Select Department</option>{departments.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
                 <div><label className="form-label">Monthly Salary (Rs.)</label><input type="number" className="form-input" value={form.salary || ''} onChange={e => updateField('salary', Number(e.target.value))} placeholder="0" /></div>
                 <div><label className="form-label">Join Date</label><input type="date" className="form-input" value={form.joinDate} onChange={e => updateField('joinDate', e.target.value)} /></div>
                 <div><label className="form-label">Bank Account (IBAN)</label><input className="form-input" value={form.bankAccount} onChange={e => updateField('bankAccount', e.target.value)} placeholder="IBAN-xxxx" /></div>
