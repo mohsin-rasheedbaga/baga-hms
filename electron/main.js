@@ -11,6 +11,7 @@ const APP_VERSION = require('../package.json').version;
 const API_BASE = 'https://baga-hospital-api.vercel.app';
 const SERVER_PORT = 18765;
 const STORE_PATH = path.join(app.getPath('userData'), 'baga-store.json');
+const INSTALLED_VERSION_PATH = path.join(app.getPath('userData'), 'baga-installed-version.json');
 
 // ============================================================
 // PERSISTENT STORE (machine ID, license, etc.)
@@ -33,6 +34,28 @@ function saveStore(data) {
     console.error('Store write error:', e);
   }
 }
+
+// ============================================================
+// INSTALLED VERSION TRACKER
+// ============================================================
+function getInstalledVersion() {
+  try {
+    if (fs.existsSync(INSTALLED_VERSION_PATH)) {
+      return JSON.parse(fs.readFileSync(INSTALLED_VERSION_PATH, 'utf8')).version;
+    }
+  } catch (e) {}
+  return null;
+}
+
+function setInstalledVersion(version) {
+  try {
+    fs.writeFileSync(INSTALLED_VERSION_PATH, JSON.stringify({ version, installedAt: new Date().toISOString() }, null, 2), 'utf8');
+  } catch (e) {}
+}
+
+// On every app start, update the installed version tracker
+setInstalledVersion(APP_VERSION);
+console.log('[BAGA HMS] Package version:', APP_VERSION, '| Previous installed:', getInstalledVersion() || 'N/A');
 
 function getMachineId() {
   let store = getStore();
@@ -285,13 +308,13 @@ async function checkForUpdates() {
     }
 
     const latestVersion = release.tag_name.replace(/^v/, '');
-    updateLog('Latest release: ' + latestVersion + ' | Current: ' + APP_VERSION);
+    updateLog('Latest release: ' + latestVersion + ' | Current: ' + APP_VERSION + ' | Installed: ' + APP_VERSION);
 
     // Version guard: NEVER download older or equal version
-    // compareVersions returns 1 if b>a (newer), -1 if b<a (older), 0 if equal
-    // Skip update only when installed >= latest (b <= a), i.e. result <= 0
+    // compareVersions(a, b) returns 1 if b>a (newer), -1 if b<a (older), 0 if equal
+    // If installed >= latest, skip update (result <= 0)
     if (compareVersions(APP_VERSION, latestVersion) <= 0) {
-      updateLog('Already up to date (or newer). Installed: ' + APP_VERSION + ', Latest: ' + latestVersion);
+      updateLog('Already up to date. Installed: ' + APP_VERSION + ', Latest: ' + latestVersion);
       sendToAllWindows('update-status', { status: 'not-available', lastChecked: new Date().toISOString(), version: latestVersion });
       return;
     }
@@ -345,6 +368,19 @@ async function checkForUpdates() {
 
     updateDownloaded = true;
     updateLog('Download complete! File: ' + updatePath);
+
+    // Save the pending update info so we can verify on next launch
+    try {
+      const pendingUpdatePath = path.join(app.getPath('userData'), 'baga-pending-update.json');
+      fs.writeFileSync(pendingUpdatePath, JSON.stringify({
+        version: latestVersion,
+        filePath: updatePath,
+        downloadedAt: new Date().toISOString(),
+      }, null, 2), 'utf8');
+    } catch (e) {
+      updateLog('Failed to save pending update info: ' + e.message);
+    }
+
     sendToAllWindows('update-status', {
       status: 'downloaded',
       version: latestVersion,
@@ -1415,7 +1451,65 @@ ipcMain.on('open-main-window', () => {
 // APP LIFECYCLE
 // ============================================================
 
+// ============================================================
+// CLEANUP OLD UPDATE FILES ON STARTUP
+// ============================================================
+function cleanupOldUpdateFiles() {
+  try {
+    const userDataDir = app.getPath('userData');
+    const pendingUpdatePath = path.join(userDataDir, 'baga-pending-update.json');
+
+    // Check if there was a pending update that matches current version
+    if (fs.existsSync(pendingUpdatePath)) {
+      try {
+        const pending = JSON.parse(fs.readFileSync(pendingUpdatePath, 'utf8'));
+        if (pending.version === APP_VERSION) {
+          // User successfully installed this version — clean up
+          console.log('[BAGA HMS] Update to v' + APP_VERSION + ' was successful. Cleaning up update files.');
+          try { fs.unlinkSync(pendingUpdatePath); } catch (e) {}
+          if (pending.filePath && fs.existsSync(pending.filePath)) {
+            try { fs.unlinkSync(pending.filePath); } catch (e) {}
+          }
+        } else if (pending.version !== APP_VERSION) {
+          // Different version pending — clean stale file
+          console.log('[BAGA HMS] Stale pending update for v' + pending.version + ' (current: ' + APP_VERSION + '). Removing.');
+          try { fs.unlinkSync(pendingUpdatePath); } catch (e) {}
+          if (pending.filePath && fs.existsSync(pending.filePath)) {
+            try { fs.unlinkSync(pending.filePath); } catch (e) {}
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Also clean any old update exe files in userData
+    try {
+      const files = fs.readdirSync(userDataDir);
+      files.forEach(file => {
+        if (file.startsWith('BAGA-HMS-Update-') && file.endsWith('.exe')) {
+          const filePath = path.join(userDataDir, file);
+          // Extract version from filename
+          const match = file.match(/BAGA-HMS-Update-(\d+\.\d+\.\d+)\.exe/);
+          if (match && match[1] === APP_VERSION) {
+            // Current version's update file — remove it (we're already on this version)
+            try { fs.unlinkSync(filePath); } catch (e) {}
+            console.log('[BAGA HMS] Removed update file for installed version: ' + file);
+          } else if (match && compareVersions(APP_VERSION, match[1]) >= 0) {
+            // Older version's update file — remove it
+            try { fs.unlinkSync(filePath); } catch (e) {}
+            console.log('[BAGA HMS] Removed old update file: ' + file);
+          }
+        }
+      });
+    } catch (e) {}
+  } catch (e) {
+    console.error('[BAGA HMS] Cleanup error:', e);
+  }
+}
+
 app.whenReady().then(async () => {
+  // Clean up stale update files on startup
+  cleanupOldUpdateFiles();
+
   console.log('='.repeat(60));
   console.log(`[BAGA HMS] v${APP_VERSION} starting...`);
   console.log(`[BAGA HMS] Electron: ${process.versions.electron}`);
