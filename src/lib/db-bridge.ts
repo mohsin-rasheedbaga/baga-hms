@@ -172,7 +172,7 @@ export async function syncDataFromServer(): Promise<boolean> {
       }
     }
     // Sync KV pairs
-    const kvKeys = ['baga_session', 'baga_patient_counter', 'baga_outdoor_counter', 'baga_employee_counter', 'baga_pharmacy_sales', 'baga_pharmacy_returns', 'baga_profit_password', 'baga_notif_cleared'];
+    const kvKeys = ['baga_session', 'baga_patient_counter', 'baga_outdoor_counter', 'baga_employee_counter', 'baga_pharmacy_sales', 'baga_pharmacy_returns', 'baga_profit_password', 'baga_notif_cleared_at', 'baga_notif_cleared_ids'];
     for (const key of kvKeys) {
       const resp = await fetch(getLanBase() + '/api/kv/' + key);
       if (resp.ok) {

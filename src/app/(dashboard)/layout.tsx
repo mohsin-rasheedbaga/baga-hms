@@ -249,37 +249,70 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     localStorage.setItem('baga_dark_mode', String(next));
   };
 
-  // Load notifications
+  // Load notifications — only loads data-based notifications (expired/low stock)
+  // Does NOT reset cleared state or overwrite update notifications
   const loadNotifications = () => {
-    const items: { type: string; msg: string; color: string; route?: string }[] = [];
+    const dataItems: { type: string; msg: string; color: string; route?: string }[] = [];
     try {
       const expired = getExpiredMedicines();
       const lowStock = getLowStockMedicines();
       const lt = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('baga_session') || '{}')?.licenseType || 'hospital' : 'hospital';
       const pharmacyBase = lt === 'pharmacy' ? '/pharmacy' : '/pharmacy';
-      expired.forEach(m => items.push({ type: 'expired', msg: `${m.name} (${m.strength}) expired`, color: 'rose', route: `${pharmacyBase}?tab=expired` }));
-      lowStock.filter(m => !expired.find(e => e.id === m.id)).slice(0, 5).forEach(m => items.push({ type: 'low_stock', msg: `${m.name} stock: ${m.stock}`, color: 'amber', route: `${pharmacyBase}?tab=lowstock` }));
+      expired.forEach(m => dataItems.push({ type: 'expired', msg: `${m.name} (${m.strength}) expired`, color: 'rose', route: `${pharmacyBase}?tab=expired` }));
+      lowStock.filter(m => !expired.find(e => e.id === m.id)).slice(0, 5).forEach(m => dataItems.push({ type: 'low_stock', msg: `${m.name} stock: ${m.stock}`, color: 'amber', route: `${pharmacyBase}?tab=lowstock` }));
     } catch {}
-    if (items.length > 0) setNotifViewed(false);
-    setNotifItems(items);
+
+    // Get the cleared timestamp and cleared item IDs
+    const clearedAt = getClearedTimestamp();
+    const clearedIds = getClearedIds();
+
+    // Merge: keep update notifications, replace data notifications
+    setNotifItems(prev => {
+      // Keep existing update/download notifications
+      const updateItems = prev.filter(n => n.type === 'update' || n.type === 'download');
+      // Filter data items that were cleared
+      const newDataItems = clearedAt > 0
+        ? [] // Data notifs were cleared, don't show them again until manually re-checked
+        : dataItems.filter(d => !clearedIds.includes(d.type + ':' + d.msg));
+      const combined = [...updateItems, ...newDataItems];
+      if (combined.length > 0) setNotifViewed(false);
+      return combined;
+    });
   };
 
-  // Clear all notifications
+  // Get the timestamp when notifications were cleared
+  const getClearedTimestamp = (): number => {
+    try { return parseInt(localStorage.getItem('baga_notif_cleared_at') || '0'); } catch { return 0; }
+  };
+
+  // Get IDs of individually cleared notifications
+  const getClearedIds = (): string[] => {
+    try { return JSON.parse(localStorage.getItem('baga_notif_cleared_ids') || '[]'); } catch { return []; }
+  };
+
+  // Clear all notifications — permanent until new data arrives
   const clearNotifications = () => {
     setNotifItems([]);
     setNotifViewed(true);
     setShowNotif(false);
-    localStorage.setItem('baga_notif_cleared', Date.now().toString());
+    localStorage.setItem('baga_notif_cleared_at', Date.now().toString());
+    localStorage.setItem('baga_notif_cleared_ids', '[]');
+    // Also sync to server in LAN mode
+    try {
+      if (typeof window !== 'undefined' && !(window as any).bagaAPI && localStorage.getItem('baga_lan_mode') === 'true') {
+        const base = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
+        fetch(base + '/api/kv/baga_notif_cleared_at', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: Date.now().toString() }),
+        }).catch(() => {});
+        fetch(base + '/api/kv/baga_notif_cleared_ids', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: '[]' }),
+        }).catch(() => {});
+      }
+    } catch {}
   };
 
-  // Check if notifications were recently cleared (within 10 minutes)
-  const wereNotifsCleared = (): boolean => {
-    try {
-      const cleared = localStorage.getItem('baga_notif_cleared');
-      if (cleared && (Date.now() - parseInt(cleared)) < 600000) return true;
-    } catch {}
-    return false;
-  };
 
   useEffect(() => {
     setSearchStr(typeof window !== 'undefined' ? window.location.search : '');
@@ -326,14 +359,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       } catch (e) {}
     }
     loadLicense();
-    if (!wereNotifsCleared()) {
-      loadNotifications();
-    } else {
+    // Load data-based notifications on mount (respects cleared state)
+    loadNotifications();
+    // If already cleared, mark as viewed
+    if (getClearedTimestamp() > 0) {
       setNotifViewed(true);
     }
     // Refresh notifications every 60 seconds
     const notifInterval = setInterval(loadNotifications, 60000);
-    // Check for software update notification
+    // Check for software update notification (Electron only)
     const isEl = typeof window !== 'undefined' && !!(window as any).bagaAPI;
     if (isEl) {
       try {
@@ -341,9 +375,19 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           if (data && data.status === 'available') {
             setNotifItems(prev => {
               if (!prev.find(n => n.type === 'update')) {
-                return [...prev, { type: 'update', msg: `Software update v${data.version || ''} available!`, color: 'blue' }];
+                setNotifViewed(false);
+                return [...prev, { type: 'update', msg: `Software update v${data.version || ''} available!`, color: 'blue', route: '/settings' }];
               }
               return prev;
+            });
+          } else if (data && data.status === 'downloaded') {
+            setNotifItems(prev => {
+              const filtered = prev.filter(n => n.type !== 'update');
+              if (!filtered.find(n => n.type === 'download')) {
+                setNotifViewed(false);
+                return [...filtered, { type: 'download', msg: `Update v${data.version || ''} downloaded! Restart to install.`, color: 'emerald', route: '/settings' }];
+              }
+              return filtered;
             });
           }
         });
@@ -634,8 +678,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   ) : (
                     <div className="max-h-60 overflow-y-auto">
                       {notifItems.map((n, i) => (
-                        <div key={i} onClick={() => { setShowNotif(false); setNotifViewed(true); if (n.route) router.push(n.route); }} className={`px-4 py-2 text-xs border-b border-slate-50 flex items-center gap-2 cursor-pointer hover:opacity-80 transition ${n.color === 'rose' ? 'bg-red-50' : n.color === 'blue' ? 'bg-blue-50' : 'bg-amber-50'}`}>
-                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${n.color === 'rose' ? 'bg-red-500' : n.color === 'blue' ? 'bg-blue-500' : 'bg-amber-500'}`} />
+                        <div key={i} onClick={() => { setShowNotif(false); setNotifViewed(true); if (n.route) router.push(n.route); }} className={`px-4 py-2 text-xs border-b border-slate-50 flex items-center gap-2 cursor-pointer hover:opacity-80 transition ${n.color === 'rose' ? 'bg-red-50' : n.color === 'blue' ? 'bg-blue-50' : n.color === 'emerald' ? 'bg-green-50' : 'bg-amber-50'}`}>
+                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${n.color === 'rose' ? 'bg-red-500' : n.color === 'blue' ? 'bg-blue-500' : n.color === 'emerald' ? 'bg-green-500' : 'bg-amber-500'}`} />
                           <span className="text-slate-700">{n.msg}</span>
                           <svg className="w-3 h-3 text-slate-400 ml-auto flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                         </div>

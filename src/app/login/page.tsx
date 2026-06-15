@@ -31,7 +31,7 @@ export default function LoginPage() {
   const [showChangeLicense, setShowChangeLicense] = useState(false);
   const [newLicenseKey, setNewLicenseKey] = useState('');
   const [changeLicenseStatus, setChangeLicenseStatus] = useState({ loading: false, error: '', success: '' });
-  const [appVersion, setAppVersion] = useState('3.5.9');
+  const [appVersion, setAppVersion] = useState('');
   const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
@@ -48,6 +48,14 @@ export default function LoginPage() {
             const info = await resp.json();
             if (info.mode && info.mode !== 'none') {
               setLanMode(true);
+              // Fetch app version from LAN server
+              try {
+                const verResp = await fetch(baseUrl + '/api/version', { signal: AbortSignal.timeout(3000) });
+                if (verResp.ok) {
+                  const verData = await verResp.json();
+                  if (verData.success && verData.version) setAppVersion(verData.version);
+                }
+              } catch {}
               setLicenseInfo(info);
               setLicenseMode(info.mode);
               setLicenseType(info.licenseType || 'hospital');
@@ -430,10 +438,12 @@ export default function LoginPage() {
           </div>
 
           <div className="bg-white/5 rounded-lg p-3 mb-4">
+            {appVersion && (
             <div className="flex items-center justify-between text-sm">
               <span className="text-blue-300/70">System:</span>
               <span className="text-white text-xs">BAGA HMS v{appVersion}</span>
             </div>
+            )}
             <div className="flex items-center justify-between text-sm mt-1">
               <span className="text-blue-300/70">License Type:</span>
               <span className={`text-xs px-2 py-0.5 rounded-full border ${licenseTypeColor[licenseType] || licenseTypeColor.hospital}`}>

@@ -454,6 +454,11 @@ function handleLanApi(req, res, url, method) {
     req.on('end', () => { try { callback(JSON.parse(body)); } catch { callback({}); } });
   };
 
+  // GET /api/version
+  if (url === '/api/version' && method === 'GET') {
+    return sendJson(200, { success: true, version: APP_VERSION });
+  }
+
   // GET /api/license-info
   if (url === '/api/license-info' && method === 'GET') {
     const store = getStore();
@@ -497,8 +502,9 @@ function handleLanApi(req, res, url, method) {
     return readBody(({ username, password }) => {
       if (!username || !password) return sendJson(400, { success: false, error: 'Missing credentials' });
       try {
-        const users = db ? db.getAll('users') : null;
-        if (!users) return sendJson(200, { success: false, error: 'Database not available' });
+        const dbResult = safeDbGetAll('users');
+        if (!dbResult.success || !dbResult.data) return sendJson(200, { success: false, error: 'Database not available. Please make sure the main app is running.' });
+        const users = dbResult.data;
         const user = users.find(u => u.email === username.trim() && u.password === password.trim() && u.active !== false);
         if (!user) return sendJson(200, { success: false, error: 'Invalid Login ID or Password' });
         return sendJson(200, {
