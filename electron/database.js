@@ -318,6 +318,9 @@ function initDatabase(app) {
     // ── Seed if empty ──────────────────────────────────────────────────────
     seedIfEmpty();
 
+    // ── Migrate double-wrapped records (one-time fix) ─────────────────────
+    migrateDoubleWrapped();
+
     console.log('[DB] Initialization complete');
   } catch (err) {
     console.error('[DB] Failed to initialize database:', err);
@@ -353,6 +356,57 @@ function createTables() {
   }
 
   console.log('[DB] All tables created');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// migrateDoubleWrapped – one-time fix for data corrupted by store.ts wrapping bug
+// Records were stored as { id, data: { id, email, ... } } instead of flat { id, email, ... }
+// ─────────────────────────────────────────────────────────────────────────────
+
+function migrateDoubleWrapped() {
+  try {
+    const migrationDone = db.prepare("SELECT value FROM [config] WHERE key = 'migration_double_wrap_done'").get();
+    if (migrationDone) {
+      console.log('[DB] Double-wrap migration already done, skipping');
+      return;
+    }
+
+    console.log('[DB] Checking for double-wrapped records...');
+    const update = db.prepare('UPDATE [?] SET data = ? WHERE id = ?');
+    let fixedCount = 0;
+
+    for (const table of JSON_TABLES) {
+      try {
+        const rows = db.prepare(`SELECT id, data FROM [${table}]`).all();
+        for (const row of rows) {
+          let parsed;
+          try { parsed = JSON.parse(row.data); } catch { continue; }
+
+          // Check if this record is double-wrapped: has a 'data' property that is an object
+          // and the 'data' property contains the same 'id' field
+          if (parsed && typeof parsed === 'object' && typeof parsed.data === 'object' && parsed.data !== null) {
+            // Verify it's truly double-wrapped by checking if inner data has real content
+            const inner = parsed.data;
+            const innerKeys = Object.keys(inner);
+            // If inner has more than 2 keys including 'id', it's likely wrapped data
+            if (innerKeys.length >= 2 && (inner.id === parsed.id || innerKeys.includes('name') || innerKeys.includes('email') || innerKeys.includes('type'))) {
+              console.log(`[DB]   Fixing double-wrapped record in ${table}: id=${row.id}`);
+              update.run(table, JSON.stringify(inner), row.id);
+              fixedCount++;
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`[DB]   Migration error on ${table}:`, err.message);
+      }
+    }
+
+    // Mark migration as done
+    db.prepare("INSERT OR REPLACE INTO [config] (key, value) VALUES ('migration_double_wrap_done', '1')").run();
+    console.log(`[DB] Double-wrap migration complete: ${fixedCount} records fixed`);
+  } catch (err) {
+    console.error('[DB] Double-wrap migration failed:', err.message);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -54,12 +54,21 @@ const TABLES: Record<string, string> = {
 function get<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
 
+  // Single-object tables: hospital, hospital_settings
+  const SINGLE_OBJECT_KEYS = ['baga_hospital', 'baga_hospital_settings'];
+
   // Try Electron SQLite first
   if (isElectron()) {
     const tableName = TABLES[key];
     if (tableName) {
       const data = dbGetAll(tableName);
-      if (data !== null) return data as T;
+      if (data !== null) {
+        if (SINGLE_OBJECT_KEYS.includes(key)) {
+          // For single-object tables, return the first element
+          if (Array.isArray(data) && data.length > 0) return data[0] as T;
+        }
+        return data as T;
+      }
     }
   }
 
@@ -75,16 +84,15 @@ function set<T>(key: string, data: T): void {
   if (isElectron()) {
     const tableName = TABLES[key];
     if (tableName) {
-      // Convert data to array format with id/data structure for SQLite
-      if (Array.isArray(data)) {
-        const rows = data.map(item => {
-          const id = (item as any).id || genId();
-          return { id, data: item };
-        });
-        if (dbSetAll(tableName, rows)) return; // Success, don't write to localStorage
+      // Single-object tables (hospital, settings) - use setById
+      if (!Array.isArray(data)) {
+        const item = data as any;
+        const id = item.id || 'main';
+        if (dbSetById(tableName, id, item)) return;
       } else {
-        // Single object (hospital, settings) - use id 'main'
-        if (dbSetById(tableName, 'main', data)) return;
+        // Array data: pass directly to dbSetAll (NO wrapping)
+        // database.js setAll expects flat objects with id field
+        if (dbSetAll(tableName, data)) return;
       }
     }
   }
