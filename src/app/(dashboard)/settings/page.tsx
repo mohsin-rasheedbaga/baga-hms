@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   getHospitalSettings, setHospitalSettings,
   getRoomTypes, addRoomType, updateRoomType, deleteRoomType, todayStr, genId,
+  getUsers, updateUser,
 } from '@/lib/store';
 import { fetchLicenseInfo } from '@/lib/db-bridge';
 import type { HospitalSettings, RoomType } from '@/lib/types';
@@ -206,6 +207,12 @@ export default function SettingsPage() {
   const [securityPinConfirm, setSecurityPinConfirm] = useState('');
   const [pinSaved, setPinSaved] = useState(false);
 
+  // Password change for logged-in user
+  const [currentPass, setCurrentPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [passChangeMsg, setPassChangeMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   // Refs
   const logoInputRef = useRef<HTMLInputElement>(null);
 
@@ -219,7 +226,7 @@ export default function SettingsPage() {
     // Check admin role from session
     try {
       const sess = JSON.parse(localStorage.getItem('baga_session') || '{}');
-      setIsAdmin(sess.role === 'admin' || sess.role === 'Admin' || sess.role === 'main_admin' || sess.role === 'Main Admin');
+      setIsAdmin(sess.role === 'admin' || sess.role === 'Admin' || sess.role === 'main_admin' || sess.role === 'Main Admin' || sess.role === 'super_admin');
     } catch {}
     // Load existing PIN
     try {
@@ -421,6 +428,47 @@ export default function SettingsPage() {
     setSecurityPin('');
     setSecurityPinConfirm('');
     showToast('PIN removed');
+  };
+
+  // ---- Password Change for Logged-in User ----
+  const handleChangePassword = () => {
+    setPassChangeMsg(null);
+    if (!currentPass.trim() || !newPass.trim() || !confirmPass.trim()) {
+      setPassChangeMsg({ type: 'error', text: 'All fields are required' });
+      return;
+    }
+    try {
+      const sess = JSON.parse(localStorage.getItem('baga_session') || '{}');
+      if (!sess.userId) {
+        setPassChangeMsg({ type: 'error', text: 'No active session found. Please login again.' });
+        return;
+      }
+      const users = getUsers();
+      const user = users.find((u: any) => u.id === sess.userId);
+      if (!user) {
+        setPassChangeMsg({ type: 'error', text: 'User not found. Please contact administrator.' });
+        return;
+      }
+      if (user.password !== currentPass.trim()) {
+        setPassChangeMsg({ type: 'error', text: 'Current password is incorrect' });
+        return;
+      }
+      if (newPass.trim().length < 4) {
+        setPassChangeMsg({ type: 'error', text: 'New password must be at least 4 characters' });
+        return;
+      }
+      if (newPass.trim() !== confirmPass.trim()) {
+        setPassChangeMsg({ type: 'error', text: 'New password and confirmation do not match' });
+        return;
+      }
+      updateUser(user.id, { password: newPass.trim() });
+      setCurrentPass('');
+      setNewPass('');
+      setConfirmPass('');
+      setPassChangeMsg({ type: 'success', text: 'Password changed successfully!' });
+    } catch (e: any) {
+      setPassChangeMsg({ type: 'error', text: 'Error changing password: ' + (e.message || 'Unknown error') });
+    }
   };
 
   return (
@@ -858,6 +906,58 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* ==================== SECTION: Change Password (Logged-in User) ==================== */}
+      <div className="bg-white rounded-xl border-2 border-sky-200 p-6">
+        <h3 className="text-lg font-semibold text-slate-800 mb-2 flex items-center gap-2">
+          <svg className="w-5 h-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
+          Change My Password
+        </h3>
+        <p className="text-sm text-slate-500 mb-4">
+          Change the password for your currently logged-in account. You will need to enter your current password to confirm the change.
+        </p>
+        {passChangeMsg && (
+          <div className={`mb-3 p-3 rounded-lg text-sm font-medium ${passChangeMsg.type === 'success' ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+            {passChangeMsg.text}
+          </div>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="form-label">Current Password *</label>
+            <input
+              type="password"
+              className="form-input"
+              value={currentPass}
+              onChange={e => setCurrentPass(e.target.value)}
+              placeholder="Enter current password"
+            />
+          </div>
+          <div>
+            <label className="form-label">New Password *</label>
+            <input
+              type="password"
+              className="form-input"
+              value={newPass}
+              onChange={e => setNewPass(e.target.value)}
+              placeholder="Enter new password"
+            />
+          </div>
+          <div>
+            <label className="form-label">Confirm New Password *</label>
+            <input
+              type="password"
+              className="form-input"
+              value={confirmPass}
+              onChange={e => setConfirmPass(e.target.value)}
+              placeholder="Confirm new password"
+              onKeyDown={e => e.key === 'Enter' && handleChangePassword()}
+            />
+          </div>
+        </div>
+        <div className="mt-4">
+          <button onClick={handleChangePassword} className="btn btn-primary">Change Password</button>
+        </div>
+      </div>
+
       {/* ==================== SECTION: Network Sharing ==================== */}
       {isElectron && (
         <div className="bg-white rounded-xl border-2 border-cyan-200 p-6">
@@ -872,7 +972,7 @@ export default function SettingsPage() {
             <label className="form-label">Local Network Link</label>
             <div className="flex gap-2 items-center">
               <code id="network-link" className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-cyan-700 font-mono truncate">
-                {(typeof window !== 'undefined') ? `http://${window.location.hostname}:3000` : 'http://localhost:3000'}
+                {(typeof window !== 'undefined') ? `http://${window.location.hostname}:${window.location.port || 18765}` : 'http://localhost:18765'}
               </code>
               <button
                 onClick={() => {

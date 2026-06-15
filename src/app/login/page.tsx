@@ -476,7 +476,7 @@ export default function LoginPage() {
         <p className="text-center text-blue-400/40 text-xs">
           After login, use User Management to create additional login IDs and assign roles
         </p>
-        <p className="text-center text-blue-400/30 text-[10px] mt-1">
+        <p className="text-center text-cyan-400/80 text-sm font-bold mt-2">
           Powered by Mohsin Rasheed
         </p>
       </div>

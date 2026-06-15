@@ -230,7 +230,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   // Notification state
   const [showNotif, setShowNotif] = useState(false);
-  const [notifItems, setNotifItems] = useState<{ type: string; msg: string; color: string }[]>([]);
+  const [notifItems, setNotifItems] = useState<{ type: string; msg: string; color: string; route?: string }[]>([]);
   const [notifViewed, setNotifViewed] = useState(false);
 
   // Dark mode state
@@ -251,15 +251,34 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   // Load notifications
   const loadNotifications = () => {
-    const items: { type: string; msg: string; color: string }[] = [];
+    const items: { type: string; msg: string; color: string; route?: string }[] = [];
     try {
       const expired = getExpiredMedicines();
       const lowStock = getLowStockMedicines();
-      expired.forEach(m => items.push({ type: 'expired', msg: `${m.name} (${m.strength}) expired`, color: 'rose' }));
-      lowStock.filter(m => !expired.find(e => e.id === m.id)).slice(0, 5).forEach(m => items.push({ type: 'low_stock', msg: `${m.name} stock: ${m.stock}`, color: 'amber' }));
+      const lt = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('baga_session') || '{}')?.licenseType || 'hospital' : 'hospital';
+      const pharmacyBase = lt === 'pharmacy' ? '/pharmacy' : '/pharmacy';
+      expired.forEach(m => items.push({ type: 'expired', msg: `${m.name} (${m.strength}) expired`, color: 'rose', route: `${pharmacyBase}?tab=expired` }));
+      lowStock.filter(m => !expired.find(e => e.id === m.id)).slice(0, 5).forEach(m => items.push({ type: 'low_stock', msg: `${m.name} stock: ${m.stock}`, color: 'amber', route: `${pharmacyBase}?tab=lowstock` }));
     } catch {}
     if (items.length > 0) setNotifViewed(false);
     setNotifItems(items);
+  };
+
+  // Clear all notifications
+  const clearNotifications = () => {
+    setNotifItems([]);
+    setNotifViewed(true);
+    setShowNotif(false);
+    localStorage.setItem('baga_notif_cleared', Date.now().toString());
+  };
+
+  // Check if notifications were recently cleared (within 10 minutes)
+  const wereNotifsCleared = (): boolean => {
+    try {
+      const cleared = localStorage.getItem('baga_notif_cleared');
+      if (cleared && (Date.now() - parseInt(cleared)) < 600000) return true;
+    } catch {}
+    return false;
   };
 
   useEffect(() => {
@@ -307,7 +326,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       } catch (e) {}
     }
     loadLicense();
-    loadNotifications();
+    if (!wereNotifsCleared()) {
+      loadNotifications();
+    } else {
+      setNotifViewed(true);
+    }
     // Refresh notifications every 60 seconds
     const notifInterval = setInterval(loadNotifications, 60000);
     // Check for software update notification
@@ -600,15 +623,21 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </button>
               {showNotif && (
                 <div className="absolute right-0 top-full mt-1 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-80 overflow-hidden">
-                  <div className="px-4 py-2 border-b border-slate-100 font-semibold text-sm text-slate-700">Notifications</div>
+                  <div className="px-4 py-2 border-b border-slate-100 font-semibold text-sm text-slate-700 flex items-center justify-between">
+                    <span>Notifications</span>
+                    {notifItems.length > 0 && (
+                      <button onClick={(e) => { e.stopPropagation(); clearNotifications(); }} className="text-xs text-red-500 hover:text-red-700 font-medium cursor-pointer">Clear All</button>
+                    )}
+                  </div>
                   {notifItems.length === 0 ? (
                     <div className="p-6 text-center text-sm text-slate-400">No notifications</div>
                   ) : (
                     <div className="max-h-60 overflow-y-auto">
                       {notifItems.map((n, i) => (
-                        <div key={i} className={`px-4 py-2 text-xs border-b border-slate-50 flex items-center gap-2 ${n.color === 'rose' ? 'bg-red-50' : n.color === 'blue' ? 'bg-blue-50' : 'bg-amber-50'}`}>
+                        <div key={i} onClick={() => { setShowNotif(false); setNotifViewed(true); if (n.route) router.push(n.route); }} className={`px-4 py-2 text-xs border-b border-slate-50 flex items-center gap-2 cursor-pointer hover:opacity-80 transition ${n.color === 'rose' ? 'bg-red-50' : n.color === 'blue' ? 'bg-blue-50' : 'bg-amber-50'}`}>
                           <span className={`w-2 h-2 rounded-full flex-shrink-0 ${n.color === 'rose' ? 'bg-red-500' : n.color === 'blue' ? 'bg-blue-500' : 'bg-amber-500'}`} />
                           <span className="text-slate-700">{n.msg}</span>
+                          <svg className="w-3 h-3 text-slate-400 ml-auto flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                         </div>
                       ))}
                     </div>
