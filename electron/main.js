@@ -406,6 +406,135 @@ async function checkForUpdates() {
 }
 
 // ============================================================
+// LAN SHARING API HANDLER
+// ============================================================
+function handleLanApi(req, res, url, method) {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+
+  const sendJson = (code, data) => { res.writeHead(code); res.end(JSON.stringify(data)); };
+  const readBody = (callback) => {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => { try { callback(JSON.parse(body)); } catch { callback({}); } });
+  };
+
+  // GET /api/license-info
+  if (url === '/api/license-info' && method === 'GET') {
+    const store = getStore();
+    const license = store.license || null;
+    const demo = store.demo || null;
+    let mode = 'none', licenseType = 'hospital', features = [];
+
+    if (demo && demo.activated && !demo.blocked) {
+      const now = new Date(), expiresAt = new Date(demo.expiresAt);
+      if (now <= expiresAt) { mode = 'demo'; licenseType = 'hospital'; features = ['all']; }
+    }
+    if (license) {
+      mode = 'licensed';
+      licenseType = license.licenseType || 'hospital';
+      features = license.features || [];
+      if (license.expiryDate && license.licenseDuration !== 'lifetime') {
+        if (new Date() > new Date(license.expiryDate)) {
+          return sendJson(200, { mode: 'expired', licenseType, features: [], expired: true, expiryDate: license.expiryDate, hospitalName: license.hospitalName });
+        }
+      }
+    }
+    return sendJson(200, {
+      mode, licenseType, features, expired: false,
+      hospitalName: license ? license.hospitalName : (mode === 'demo' ? 'BAGA Hospital (Demo)' : ''),
+      hospitalAddress: license ? license.address : '',
+      hospitalPhone: license ? license.phone : '',
+      hospitalEmail: license ? (license.email || '') : '',
+      hospitalMobile: license ? (license.mobile || '') : '',
+      logoUrl: license ? (license.logoUrl || '') : '',
+      logoPath: license ? (license.logoPath || '') : '',
+      licenseKey: license ? license.key : null,
+      expiryDate: license ? license.expiryDate : null,
+      licenseDuration: license ? license.licenseDuration : null,
+      activatedAt: license ? license.activatedAt : null,
+      demo: mode === 'demo' ? { remaining: Math.ceil((new Date(demo.expiresAt) - new Date()) / 86400000), expiresAt: demo.expiresAt } : null,
+    });
+  }
+
+  // POST /api/login
+  if (url === '/api/login' && method === 'POST') {
+    return readBody(({ username, password }) => {
+      if (!username || !password) return sendJson(400, { success: false, error: 'Missing credentials' });
+      try {
+        const users = db ? db.getAll('users') : null;
+        if (!users) return sendJson(200, { success: false, error: 'Database not available' });
+        const user = users.find(u => u.email === username.trim() && u.password === password.trim() && u.active !== false);
+        if (!user) return sendJson(200, { success: false, error: 'Invalid Login ID or Password' });
+        return sendJson(200, {
+          success: true,
+          user: { id: user.id, name: user.name, role: user.role, department: user.department || '', email: user.email, active: user.active, permissions: user.permissions || ['all'] },
+        });
+      } catch (err) { return sendJson(500, { success: false, error: err.message }); }
+    });
+  }
+
+  // GET /api/db/:table
+  if (url.startsWith('/api/db/') && !url.includes('/kv/') && method === 'GET') {
+    const table = url.replace('/api/db/', '');
+    const allowed = ['hospital','hospital_settings','users','patients','medicines','prescriptions','bills','appointments','admissions','lab_orders','lab_test_catalog','room_types','employees','attendance','salaries','xray_orders','ultrasound_orders','dispenses','visits'];
+    if (!allowed.includes(table)) return sendJson(403, { success: false, error: 'Forbidden' });
+    try {
+      const data = db ? db.getAll(table) : null;
+      sendJson(200, { success: true, data: data || [] });
+    } catch (err) { sendJson(500, { success: false, error: err.message }); }
+    return;
+  }
+
+  // POST /api/db/:table
+  if (url.startsWith('/api/db/') && method === 'POST') {
+    const table = url.replace('/api/db/', '');
+    const allowed = ['hospital','hospital_settings','users','patients','medicines','prescriptions','bills','appointments','admissions','lab_orders','lab_test_catalog','room_types','employees','attendance','salaries','xray_orders','ultrasound_orders','dispenses','visits'];
+    if (!allowed.includes(table)) return sendJson(403, { success: false, error: 'Forbidden' });
+    return readBody(({ data }) => {
+      if (!Array.isArray(data)) return sendJson(400, { success: false, error: 'Data must be array' });
+      try { if (db) { db.setAll(table, data); sendJson(200, { success: true }); } else sendJson(500, { success: false, error: 'DB not available' }); }
+      catch (err) { sendJson(500, { success: false, error: err.message }); }
+    });
+  }
+
+  // GET /api/kv/:key
+  if (url.startsWith('/api/kv/') && method === 'GET') {
+    const key = url.replace('/api/kv/', '');
+    try { const val = db ? db.getKV(key) : null; sendJson(200, { success: true, data: val || null }); }
+    catch (err) { sendJson(500, { success: false, error: err.message }); }
+    return;
+  }
+
+  // POST /api/kv/:key
+  if (url.startsWith('/api/kv/') && method === 'POST') {
+    const key = url.replace('/api/kv/', '');
+    return readBody(({ value }) => {
+      try { if (db) { db.setKV(key, typeof value === 'string' ? value : JSON.stringify(value)); sendJson(200, { success: true }); } else sendJson(500, { success: false, error: 'DB not available' }); }
+      catch (err) { sendJson(500, { success: false, error: err.message }); }
+    });
+  }
+
+  // GET /api/counter/:key
+  if (url.startsWith('/api/counter/') && method === 'GET') {
+    const key = url.replace('/api/counter/', '');
+    try { const val = db ? db.getCounter(key) : null; sendJson(200, { success: true, data: val !== null ? val : 0 }); }
+    catch (err) { sendJson(500, { success: false, error: err.message }); }
+    return;
+  }
+
+  // POST /api/counter/:key
+  if (url.startsWith('/api/counter/') && method === 'POST') {
+    const key = url.replace('/api/counter/', '');
+    return readBody(({ value }) => {
+      try { if (db) { db.setCounter(key, value); sendJson(200, { success: true }); } else sendJson(500, { success: false, error: 'DB not available' }); }
+      catch (err) { sendJson(500, { success: false, error: err.message }); }
+    });
+  }
+
+  sendJson(404, { error: 'API endpoint not found' });
+}
+
+// ============================================================
 // HTTP SERVER (serves Next.js static export from out/)
 // ============================================================
 let serverInstance = null;
@@ -437,6 +566,12 @@ function startServer() {
 
       // Decode the URL to handle encoded characters
       const decodedUrl = decodeURIComponent(req.url.split('?')[0]);
+
+      // ==================== API ROUTES FOR LAN SHARING ====================
+      if (decodedUrl.startsWith('/api/')) {
+        handleLanApi(req, res, decodedUrl, req.method);
+        return;
+      }
       let filePath = path.join(outDir, decodedUrl === '/' ? 'index.html' : decodedUrl);
 
       // Security: ensure we don't escape the out directory

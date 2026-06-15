@@ -657,7 +657,6 @@ export default function EmployeesPage() {
                   <div className="hospital-name" style={{ fontSize: 24, fontWeight: 'bold', color: '#1a1a1a' }}>{hospital.name}</div>
                   <div className="hospital-info" style={{ fontSize: 12, color: '#555', marginTop: 5 }}>{hospital.address}</div>
                   <div className="hospital-info" style={{ fontSize: 12, color: '#555' }}>Phone: {hospital.phone} | Email: {hospital.email}</div>
-                  <div className="hospital-info" style={{ fontSize: 12, color: '#555' }}>License: {hospital.licenseNo}</div>
                 </div>
 
                 <hr className="double" style={{ border: 'none', borderTop: '3px double #1a1a1a', margin: '15px 0' }} />

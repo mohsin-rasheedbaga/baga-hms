@@ -275,7 +275,6 @@ export default function AppointmentPage() {
           <div class="header">
             <h1>${hospital.name || 'BAGA Hospital'}</h1>
             <p>${hospital.address || 'Main Road, City'} | ${hospital.phone || ''}</p>
-            <p>License: ${hospital.licenseNo || 'BAGA-LIC-0001'}</p>
           </div>
           <div class="slip-title">Appointment Slip</div>
           <div class="info-grid">

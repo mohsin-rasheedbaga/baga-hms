@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getHospital, getUsers, setHospital, addUser, updateUser } from '@/lib/store';
+import { isLanMode, setLanMode, syncDataFromServer } from '@/lib/db-bridge';
 
 const isElectron = typeof window !== 'undefined' && !!(window as any).bagaAPI;
 
@@ -35,7 +36,68 @@ export default function LoginPage() {
 
   useEffect(() => {
     async function init() {
-      // Try to get license info from Electron
+      // Check if we're in LAN sharing mode (not Electron, but API server reachable)
+      if (!isElectron && typeof window !== 'undefined') {
+        try {
+          const protocol = window.location.protocol;
+          const host = window.location.hostname;
+          const port = window.location.port || '18765';
+          const baseUrl = `${protocol}//${host}:${port}`;
+          const resp = await fetch(baseUrl + '/api/license-info', { signal: AbortSignal.timeout(3000) });
+          if (resp.ok) {
+            const info = await resp.json();
+            if (info.mode && info.mode !== 'none') {
+              setLanMode(true);
+              setLicenseInfo(info);
+              setLicenseMode(info.mode);
+              setLicenseType(info.licenseType || 'hospital');
+              // Update hospital info from LAN license
+              if (info.hospitalName) {
+                setH(prev => ({
+                  ...prev,
+                  name: info.hospitalName,
+                  address: info.hospitalAddress || prev.address,
+                  phone: info.hospitalPhone || prev.phone,
+                  email: info.hospitalEmail || prev.email,
+                  licenseNo: info.licenseKey || prev.licenseNo,
+                }));
+                setHospital({
+                  ...getHospital(),
+                  name: info.hospitalName,
+                  address: info.hospitalAddress || '',
+                  phone: info.hospitalPhone || '',
+                  email: info.hospitalEmail || '',
+                  licenseNo: info.licenseKey || '',
+                });
+              }
+              if (info.logoUrl) setLogoSrc(info.logoUrl);
+              if (info.mode === 'expired') {
+                setInitLoading(false);
+                return;
+              }
+              // Sync data from server to localStorage
+              await syncDataFromServer();
+              // Check for existing session after sync
+              try {
+                const sess = JSON.parse(localStorage.getItem('baga_session') || '{}');
+                if (sess && sess.userId) {
+                  setRedirecting(true);
+                  router.push(getHomePath(sess.licenseType || info.licenseType || 'hospital'));
+                  return;
+                }
+              } catch {}
+              setInitLoading(false);
+              return;
+            }
+          }
+        } catch (e) {
+          console.log('LAN mode not available, running as standalone browser');
+        }
+        setInitLoading(false);
+        return;
+      }
+
+      // Electron mode - Try to get license info from Electron
       if (isElectron) {
         try {
           // Get app version
@@ -158,6 +220,40 @@ export default function LoginPage() {
       };
     }
 
+    // Try LAN server login (for LAN sharing mode)
+    if (!user && !isElectron && isLanMode()) {
+      try {
+        const host = window.location.hostname;
+        const port = window.location.port || '18765';
+        const resp = await fetch(`${window.location.protocol}//${host}:${port}/api/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: loginId.trim(), password: password.trim() }),
+        });
+        const result = await resp.json();
+        if (result.success) {
+          user = {
+            id: result.user.id,
+            name: result.user.name,
+            role: result.user.role,
+            department: result.user.department || '',
+            email: result.user.email || loginId.trim(),
+            password: password.trim(),
+            active: true,
+            permissions: result.user.permissions || ['all'],
+          };
+        } else {
+          setError(result.error || 'Invalid Login ID or Password');
+          setLoading(false);
+          return;
+        }
+      } catch (e) {
+        setError('Cannot connect to server. Please check the sharing link.');
+        setLoading(false);
+        return;
+      }
+    }
+
     // Try API login first (for licensed mode) with 5s timeout for offline fallback
     if (!user && isElectron && licenseMode === 'licensed') {
       try {
@@ -217,6 +313,14 @@ export default function LoginPage() {
     if (isElectron) {
       try { (window as any).bagaAPI.dbSetKV('baga_session', JSON.stringify(sessionData)); } catch (e) {}
     }
+    if (isLanMode()) {
+      try {
+        await fetch(`${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/kv/baga_session`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: JSON.stringify(sessionData) }),
+        });
+      } catch {}
+    }
 
     setRedirecting(true);
     router.push(getHomePath(licenseType));
@@ -265,7 +369,7 @@ export default function LoginPage() {
     }
   };
 
-  if ((initLoading || redirecting) && isElectron) {
+  if ((initLoading || redirecting) && (isElectron || isLanMode())) {
     return null;
   }
 

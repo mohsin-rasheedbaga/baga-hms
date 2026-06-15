@@ -92,71 +92,50 @@ function setOutdoorCounter(n: number): void { lsSet(OUTDOOR_COUNTER_KEY, n); }
 function getPharmacyReturns(): MedicineReturn[] { return lsGet<MedicineReturn[]>(RETURNS_KEY, []); }
 function addPharmacyReturn(r: MedicineReturn): void { const all = getPharmacyReturns(); all.push(r); lsSet(RETURNS_KEY, all); }
 
-/* ==================== BARCODE GENERATOR (Code 128B) ==================== */
-function generateBarcodeSVG(text: string, width: number = 200, height: number = 40): string {
-  // Code 128B encoding patterns
-  const CODE128B_PATTERNS: Record<number, number[]> = {
-    0:[2,1,2,2,2,2],1:[2,2,2,1,2,2],2:[2,2,2,2,2,1],3:[1,2,1,2,2,3],4:[1,2,1,3,2,2],5:[1,3,1,2,2,2],
-    6:[1,2,2,2,1,3],7:[1,2,2,3,1,2],8:[1,3,2,2,1,2],9:[2,2,1,2,1,3],10:[2,2,1,3,1,2],11:[2,3,1,2,1,2],
-    12:[2,1,3,2,1,2],13:[2,2,3,2,1,1],14:[3,1,2,1,3,1],15:[3,1,1,2,2,3],16:[3,2,1,1,2,3],17:[3,2,1,3,1,1],
-    18:[3,1,2,3,1,1],19:[3,3,1,2,1,1],20:[2,1,2,1,2,3],21:[2,1,2,3,2,3],22:[2,3,2,1,2,1],23:[1,3,2,1,3,2],
-    24:[1,3,2,3,2,1],25:[1,1,3,2,3,2],26:[1,2,3,1,3,2],27:[1,2,3,3,2,1],28:[1,1,3,3,2,2],29:[1,2,3,2,2,3],
-    30:[1,2,2,2,3,2],31:[1,2,2,3,2,2],32:[1,3,2,2,2,2],33:[2,2,1,2,3,2],34:[2,2,1,3,2,2],35:[2,3,1,2,2,2],
-    36:[3,2,1,2,2,2],37:[3,2,2,2,1,2],38:[3,2,2,1,2,2],39:[3,1,2,2,1,2],40:[3,1,2,1,2,3],41:[3,1,1,2,2,3],
-    42:[3,1,2,3,1,1],43:[3,1,2,3,1,1],44:[2,1,2,1,2,3],45:[2,1,2,3,1,2],46:[2,3,2,1,1,2],47:[2,3,2,1,2,1],
-    48:[2,1,2,3,2,1],49:[2,1,3,2,1,2],50:[2,3,1,2,1,2],51:[2,3,2,2,1,1],52:[2,1,3,1,2,2],53:[2,3,1,1,2,2],
-    54:[2,1,3,2,1,1],55:[2,3,1,2,1,1],56:[3,1,1,2,2,1],57:[3,1,1,2,2,1],58:[3,1,2,1,2,1],59:[3,2,1,1,2,1],
-    60:[3,2,1,2,1,1],61:[3,2,2,1,1,1],62:[3,2,2,2,1,1],63:[3,3,2,1,1,1],64:[3,3,1,1,2,1],65:[3,3,1,2,1,1],
-    66:[3,3,2,1,1,1],67:[3,1,3,1,2,1],68:[3,1,3,2,1,1],69:[3,2,3,1,1,1],70:[3,2,1,3,1,1],71:[3,3,1,1,1,1],
-    72:[3,2,3,1,1,1],73:[3,1,3,1,1,2],74:[3,1,3,2,1,1],75:[3,3,1,1,1,2],76:[3,3,1,2,1,1],77:[3,1,1,1,3,2],
-    78:[3,1,1,2,3,2],79:[3,1,2,1,3,2],80:[3,2,1,1,3,2],81:[3,2,1,2,3,2],82:[3,1,3,1,1,2],83:[3,1,1,3,1,2],
-    84:[3,3,1,1,1,2],85:[3,1,1,3,2,2],86:[3,3,1,1,2,2],87:[3,1,2,3,1,2],88:[3,1,2,3,2,2],89:[3,3,2,1,2,2],
-    90:[3,3,2,1,1,1],91:[3,1,3,2,2,2],92:[3,1,3,1,2,2],93:[3,3,1,2,2,2],94:[3,1,2,2,3,2],95:[3,1,2,3,2,2],
-    96:[3,3,2,2,2,2],97:[3,1,2,2,2,3],98:[3,3,2,2,2,1],99:[3,1,2,2,3,1],100:[3,3,2,2,1,1],101:[3,1,2,3,2,1],
-    102:[3,3,2,3,1,1],103:[1,1,1,2,3,2],104:[1,2,1,1,3,2],105:[1,2,1,2,3,1],106:[1,1,1,2,2,3],
-  };
-  const START_B = 104;
-  const STOP = 106;
-  const displayText = text.slice(-12).toUpperCase();
-
-  // Calculate checksum and total bar width
-  let checksum = START_B;
-  let values = [START_B];
-  for (let i = 0; i < displayText.length; i++) {
-    const code = displayText.charCodeAt(i) - 32;
-    if (code >= 0 && code <= 95) {
-      values.push(code);
-      checksum += code * (i + 1);
+/* ==================== BARCODE GENERATOR (Code 128B via Canvas) ==================== */
+function generateBarcodeDataURL(text: string): string {
+  const PATTERNS = [
+    '212222','222122','222221','121223','121322','131222','122213','122312','132212','221213',
+    '221312','231212','112232','122132','122231','113222','123122','123221','223211','221132',
+    '221231','213212','223112','312131','311222','321122','321221','312212','322112','322211',
+    '212123','212321','232121','111323','131123','131321','112313','132113','132311','211313',
+    '231113','231311','112133','112331','132131','113123','113321','133121','313121','211331',
+    '231131','213113','213311','213131','311123','311321','331121','312113','312311','332111',
+    '314111','221411','431111','111224','111422','121124','121421','141122','141221','112214',
+    '112412','122114','122411','142112','142211','241211','221114','413111','241112','134111',
+    '111242','121142','121241','114212','124112','124211','411212','421112','421211','212141',
+    '214121','412121','111143','111341','131141','114113','114311','411113','411311','113141',
+    '114131','311141','411131','211412','211214','211232','2331112',
+  ];
+  try {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+    const displayText = text.slice(-12).toUpperCase();
+    const values: number[] = [104]; // Start Code B
+    for (let i = 0; i < displayText.length; i++) {
+      const code = displayText.charCodeAt(i) - 32;
+      if (code >= 0 && code <= 95) values.push(code);
     }
-  }
-  checksum = checksum % 103;
-  values.push(checksum);
-  values.push(STOP);
-
-  // Calculate total module width
-  let totalModules = 0;
-  for (const v of values) {
-    const pat = CODE128B_PATTERNS[v];
-    if (pat) totalModules += pat.reduce((a, b) => a + b, 0);
-  }
-  const moduleWidth = width / totalModules;
-
-  // Generate SVG rects
-  let x = 0;
-  let rects = '';
-  for (const v of values) {
-    const pat = CODE128B_PATTERNS[v];
-    if (!pat) continue;
-    for (let b = 0; b < pat.length; b++) {
-      if (b % 2 === 0) { // Bar (even index = black bar)
-        const w = pat[b] * moduleWidth;
-        rects += `<rect x="${x.toFixed(2)}" y="0" width="${w.toFixed(2)}" height="${height}" fill="#000"/>`;
+    let checksum = 104;
+    for (let i = 1; i < values.length; i++) checksum += values[i] * i;
+    values.push(checksum % 103, 106); // checksum + Stop
+    const bw = 2, bh = 40, qz = 10;
+    let totalW = qz * 2;
+    for (const v of values) { const p = PATTERNS[v]; if (p) for (let i = 0; i < p.length; i++) totalW += parseInt(p[i]) * bw; }
+    canvas.width = totalW; canvas.height = bh;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, totalW, bh);
+    let x = qz; ctx.fillStyle = '#000';
+    for (const v of values) {
+      const p = PATTERNS[v]; if (!p) continue;
+      for (let i = 0; i < p.length; i++) {
+        const w = parseInt(p[i]) * bw;
+        if (i % 2 === 0) ctx.fillRect(Math.round(x), 0, w, bh);
+        x += w;
       }
-      x += pat[b] * moduleWidth;
     }
-  }
-
-  return `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="width:${width}px;height:${height}px;">${rects}</svg>`;
+    return canvas.toDataURL('image/png');
+  } catch { return ''; }
 }
 
 async function getPrintHeader(): Promise<{ hospitalName: string; hospitalLogo: string; hospitalAddress: string; hospitalPhone: string }> {
@@ -565,7 +544,7 @@ export default function PharmacyPage() {
         <div class="info">
           <div class="info-row"><span class="label">Bill No:</span><span class="value">${saleBill.id.slice(-6).toUpperCase()}</span></div>
           <div style="text-align:center;padding:6px 0 2px;">
-            ${generateBarcodeSVG(saleBill.id, 220, 36)}
+            ${(() => { const bc = generateBarcodeDataURL(saleBill.id); return bc ? `<img src="${bc}" style="width:220px;height:40px;" />` : ''; })()}
             <div style="font-size:8px;font-family:'Courier New',monospace;color:#333;margin-top:1px;">${saleBill.id.slice(-10).toUpperCase()}</div>
           </div>
           <div class="info-row"><span class="label">Patient:</span><span class="value">${saleBill.patientName}</span></div>
