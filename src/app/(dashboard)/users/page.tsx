@@ -303,7 +303,7 @@ export default function UsersPage() {
       name: foundEmployee.name,
       email: loginId.trim(),
       password: loginPassword,
-      role: 'super_admin' as User['role'],
+      role: selectedRole as User['role'],
       department: selectedDept,
       active: true,
       permissions: selectedPermissions.length > 0 ? selectedPermissions : ['all'],

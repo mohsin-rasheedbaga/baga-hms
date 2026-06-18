@@ -43,6 +43,19 @@ jobs:
         shell: bash
         run: echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
+      - name: Create Delta Update ZIP
+        shell: bash
+        run: |
+          VERSION="${{ steps.pkg-version.outputs.VERSION }}"
+          mkdir -p delta-update
+          cp -r out delta-update/out
+          cp -r electron delta-update/electron
+          cd delta-update
+          7z a -tzip "../BAGA-HMS-Update-${VERSION}.zip" out electron
+          cd ..
+          echo "Delta ZIP created: BAGA-HMS-Update-${VERSION}.zip"
+          ls -lh "BAGA-HMS-Update-${VERSION}.zip"
+
       - name: Upload Setup Installer
         uses: actions/upload-artifact@v4
         with:
@@ -67,6 +80,12 @@ jobs:
           name: setup-blockmap
           path: dist-electron/BAGA-HMS-Setup-*.exe.blockmap
 
+      - name: Upload Delta Update ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: BAGA-HMS-Update-${{ steps.pkg-version.outputs.VERSION }}
+          path: BAGA-HMS-Update-${{ steps.pkg-version.outputs.VERSION }}.zip
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
@@ -78,16 +97,13 @@ jobs:
             ### Downloads:
             - **Setup Installer (.exe)** — Standard installer
             - **Portable (.exe)** — No installation required
-            ### Changes:
-            - Fixed CSS display — all Tailwind classes now working
-            - Navigation fix
-            - Hospital name fix
-            - Language set to English
+            - **Delta Update (.zip)** — Small update (recommended), preserves all data
           files: |
             dist-electron/BAGA-HMS-Setup-*.exe
             dist-electron/BAGA-HMS-Setup-*.exe.blockmap
             dist-electron/latest.yml
             dist-electron/BAGA-HMS-Portable-*.exe
+            BAGA-HMS-Update-${{ steps.pkg-version.outputs.VERSION }}.zip
           draft: false
           prerelease: false
         env:

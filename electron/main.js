@@ -327,18 +327,14 @@ async function checkForUpdates() {
       updateLog('WARNING: No latest.yml in release assets! Auto-update may not work correctly.');
     }
 
-    // Step 2: Find Setup exe for auto-update
+    // Step 2: Find delta update ZIP first (small ~20-30MB), then fallback to full installer (~134MB)
+    const deltaAsset = release.assets.find(a => a.name.includes('Update') && a.name.endsWith('.zip'));
     const setupAsset = release.assets.find(a => a.name.includes('Setup') && a.name.endsWith('.exe'));
     const portableAsset = release.assets.find(a => a.name.includes('Portable') && a.name.endsWith('.exe'));
-    const downloadAsset = setupAsset || portableAsset;
 
-    if (!downloadAsset) {
-      updateLog('No exe asset found in release.');
-      sendToAllWindows('update-status', { status: 'error', message: 'No downloadable update found.' });
-      return;
-    }
+    updateLog('Assets found — Delta: ' + (deltaAsset ? deltaAsset.name : 'NONE') +
+      ' | Setup: ' + (setupAsset ? setupAsset.name : 'NONE'));
 
-    updateLog('Update found: ' + latestVersion + ' — Asset: ' + downloadAsset.name + ' (' + Math.round(downloadAsset.size / 1024 / 1024) + 'MB)');
     sendToAllWindows('update-status', {
       status: 'available',
       version: latestVersion,
@@ -354,7 +350,62 @@ async function checkForUpdates() {
       }).show();
     } catch (e) {}
 
-    // Step 4: Download the update
+    // Step 4: ALWAYS create data backup before ANY update
+    createDataBackup(APP_VERSION);
+
+    // Step 5: Try DELTA update first (small, fast, no installer needed)
+    let useDelta = false;
+    if (deltaAsset) {
+      updateLog('Delta update available: ' + deltaAsset.name + ' (' + Math.round(deltaAsset.size / 1024 / 1024) + 'MB)');
+      useDelta = await performDeltaUpdate(latestVersion, deltaAsset.browser_download_url);
+    }
+
+    // Step 6: If delta succeeded, just restart
+    if (useDelta) {
+      sendToAllWindows('update-status', {
+        status: 'downloaded',
+        version: latestVersion,
+        isDelta: true,
+      });
+
+      try {
+        new Notification({
+          title: 'BAGA HMS — Update Ready!',
+          body: 'Version ' + latestVersion + ' downloaded (delta). Restart to apply.',
+          silent: false,
+        }).show();
+      } catch (e) {}
+
+      const result = await dialog.showMessageBox({
+        type: 'info',
+        title: 'Update Ready (Delta)',
+        message: 'BAGA HMS version ' + latestVersion + ' is ready.',
+        detail: 'Click "Restart Now" to close and restart with the new version.\nYour data is fully preserved.',
+        buttons: ['Restart Now', 'Later'],
+        noLink: true,
+        defaultId: 0,
+        cancelId: 1,
+      });
+
+      if (result.response === 0) {
+        updateLog('User chose Restart Now — restarting app for delta update...');
+        app.relaunch({ args: process.argv.slice(1) });
+        app.quit();
+      } else {
+        updateLog('User chose Later — delta update will apply on next restart.');
+      }
+      return;
+    }
+
+    // Step 7: FALLBACK — Full installer update
+    const downloadAsset = setupAsset || portableAsset;
+    if (!downloadAsset) {
+      updateLog('No exe asset found in release.');
+      sendToAllWindows('update-status', { status: 'error', message: 'No downloadable update found.' });
+      return;
+    }
+
+    updateLog('Falling back to full installer: ' + downloadAsset.name + ' (' + Math.round(downloadAsset.size / 1024 / 1024) + 'MB)');
     sendToAllWindows('update-status', { status: 'downloading', percent: 0 });
     const downloadUrl = downloadAsset.browser_download_url;
     updateLog('Downloading: ' + downloadUrl);
@@ -387,7 +438,7 @@ async function checkForUpdates() {
       filePath: updatePath,
     });
 
-    // Step 5: Notify user — show install dialog
+    // Step 8: Notify user — show install dialog
     try {
       new Notification({
         title: 'BAGA HMS — Update Ready!',
@@ -1458,6 +1509,332 @@ ipcMain.on('open-main-window', () => {
 // ============================================================
 
 // ============================================================
+// DATA BACKUP & RESTORE SYSTEM
+// Protects user data (medicines, customers, transactions) across updates
+// ============================================================
+
+const BACKUP_DIR = path.join(app.getPath('userData'), 'baga-backups');
+const DB_PATH_IN_USERDATA = path.join(app.getPath('userData'), 'baga-hms.db');
+
+/**
+ * Create a backup of the SQLite database before any update.
+ * Also backs up baga-store.json (license, machine ID) and custom logos.
+ */
+function createDataBackup(version) {
+  try {
+    if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupName = `backup-v${version}-${timestamp}`;
+    const backupDir = path.join(BACKUP_DIR, backupName);
+    fs.mkdirSync(backupDir, { recursive: true });
+
+    // Backup SQLite database
+    if (fs.existsSync(DB_PATH_IN_USERDATA)) {
+      fs.copyFileSync(DB_PATH_IN_USERDATA, path.join(backupDir, 'baga-hms.db'));
+      console.log(`[Backup] SQLite DB backed up: ${backupName}`);
+    }
+    // Backup WAL and SHM files (SQLite journal)
+    const walPath = DB_PATH_IN_USERDATA + '-wal';
+    const shmPath = DB_PATH_IN_USERDATA + '-shm';
+    if (fs.existsSync(walPath)) fs.copyFileSync(walPath, path.join(backupDir, 'baga-hms.db-wal'));
+    if (fs.existsSync(shmPath)) fs.copyFileSync(shmPath, path.join(backupDir, 'baga-hms.db-shm'));
+
+    // Backup store (license, machine ID)
+    const storePath = path.join(app.getPath('userData'), 'baga-store.json');
+    if (fs.existsSync(storePath)) {
+      fs.copyFileSync(storePath, path.join(backupDir, 'baga-store.json'));
+    }
+    // Backup config
+    const cfgPath = path.join(app.getPath('userData'), 'baga-config.json');
+    if (fs.existsSync(cfgPath)) {
+      fs.copyFileSync(cfgPath, path.join(backupDir, 'baga-config.json'));
+    }
+    // Backup custom logos
+    for (const ext of ['.png', '.jpg', '.jpeg']) {
+      const logoPath = path.join(app.getPath('userData'), 'hospital-logo-custom' + ext);
+      if (fs.existsSync(logoPath)) {
+        fs.copyFileSync(logoPath, path.join(backupDir, 'hospital-logo-custom' + ext));
+      }
+    }
+    // Backup counters and KV data
+    const countersPath = path.join(app.getPath('userData'), 'baga-counters.json');
+    if (fs.existsSync(countersPath)) {
+      fs.copyFileSync(countersPath, path.join(backupDir, 'baga-counters.json'));
+    }
+
+    // Save metadata
+    fs.writeFileSync(path.join(backupDir, 'backup-meta.json'), JSON.stringify({
+      version,
+      timestamp: new Date().toISOString(),
+      dbExists: fs.existsSync(DB_PATH_IN_USERDATA),
+    }, null, 2), 'utf8');
+
+    // Keep only last 5 backups to save disk space
+    cleanupOldBackups(5);
+
+    console.log(`[Backup] Full data backup created: ${backupName}`);
+    updateLog(`Data backup created before update: ${backupName}`);
+    return true;
+  } catch (e) {
+    console.error('[Backup] Failed to create backup:', e.message);
+    updateLog('WARNING: Data backup failed: ' + e.message);
+    return false;
+  }
+}
+
+/**
+ * Restore data from the most recent backup if current DB is empty or missing.
+ * Called on startup to ensure data is never lost.
+ */
+function restoreDataIfMissing() {
+  try {
+    // Check if DB exists and has meaningful data
+    if (db && db.getAll) {
+      try {
+        const users = db.getAll('users');
+        if (users && users.length > 0) {
+          console.log('[Restore] DB has data, no restore needed.');
+          return;
+        }
+      } catch (e) { /* DB might be empty, continue */ }
+    }
+
+    // DB is empty or missing — try to restore from backup
+    if (!fs.existsSync(BACKUP_DIR)) {
+      console.log('[Restore] No backup directory found.');
+      return;
+    }
+
+    const backups = fs.readdirSync(BACKUP_DIR)
+      .filter(f => fs.statSync(path.join(BACKUP_DIR, f)).isDirectory())
+      .sort()
+      .reverse(); // newest first
+
+    if (backups.length === 0) {
+      console.log('[Restore] No backups found.');
+      return;
+    }
+
+    const latestBackup = path.join(BACKUP_DIR, backups[0]);
+    const backupDb = path.join(latestBackup, 'baga-hms.db');
+
+    if (!fs.existsSync(backupDb)) {
+      console.log('[Restore] Latest backup has no DB file.');
+      return;
+    }
+
+    console.log(`[Restore] Restoring data from backup: ${backups[0]}`);
+    updateLog(`Restoring data from backup: ${backups[0]}`);
+
+    // Restore SQLite DB
+    fs.copyFileSync(backupDb, DB_PATH_IN_USERDATA);
+
+    // Restore WAL/SHM if they exist in backup
+    for (const suffix of ['-wal', '-shm']) {
+      const src = path.join(latestBackup, 'baga-hms.db' + suffix);
+      if (fs.existsSync(src)) fs.copyFileSync(src, DB_PATH_IN_USERDATA + suffix);
+    }
+
+    // Restore store (license)
+    const storeBak = path.join(latestBackup, 'baga-store.json');
+    if (fs.existsSync(storeBak)) {
+      const storeDest = path.join(app.getPath('userData'), 'baga-store.json');
+      fs.copyFileSync(storeBak, storeDest);
+    }
+
+    // Restore custom logos
+    for (const ext of ['.png', '.jpg', '.jpeg']) {
+      const src = path.join(latestBackup, 'hospital-logo-custom' + ext);
+      if (fs.existsSync(src)) {
+        fs.copyFileSync(src, path.join(app.getPath('userData'), 'hospital-logo-custom' + ext));
+      }
+    }
+
+    // Reinitialize database with restored data
+    try {
+      if (db && db.closeDatabase) db.closeDatabase();
+      db = null;
+      db = require('./database');
+      db.initDatabase(app);
+      console.log('[Restore] Database reinitialized with restored data.');
+    } catch (e) {
+      console.error('[Restore] Failed to reinitialize DB after restore:', e.message);
+    }
+
+    console.log('[Restore] Data restoration complete.');
+  } catch (e) {
+    console.error('[Restore] Data restoration failed:', e.message);
+  }
+}
+
+function cleanupOldBackups(keepCount) {
+  try {
+    if (!fs.existsSync(BACKUP_DIR)) return;
+    const backups = fs.readdirSync(BACKUP_DIR)
+      .filter(f => fs.statSync(path.join(BACKUP_DIR, f)).isDirectory())
+      .sort()
+      .reverse();
+    // Delete backups beyond keepCount
+    for (let i = keepCount; i < backups.length; i++) {
+      const dir = path.join(BACKUP_DIR, backups[i]);
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+        console.log(`[Backup] Removed old backup: ${backups[i]}`);
+      } catch (e) {}
+    }
+  } catch (e) {}
+}
+
+// ============================================================
+// DELTA UPDATE SYSTEM
+// Downloads only changed files (out/ + electron/) instead of full installer
+// Falls back to full installer if delta ZIP not available
+// ============================================================
+
+/**
+ * Perform a delta/in-place update by downloading a ZIP of changed files.
+ * The ZIP contains: out/ (Next.js static export) + electron/ (main process)
+ * This avoids running the NSIS installer entirely, preserving userData.
+ */
+async function performDeltaUpdate(latestVersion, downloadUrl) {
+  const updateZipPath = path.join(app.getPath('userData'), `BAGA-HMS-Delta-${latestVersion}.zip`);
+  const extractDir = path.join(app.getPath('userData'), `BAGA-HMS-Delta-Extract-${latestVersion}`);
+
+  try {
+    // Step 1: Download delta ZIP
+    updateLog(`[Delta] Downloading: ${downloadUrl}`);
+    sendToAllWindows('update-status', { status: 'downloading', percent: 0, isDelta: true });
+
+    await httpsDownload(downloadUrl, updateZipPath, (percent) => {
+      sendToAllWindows('update-status', { status: 'downloading', percent, isDelta: true });
+      updateLog(`[Delta] Download progress: ${percent}%`);
+    });
+
+    // Step 2: Extract ZIP (using Node.js built-in or fallback)
+    updateLog('[Delta] Extracting update...');
+    sendToAllWindows('update-status', { status: 'extracting', isDelta: true });
+
+    if (!fs.existsSync(extractDir)) fs.mkdirSync(extractDir, { recursive: true });
+
+    // Use Node.js built-in zlib for ZIP extraction
+    const { execSync } = require('child_process');
+    try {
+      // Try PowerShell (available on all modern Windows)
+      execSync(`powershell -NoProfile -Command "Expand-Archive -Path '${updateZipPath}' -DestinationPath '${extractDir}' -Force"`, {
+        stdio: 'pipe', timeout: 60000
+      });
+    } catch (pwErr) {
+      // Fallback: try tar (Windows 10+ has tar)
+      try {
+        execSync(`tar -xf "${updateZipPath}" -C "${extractDir}"`, { stdio: 'pipe', timeout: 60000 });
+      } catch (tarErr) {
+        throw new Error('Failed to extract update ZIP. Will use full installer instead.');
+      }
+    }
+
+    // Step 3: Determine installation directory (where electron/main.js lives)
+    const installDir = path.dirname(__dirname); // Parent of electron/ directory
+    updateLog(`[Delta] Install directory: ${installDir}`);
+
+    // Step 4: Copy updated files to installation directory
+    const deltaOut = path.join(extractDir, 'out');
+    const deltaElectron = path.join(extractDir, 'electron');
+
+    if (fs.existsSync(deltaOut)) {
+      const targetOut = path.join(installDir, 'out');
+      copyDirRecursive(deltaOut, targetOut);
+      updateLog('[Delta] Updated out/ (Next.js static export)');
+    }
+
+    if (fs.existsSync(deltaElectron)) {
+      const targetElectron = path.join(installDir, 'electron');
+      // Don't overwrite database.js or main.js while they're in use — copy to temp first
+      const tempElectron = path.join(app.getPath('userData'), 'electron-temp');
+      if (fs.existsSync(tempElectron)) fs.rmSync(tempElectron, { recursive: true, force: true });
+      copyDirRecursive(deltaElectron, tempElectron);
+      updateLog('[Delta] Electron files staged in temp');
+    }
+
+    // Step 5: Save delta update info for post-restart application
+    const pendingDeltaPath = path.join(app.getPath('userData'), 'baga-pending-delta.json');
+    fs.writeFileSync(pendingDeltaPath, JSON.stringify({
+      version: latestVersion,
+      extractDir,
+      tempElectron: path.join(app.getPath('userData'), 'electron-temp'),
+      appliedAt: new Date().toISOString(),
+    }, null, 2), 'utf8');
+
+    // Clean up ZIP
+    try { fs.unlinkSync(updateZipPath); } catch (e) {}
+
+    updateLog(`[Delta] Delta update staged for v${latestVersion}. Restart required.`);
+    return true;
+
+  } catch (err) {
+    updateLog(`[Delta] Delta update failed: ${err.message}. Will try full installer.`);
+    // Clean up partial extraction
+    try { if (fs.existsSync(extractDir)) fs.rmSync(extractDir, { recursive: true, force: true }); } catch (e) {}
+    try { if (fs.existsSync(updateZipPath)) fs.unlinkSync(updateZipPath); } catch (e) {}
+    return false;
+  }
+}
+
+/**
+ * Apply staged delta update files (called on startup before DB init)
+ */
+function applyStagedDeltaUpdate() {
+  try {
+    const pendingDeltaPath = path.join(app.getPath('userData'), 'baga-pending-delta.json');
+    if (!fs.existsSync(pendingDeltaPath)) return;
+
+    const pending = JSON.parse(fs.readFileSync(pendingDeltaPath, 'utf8'));
+    if (pending.version !== APP_VERSION) {
+      // Version mismatch — this update was for a different version, discard
+      try { fs.unlinkSync(pendingDeltaPath); } catch (e) {}
+      return;
+    }
+
+    console.log(`[Delta] Applying staged delta update for v${pending.version}...`);
+    const installDir = path.dirname(__dirname);
+
+    // Copy staged electron files to install directory
+    if (pending.tempElectron && fs.existsSync(pending.tempElectron)) {
+      const targetElectron = path.join(installDir, 'electron');
+      copyDirRecursive(pending.tempElectron, targetElectron);
+      console.log('[Delta] Electron files applied successfully');
+      // Clean up temp
+      try { fs.rmSync(pending.tempElectron, { recursive: true, force: true }); } catch (e) {}
+    }
+
+    // Clean up extraction dir
+    if (pending.extractDir && fs.existsSync(pending.extractDir)) {
+      try { fs.rmSync(pending.extractDir, { recursive: true, force: true }); } catch (e) {}
+    }
+
+    // Remove pending marker
+    try { fs.unlinkSync(pendingDeltaPath); } catch (e) {}
+
+    console.log('[Delta] Delta update applied successfully!');
+  } catch (e) {
+    console.error('[Delta] Failed to apply staged delta update:', e.message);
+  }
+}
+
+function copyDirRecursive(src, dest) {
+  if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+// ============================================================
 // CLEANUP OLD UPDATE FILES ON STARTUP
 // ============================================================
 function cleanupOldUpdateFiles() {
@@ -1516,6 +1893,9 @@ app.whenReady().then(async () => {
   // Clean up stale update files on startup
   cleanupOldUpdateFiles();
 
+  // Apply staged delta update (if one was downloaded but not yet applied)
+  applyStagedDeltaUpdate();
+
   console.log('='.repeat(60));
   console.log(`[BAGA HMS] v${APP_VERSION} starting...`);
   console.log(`[BAGA HMS] Electron: ${process.versions.electron}`);
@@ -1529,6 +1909,12 @@ app.whenReady().then(async () => {
 
   // 1. Initialize SQLite (non-fatal if it fails)
   initDatabaseSafe();
+
+  // 2. Check if data needs restoration (DB is empty after update)
+  //    This runs after DB init so we can check if data exists
+  setTimeout(() => {
+    restoreDataIfMissing();
+  }, 2000); // Delay 2s to let DB fully initialize
 
   // 2. Start HTTP server (non-fatal if it fails)
   try {

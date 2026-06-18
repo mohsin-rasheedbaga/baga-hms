@@ -262,7 +262,22 @@ export default function LoginPage() {
       }
     }
 
-    // Try API login first (for licensed mode) with 5s timeout for offline fallback
+    // Check local users FIRST in Electron mode (User Management created users live in SQLite)
+    // This ensures locally created users always work, even if remote API rejects them
+    if (!user && isElectron) {
+      try {
+        const localUsers = getUsers();
+        const localUser = localUsers.find(u => u.email === loginId.trim() && u.password === password.trim() && u.active);
+        if (localUser) {
+          console.log('Login: Found user in local database:', localUser.email);
+          user = localUser;
+        }
+      } catch (e) {
+        console.error('Local user lookup failed:', e);
+      }
+    }
+
+    // Try API login (for licensed mode) with 5s timeout — only if NOT found locally
     if (!user && isElectron && licenseMode === 'licensed') {
       try {
         const loginPromise = (window as any).bagaAPI.apiLogin({ username: loginId.trim(), password: password.trim() });
@@ -280,14 +295,9 @@ export default function LoginPage() {
             permissions: ['all'],
           };
           cacheUserLocally(user);
-        } else if (result.error && result.error.toLowerCase().includes('connection')) {
-          // Network/connection error — try local cache instead of showing error
-          console.log('API connection error, falling back to local cache');
-          isOfflineLogin = true;
         } else {
-          setError(result.error || 'Invalid credentials');
-          setLoading(false);
-          return;
+          // API returned error (invalid credentials etc.) — fall through to local check
+          console.log('API login failed, falling back to local users:', result.error);
         }
       } catch (e) {
         console.error('API login failed (no internet?), trying local cache:', e);
