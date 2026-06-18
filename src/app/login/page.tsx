@@ -228,35 +228,23 @@ export default function LoginPage() {
       };
     }
 
-    // Try LAN server login (for LAN sharing mode)
+    // LAN mode: validate against locally synced users (syncDataFromServer already downloaded them)
+    // This avoids "Database not available" errors when SQLite isn't accessible via HTTP
     if (!user && !isElectron && isLanMode()) {
       try {
-        const host = window.location.hostname;
-        const port = window.location.port || '18765';
-        const resp = await fetch(`${window.location.protocol}//${host}:${port}/api/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: loginId.trim(), password: password.trim() }),
-        });
-        const result = await resp.json();
-        if (result.success) {
-          user = {
-            id: result.user.id,
-            name: result.user.name,
-            role: result.user.role,
-            department: result.user.department || '',
-            email: result.user.email || loginId.trim(),
-            password: password.trim(),
-            active: true,
-            permissions: result.user.permissions || ['all'],
-          };
+        const lanUsers = getUsers();
+        const lanUser = lanUsers.find(u => u.email === loginId.trim() && u.password === password.trim() && u.active);
+        if (lanUser) {
+          console.log('LAN Login: Found user in synced data:', lanUser.email);
+          user = lanUser;
         } else {
-          setError(result.error || 'Invalid Login ID or Password');
+          setError('Invalid Login ID or Password');
           setLoading(false);
           return;
         }
       } catch (e) {
-        setError('Cannot connect to server. Please check the sharing link.');
+        console.error('LAN local user lookup failed:', e);
+        setError('Login failed. Please try refreshing the page.');
         setLoading(false);
         return;
       }
@@ -326,6 +314,7 @@ export default function LoginPage() {
       department: user.department,
       licenseType: licenseType,
       mode: licenseMode,
+      permissions: user.permissions || ['all'],
     };
     localStorage.setItem('baga_session', JSON.stringify(sessionData));
     if (isElectron) {
