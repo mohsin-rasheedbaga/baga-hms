@@ -53,8 +53,8 @@ function setInstalledVersion(version) {
   } catch (e) {}
 }
 
-// On every app start, update the installed version tracker
-setInstalledVersion(APP_VERSION);
+// IMPORTANT: Do NOT update version tracker here — it must be read first in the startup sequence
+// to detect version changes and create backups. It's updated AFTER the comparison.
 console.log('[BAGA HMS] Package version:', APP_VERSION, '| Previous installed:', getInstalledVersion() || 'N/A');
 
 function getMachineId() {
@@ -553,11 +553,30 @@ function handleLanApi(req, res, url, method) {
     return readBody(({ username, password }) => {
       if (!username || !password) return sendJson(400, { success: false, error: 'Missing credentials' });
       try {
+        console.log(`[API Login] Attempt: username='${username.trim()}'`);
         const dbResult = safeDbGetAll('users');
-        if (!dbResult.success || !dbResult.data) return sendJson(200, { success: false, error: 'Database not available. Please make sure the main app is running.' });
+        if (!dbResult.success || !dbResult.data) {
+          console.log(`[API Login] DB error:`, dbResult.error || 'no data');
+          return sendJson(200, { success: false, error: 'Database not available. Please make sure the main app is running.' });
+        }
         const users = dbResult.data;
-        const user = users.find(u => u.email === username.trim() && u.password === password.trim() && u.active !== false);
-        if (!user) return sendJson(200, { success: false, error: 'Invalid Login ID or Password' });
+        console.log(`[API Login] Found ${users.length} users in database`);
+        // Match by email/login_id field (trim both sides for safety)
+        const trimmedUser = username.trim();
+        const trimmedPass = password.trim();
+        const user = users.find(u => {
+          const uEmail = (u.email || u.login_id || '').trim();
+          const uPass = (u.password || '').trim();
+          const isActive = u.active !== false && u.active !== 'false';
+          return uEmail === trimmedUser && uPass === trimmedPass && isActive;
+        });
+        if (!user) {
+          // Debug: log available usernames (not passwords) to help diagnose
+          const activeEmails = users.filter(u => u.active !== false).map(u => (u.email || u.login_id || '').trim());
+          console.log(`[API Login] No match. Active logins: [${activeEmails.join(', ')}], attempted: '${trimmedUser}'`);
+          return sendJson(200, { success: false, error: 'Invalid Login ID or Password' });
+        }
+        console.log(`[API Login] Success: ${user.email} (${user.name})`);
         return sendJson(200, {
           success: true,
           user: { id: user.id, name: user.name, role: user.role, department: user.department || '', email: user.email, active: user.active, permissions: user.permissions || ['all'] },
@@ -1600,21 +1619,21 @@ function createDataBackup(version) {
  */
 function restoreDataIfMissing() {
   try {
-    // Check if DB exists and has meaningful data (check multiple tables, not just users)
+    // Check if DB exists and has USER-CREATED data (not just seed data)
+    // Seed data has users like 'admin', 'reception', 'doctor', 'pharmacy', etc.
+    // If ONLY seed data exists, the DB is effectively "empty" from user's perspective
     if (db && db.getAll) {
       try {
-        let totalRecords = 0;
-        const checkTables = ['users', 'patients', 'medicines', 'employees'];
-        for (const table of checkTables) {
-          try {
-            const rows = db.getAll(table);
-            if (rows && Array.isArray(rows)) totalRecords += rows.length;
-          } catch (e) { /* table might not exist */ }
-        }
-        if (totalRecords > 0) {
-          console.log(`[Restore] DB has ${totalRecords} total records across key tables, no restore needed.`);
+        const users = db.getAll('users');
+        const hasUserCreatedData = users && Array.isArray(users) && users.some(u => {
+          // Check for any user that's NOT a seed user (id: u1-u8)
+          return u.id && !u.id.startsWith('u') && !u.id.startsWith('seed');
+        });
+        if (hasUserCreatedData) {
+          console.log(`[Restore] DB has user-created data (${users.length} users), no restore needed.`);
           return;
         }
+        console.log(`[Restore] DB has only seed data (${users ? users.length : 0} users). Checking backups...`);
       } catch (e) { /* DB might be empty, continue */ }
     }
 
@@ -1841,8 +1860,12 @@ function applyStagedDeltaUpdate() {
     if (!fs.existsSync(pendingDeltaPath)) return;
 
     const pending = JSON.parse(fs.readFileSync(pendingDeltaPath, 'utf8'));
-    if (pending.version !== APP_VERSION) {
-      // Version mismatch — this update was for a different version, discard
+    // Since delta updates only replace out/ and electron/ (NOT package.json),
+    // APP_VERSION might still be the old version. The delta was staged for
+    // a specific new version, so we should apply it regardless of current version.
+    // Just verify the staged files exist before applying.
+    if (!pending.tempElectron || !fs.existsSync(pending.tempElectron)) {
+      // No staged files to apply — this is a stale marker, clean up
       try { fs.unlinkSync(pendingDeltaPath); } catch (e) {}
       return;
     }
@@ -1963,13 +1986,15 @@ app.whenReady().then(async () => {
   // 1. Initialize SQLite (non-fatal if it fails)
   initDatabaseSafe();
 
-  // 2. Create startup backup (first launch of this version creates a backup)
+  // 2. Check version change BEFORE updating tracker — create backup if version changed
   const prevVersion = getInstalledVersion();
   if (prevVersion && prevVersion !== APP_VERSION) {
     // Version changed — this is an update! Create backup BEFORE restore check
     console.log(`[BAGA HMS] Version changed: ${prevVersion} → ${APP_VERSION}`);
-    createDataBackup(APP_VERSION);
+    createDataBackup(prevVersion); // Backup with OLD version label
   }
+  // NOW update the version tracker (after comparison)
+  setInstalledVersion(APP_VERSION);
 
   // 3. Check if data needs restoration (DB is empty after update)
   //    This runs after DB init so we can check if data exists

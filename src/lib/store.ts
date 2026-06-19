@@ -1,6 +1,6 @@
 /* ========== DATA STORE - Offline / LocalStorage + Electron SQLite ========== */
 import type { Hospital, HospitalSettings, User, Patient, Visit, LabOrder, Prescription, DispenseRecord, Bill, XRayOrder, UltrasoundOrder, Appointment, Admission, MedicineItem, LabTestCatalog, RoomType, Employee, AttendanceRecord, SalaryRecord } from './types';
-import { isElectron, dbGetAll, dbSetAll, dbSetById, dbGetCounter, dbSetCounter } from './db-bridge';
+import { isElectron, isLanMode, dbGetAll, dbSetAll, dbSetById, dbGetCounter, dbSetCounter } from './db-bridge';
 
 const KEYS = {
   hospital: 'baga_hospital',
@@ -72,6 +72,17 @@ function get<T>(key: string, fallback: T): T {
     }
   }
 
+  // Try LAN server API (for browser clients connected via LAN)
+  if (isLanMode() && TABLES[key]) {
+    const data = dbGetAll(TABLES[key]);
+    if (data !== null) {
+      if (SINGLE_OBJECT_KEYS.includes(key)) {
+        if (Array.isArray(data) && data.length > 0) return data[0] as T;
+      }
+      return data as T;
+    }
+  }
+
   // Fall back to localStorage
   try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : fallback; }
   catch { return fallback; }
@@ -94,6 +105,17 @@ function set<T>(key: string, data: T): void {
         // database.js setAll expects flat objects with id field
         if (dbSetAll(tableName, data)) return;
       }
+    }
+  }
+
+  // Try LAN server API (for browser clients connected via LAN)
+  if (isLanMode() && TABLES[key]) {
+    if (!Array.isArray(data)) {
+      const item = data as any;
+      const id = item.id || 'main';
+      if (dbSetById(TABLES[key], id, item)) return;
+    } else {
+      if (dbSetAll(TABLES[key], data)) return;
     }
   }
 

@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getUsers, addUser, updateUser, deleteUser, genId, getEmployees } from '@/lib/store';
 import type { User, Employee } from '@/lib/types';
 import { fetchLicenseInfo } from '@/lib/db-bridge';
+import { ALL_PERMISSIONS, PERMISSION_LABELS, PERMISSION_GROUPS, getModulePermissions as getModulePermissionsFromConfig } from '@/lib/permissions';
 
 const ROLES = [
   { value: 'reception', label: 'Reception', dept: 'Reception' },
@@ -12,76 +13,6 @@ const ROLES = [
   { value: 'xray', label: 'Radiologist', dept: 'X-Ray' },
   { value: 'ultrasound', label: 'USG Technician', dept: 'Ultrasound' },
   { value: 'accounts', label: 'Accountant', dept: 'Accounts' },
-];
-
-const ALL_PERMISSIONS = [
-  'register_patient', 'new_visit', 'search_patient', 'card_renewal', 'print_card',
-  'order_lab', 'prescribe', 'order_xray', 'order_ultrasound', 'write_notes',
-  'discharge', 'view_reports', 'view_lab_orders', 'enter_results', 'print_report',
-  'view_prescriptions', 'dispense_medicine', 'view_bills', 'collect_payment', 'daily_report',
-  'return_medicine', 'view_profit', 'add_inventory', 'view_statement',
-  'manage_employees', 'manage_users', 'manage_settings',
-];
-
-const PERMISSION_LABELS: Record<string, string> = {
-  register_patient: 'Register Patient',
-  new_visit: 'New Visit',
-  search_patient: 'Search Patient',
-  card_renewal: 'Card Renewal',
-  print_card: 'Print Card',
-  order_lab: 'Order Lab',
-  prescribe: 'Prescribe',
-  order_xray: 'Order X-Ray',
-  order_ultrasound: 'Order Ultrasound',
-  write_notes: 'Write Notes',
-  discharge: 'Discharge',
-  view_reports: 'View Reports',
-  view_lab_orders: 'View Lab Orders',
-  enter_results: 'Enter Results',
-  print_report: 'Print Report',
-  view_prescriptions: 'View Prescriptions',
-  dispense_medicine: 'Dispense Medicine (POS)',
-  view_bills: 'View Bills',
-  collect_payment: 'Collect Payment',
-  daily_report: 'Daily Report',
-  return_medicine: 'Return Medicine',
-  view_profit: 'View Net Profit',
-  add_inventory: 'Medicine Inventory',
-  view_statement: 'My Statement',
-  manage_employees: 'Employees (HR)',
-  manage_users: 'User Management',
-  manage_settings: 'Settings',
-};
-
-const PERMISSION_GROUPS = [
-  {
-    title: 'Patient & Card',
-    perms: ['register_patient', 'new_visit', 'search_patient', 'card_renewal', 'print_card'],
-  },
-  {
-    title: 'Clinical',
-    perms: ['order_lab', 'prescribe', 'order_xray', 'order_ultrasound', 'write_notes', 'discharge'],
-  },
-  {
-    title: 'Laboratory',
-    perms: ['view_lab_orders', 'enter_results', 'print_report', 'view_reports'],
-  },
-  {
-    title: 'Pharmacy & Billing',
-    perms: ['view_prescriptions', 'dispense_medicine', 'view_bills', 'collect_payment', 'daily_report'],
-  },
-  {
-    title: 'Sensitive Operations (PIN Protected)',
-    perms: ['return_medicine', 'view_profit'],
-  },
-  {
-    title: 'Inventory & Data',
-    perms: ['add_inventory', 'view_statement'],
-  },
-  {
-    title: 'Administration',
-    perms: ['manage_employees', 'manage_users', 'manage_settings'],
-  },
 ];
 
 const DEPT_ROLE_MAP: Record<string, string> = {
@@ -232,31 +163,8 @@ export default function UsersPage() {
     }
   };
 
-  // ---- Module-Aware Permissions ----
-  const getModulePermissions = () => {
-    if (licenseType === 'pharmacy') {
-      const perms = ['dispense_medicine', 'return_medicine', 'add_inventory', 'view_statement', 'manage_employees', 'manage_users', 'manage_settings'];
-      return {
-        groups: PERMISSION_GROUPS.filter(g => g.perms.some(p => perms.includes(p))),
-        all: ALL_PERMISSIONS.filter(p => perms.includes(p)),
-      };
-    }
-    if (licenseType === 'lab') {
-      const perms = ['view_lab_orders', 'enter_results', 'print_report', 'view_reports', 'add_inventory', 'view_profit', 'manage_employees', 'manage_users', 'manage_settings'];
-      return {
-        groups: PERMISSION_GROUPS.filter(g => g.perms.some(p => perms.includes(p))),
-        all: ALL_PERMISSIONS.filter(p => perms.includes(p)),
-      };
-    }
-    if (licenseType === 'clinic') {
-      const perms = ['register_patient', 'new_visit', 'search_patient', 'dispense_medicine', 'view_bills', 'collect_payment', 'view_lab_orders', 'enter_results', 'manage_employees', 'manage_users', 'manage_settings'];
-      return {
-        groups: PERMISSION_GROUPS.filter(g => g.perms.some(p => perms.includes(p))),
-        all: ALL_PERMISSIONS.filter(p => perms.includes(p)),
-      };
-    }
-    return { groups: PERMISSION_GROUPS, all: ALL_PERMISSIONS };
-  };
+  // ---- Module-Aware Permissions (uses shared permissions config) ----
+  const getLocalModulePermissions = () => getModulePermissionsFromConfig(licenseType);
 
   // ---- Permission Toggles (Add Modal) ----
   const toggleAddPermission = (perm: string) => {
@@ -266,7 +174,7 @@ export default function UsersPage() {
   };
 
   const selectAllPermissions = () => {
-    setSelectedPermissions(getModulePermissions().all);
+    setSelectedPermissions(getLocalModulePermissions().all);
   };
 
   const clearAllPermissions = () => {
@@ -796,7 +704,7 @@ export default function UsersPage() {
                   </div>
 
                   <div className="space-y-3">
-                    {getModulePermissions().groups.map((group) => {
+                    {getLocalModulePermissions().groups.map((group) => {
                       const allGroupSelected = group.perms.every((p) =>
                         selectedPermissions.includes(p)
                       );
@@ -863,7 +771,7 @@ export default function UsersPage() {
                   <div className="mt-2 text-xs text-slate-400">
                     {selectedPermissions.length === 0
                       ? 'No permissions selected'
-                      : `${selectedPermissions.length} of ${getModulePermissions().all.length} permissions granted`}
+                      : `${selectedPermissions.length} of ${getLocalModulePermissions().all.length} permissions granted`}
                   </div>
                 </div>
 
@@ -961,7 +869,7 @@ export default function UsersPage() {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => setEditingUser({ ...editingUser, permissions: [...getModulePermissions().all] })}
+                      onClick={() => setEditingUser({ ...editingUser, permissions: [...getLocalModulePermissions().all] })}
                       className="btn btn-outline btn-sm text-xs"
                     >
                       Select All
@@ -976,7 +884,7 @@ export default function UsersPage() {
                   </div>
                 </div>
                 <div className="space-y-3">
-                  {getModulePermissions().groups.map((group) => {
+                  {getLocalModulePermissions().groups.map((group) => {
                     const allGroupSelected = group.perms.every((p) =>
                       editingUser.permissions.includes(p)
                     );
