@@ -228,23 +228,55 @@ export default function LoginPage() {
       };
     }
 
-    // LAN mode: validate against locally synced users (syncDataFromServer already downloaded them)
-    // This avoids "Database not available" errors when SQLite isn't accessible via HTTP
+    // LAN mode: validate against server's SQLite database FIRST (always has latest data)
+    // Then fall back to locally synced data if server is unreachable
     if (!user && !isElectron && isLanMode()) {
+      // Try /api/login endpoint first (queries SQLite directly on the server)
       try {
-        const lanUsers = getUsers();
-        const lanUser = lanUsers.find(u => u.email === loginId.trim() && u.password === password.trim() && u.active);
-        if (lanUser) {
-          console.log('LAN Login: Found user in synced data:', lanUser.email);
-          user = lanUser;
-        } else {
-          setError('Invalid Login ID or Password');
-          setLoading(false);
-          return;
+        const baseUrl = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
+        const loginResp = await fetch(baseUrl + '/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: loginId.trim(), password: password.trim() }),
+        });
+        if (loginResp.ok) {
+          const loginResult = await loginResp.json();
+          if (loginResult.success && loginResult.user) {
+            console.log('LAN Login: Authenticated via /api/login:', loginResult.user.email);
+            user = {
+              id: loginResult.user.id,
+              name: loginResult.user.name,
+              role: loginResult.user.role,
+              department: loginResult.user.department || '',
+              email: loginResult.user.email,
+              password: password.trim(),
+              active: true,
+              permissions: loginResult.user.permissions || ['all'],
+            };
+          } else {
+            console.log('LAN Login: Server rejected credentials');
+          }
         }
       } catch (e) {
-        console.error('LAN local user lookup failed:', e);
-        setError('Login failed. Please try refreshing the page.');
+        console.error('LAN /api/login failed, trying local cache:', e);
+      }
+
+      // Fall back to locally synced users if API login failed
+      if (!user) {
+        try {
+          const lanUsers = getUsers();
+          const lanUser = lanUsers.find(u => u.email === loginId.trim() && u.password === password.trim() && u.active);
+          if (lanUser) {
+            console.log('LAN Login: Found user in synced localStorage data:', lanUser.email);
+            user = lanUser;
+          }
+        } catch (e) {
+          console.error('LAN local user lookup failed:', e);
+        }
+      }
+
+      if (!user) {
+        setError('Invalid Login ID or Password');
         setLoading(false);
         return;
       }

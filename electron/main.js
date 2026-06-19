@@ -1528,11 +1528,22 @@ function createDataBackup(version) {
     const backupDir = path.join(BACKUP_DIR, backupName);
     fs.mkdirSync(backupDir, { recursive: true });
 
-    // Backup SQLite database
+    // Check if DB file exists and has data
+    let hasData = false;
     if (fs.existsSync(DB_PATH_IN_USERDATA)) {
-      fs.copyFileSync(DB_PATH_IN_USERDATA, path.join(backupDir, 'baga-hms.db'));
-      console.log(`[Backup] SQLite DB backed up: ${backupName}`);
+      const stat = fs.statSync(DB_PATH_IN_USERDATA);
+      if (stat.size >= 1024) { // At least 1KB = has some data
+        hasData = true;
+        fs.copyFileSync(DB_PATH_IN_USERDATA, path.join(backupDir, 'baga-hms.db'));
+        console.log(`[Backup] SQLite DB backed up: ${backupName} (${Math.round(stat.size / 1024)}KB)`);
+      } else {
+        console.log(`[Backup] DB file too small (${stat.size} bytes), skipping backup.`);
+        // Clean up empty backup dir
+        try { fs.rmdirSync(backupDir); } catch (e) {}
+        return false;
+      }
     }
+
     // Backup WAL and SHM files (SQLite journal)
     const walPath = DB_PATH_IN_USERDATA + '-wal';
     const shmPath = DB_PATH_IN_USERDATA + '-shm';
@@ -1567,13 +1578,14 @@ function createDataBackup(version) {
       version,
       timestamp: new Date().toISOString(),
       dbExists: fs.existsSync(DB_PATH_IN_USERDATA),
+      dbSize: fs.existsSync(DB_PATH_IN_USERDATA) ? fs.statSync(DB_PATH_IN_USERDATA).size : 0,
     }, null, 2), 'utf8');
 
-    // Keep only last 5 backups to save disk space
-    cleanupOldBackups(5);
+    // Keep only last 10 backups to save disk space (increased from 5)
+    cleanupOldBackups(10);
 
     console.log(`[Backup] Full data backup created: ${backupName}`);
-    updateLog(`Data backup created before update: ${backupName}`);
+    updateLog(`Data backup created: ${backupName}`);
     return true;
   } catch (e) {
     console.error('[Backup] Failed to create backup:', e.message);
@@ -1588,12 +1600,19 @@ function createDataBackup(version) {
  */
 function restoreDataIfMissing() {
   try {
-    // Check if DB exists and has meaningful data
+    // Check if DB exists and has meaningful data (check multiple tables, not just users)
     if (db && db.getAll) {
       try {
-        const users = db.getAll('users');
-        if (users && users.length > 0) {
-          console.log('[Restore] DB has data, no restore needed.');
+        let totalRecords = 0;
+        const checkTables = ['users', 'patients', 'medicines', 'employees'];
+        for (const table of checkTables) {
+          try {
+            const rows = db.getAll(table);
+            if (rows && Array.isArray(rows)) totalRecords += rows.length;
+          } catch (e) { /* table might not exist */ }
+        }
+        if (totalRecords > 0) {
+          console.log(`[Restore] DB has ${totalRecords} total records across key tables, no restore needed.`);
           return;
         }
       } catch (e) { /* DB might be empty, continue */ }
@@ -1623,8 +1642,26 @@ function restoreDataIfMissing() {
       return;
     }
 
+    // Check backup DB has data
+    try {
+      const backupSize = fs.statSync(backupDb).size;
+      if (backupSize < 1024) {
+        console.log('[Restore] Backup DB is too small, skipping.');
+        return;
+      }
+    } catch (e) {}
+
     console.log(`[Restore] Restoring data from backup: ${backups[0]}`);
     updateLog(`Restoring data from backup: ${backups[0]}`);
+
+    // IMPORTANT: Close database before replacing file
+    try {
+      if (db && db.closeDatabase) db.closeDatabase();
+      db = null;
+    } catch (e) {}
+
+    // Wait briefly for file handles to release
+    const { execSync } = require('child_process');
 
     // Restore SQLite DB
     fs.copyFileSync(backupDb, DB_PATH_IN_USERDATA);
@@ -1632,7 +1669,10 @@ function restoreDataIfMissing() {
     // Restore WAL/SHM if they exist in backup
     for (const suffix of ['-wal', '-shm']) {
       const src = path.join(latestBackup, 'baga-hms.db' + suffix);
-      if (fs.existsSync(src)) fs.copyFileSync(src, DB_PATH_IN_USERDATA + suffix);
+      const dest = DB_PATH_IN_USERDATA + suffix;
+      // Remove existing WAL/SHM first to prevent conflicts
+      try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch (e) {}
+      if (fs.existsSync(src)) fs.copyFileSync(src, dest);
     }
 
     // Restore store (license)
@@ -1640,6 +1680,13 @@ function restoreDataIfMissing() {
     if (fs.existsSync(storeBak)) {
       const storeDest = path.join(app.getPath('userData'), 'baga-store.json');
       fs.copyFileSync(storeBak, storeDest);
+    }
+
+    // Restore config
+    const cfgBak = path.join(latestBackup, 'baga-config.json');
+    if (fs.existsSync(cfgBak)) {
+      const cfgDest = path.join(app.getPath('userData'), 'baga-config.json');
+      fs.copyFileSync(cfgBak, cfgDest);
     }
 
     // Restore custom logos
@@ -1650,13 +1697,19 @@ function restoreDataIfMissing() {
       }
     }
 
+    // Restore counters
+    const countersBak = path.join(latestBackup, 'baga-counters.json');
+    if (fs.existsSync(countersBak)) {
+      const countersDest = path.join(app.getPath('userData'), 'baga-counters.json');
+      fs.copyFileSync(countersBak, countersDest);
+    }
+
     // Reinitialize database with restored data
     try {
-      if (db && db.closeDatabase) db.closeDatabase();
-      db = null;
       db = require('./database');
       db.initDatabase(app);
       console.log('[Restore] Database reinitialized with restored data.');
+      updateLog('Database successfully restored from backup');
     } catch (e) {
       console.error('[Restore] Failed to reinitialize DB after restore:', e.message);
     }
@@ -1910,13 +1963,19 @@ app.whenReady().then(async () => {
   // 1. Initialize SQLite (non-fatal if it fails)
   initDatabaseSafe();
 
-  // 2. Check if data needs restoration (DB is empty after update)
+  // 2. Create startup backup (first launch of this version creates a backup)
+  const prevVersion = getInstalledVersion();
+  if (prevVersion && prevVersion !== APP_VERSION) {
+    // Version changed — this is an update! Create backup BEFORE restore check
+    console.log(`[BAGA HMS] Version changed: ${prevVersion} → ${APP_VERSION}`);
+    createDataBackup(APP_VERSION);
+  }
+
+  // 3. Check if data needs restoration (DB is empty after update)
   //    This runs after DB init so we can check if data exists
   setTimeout(() => {
     restoreDataIfMissing();
   }, 2000); // Delay 2s to let DB fully initialize
-
-  // 2. Start HTTP server (non-fatal if it fails)
   try {
     serverInstance = await startServer();
     // Auto-configure Windows Firewall for LAN sharing

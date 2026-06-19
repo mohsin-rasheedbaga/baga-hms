@@ -20,6 +20,7 @@ const ALL_PERMISSIONS = [
   'discharge', 'view_reports', 'view_lab_orders', 'enter_results', 'print_report',
   'view_prescriptions', 'dispense_medicine', 'view_bills', 'collect_payment', 'daily_report',
   'return_medicine', 'view_profit', 'add_inventory', 'view_statement',
+  'manage_employees', 'manage_users', 'manage_settings',
 ];
 
 const PERMISSION_LABELS: Record<string, string> = {
@@ -39,14 +40,17 @@ const PERMISSION_LABELS: Record<string, string> = {
   enter_results: 'Enter Results',
   print_report: 'Print Report',
   view_prescriptions: 'View Prescriptions',
-  dispense_medicine: 'Dispense Medicine',
+  dispense_medicine: 'Dispense Medicine (POS)',
   view_bills: 'View Bills',
   collect_payment: 'Collect Payment',
   daily_report: 'Daily Report',
   return_medicine: 'Return Medicine',
   view_profit: 'View Net Profit',
-  add_inventory: 'Add/Edit Inventory',
-  view_statement: 'View Statement',
+  add_inventory: 'Medicine Inventory',
+  view_statement: 'My Statement',
+  manage_employees: 'Employees (HR)',
+  manage_users: 'User Management',
+  manage_settings: 'Settings',
 };
 
 const PERMISSION_GROUPS = [
@@ -73,6 +77,10 @@ const PERMISSION_GROUPS = [
   {
     title: 'Inventory & Data',
     perms: ['add_inventory', 'view_statement'],
+  },
+  {
+    title: 'Administration',
+    perms: ['manage_employees', 'manage_users', 'manage_settings'],
   },
 ];
 
@@ -227,14 +235,21 @@ export default function UsersPage() {
   // ---- Module-Aware Permissions ----
   const getModulePermissions = () => {
     if (licenseType === 'pharmacy') {
-      const perms = ['view_prescriptions', 'dispense_medicine', 'view_bills', 'collect_payment', 'daily_report', 'return_medicine', 'view_profit', 'add_inventory', 'view_statement'];
+      const perms = ['dispense_medicine', 'return_medicine', 'add_inventory', 'view_statement', 'manage_employees', 'manage_users', 'manage_settings'];
       return {
         groups: PERMISSION_GROUPS.filter(g => g.perms.some(p => perms.includes(p))),
         all: ALL_PERMISSIONS.filter(p => perms.includes(p)),
       };
     }
     if (licenseType === 'lab') {
-      const perms = ['view_lab_orders', 'enter_results', 'print_report', 'view_reports', 'add_inventory', 'view_statement'];
+      const perms = ['view_lab_orders', 'enter_results', 'print_report', 'view_reports', 'add_inventory', 'view_profit', 'manage_employees', 'manage_users', 'manage_settings'];
+      return {
+        groups: PERMISSION_GROUPS.filter(g => g.perms.some(p => perms.includes(p))),
+        all: ALL_PERMISSIONS.filter(p => perms.includes(p)),
+      };
+    }
+    if (licenseType === 'clinic') {
+      const perms = ['register_patient', 'new_visit', 'search_patient', 'dispense_medicine', 'view_bills', 'collect_payment', 'view_lab_orders', 'enter_results', 'manage_employees', 'manage_users', 'manage_settings'];
       return {
         groups: PERMISSION_GROUPS.filter(g => g.perms.some(p => perms.includes(p))),
         all: ALL_PERMISSIONS.filter(p => perms.includes(p)),
