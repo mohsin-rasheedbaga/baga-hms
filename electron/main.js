@@ -389,6 +389,8 @@ async function checkForUpdates() {
 
       if (result.response === 0) {
         updateLog('User chose Restart Now — restarting app for delta update...');
+        // Force WAL checkpoint before restart
+        forceWALCheckpoint();
         app.relaunch({ args: process.argv.slice(1) });
         app.quit();
       } else {
@@ -460,6 +462,8 @@ async function checkForUpdates() {
 
     if (result.response === 0) {
       updateLog('User chose Install Now — launching installer...');
+      // Force WAL checkpoint before installer runs (ensures data is on disk)
+      forceWALCheckpoint();
       shell.openPath(updatePath);
       app.quit();
     } else {
@@ -1539,8 +1543,24 @@ const DB_PATH_IN_USERDATA = path.join(app.getPath('userData'), 'baga-hms.db');
  * Create a backup of the SQLite database before any update.
  * Also backs up baga-store.json (license, machine ID) and custom logos.
  */
+function forceWALCheckpoint() {
+  try {
+    if (db && db.checkpoint) {
+      db.checkpoint();
+    } else if (db && db.db) {
+      db.db.pragma('wal_checkpoint(TRUNCATE)');
+      console.log('[DB] WAL checkpoint forced (direct) — all data flushed to disk');
+    }
+  } catch (e) {
+    console.error('[DB] WAL checkpoint failed:', e.message);
+  }
+}
+
 function createDataBackup(version) {
   try {
+    // CRITICAL: Force WAL checkpoint before backup to ensure all data is in the main DB file
+    forceWALCheckpoint();
+
     if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const backupName = `backup-v${version}-${timestamp}`;
@@ -1725,6 +1745,10 @@ function restoreDataIfMissing() {
 
     // Reinitialize database with restored data
     try {
+      if (db && (db.closeDatabase || db.close)) {
+        try { (db.closeDatabase || db.close).call(db); } catch (e) {}
+      }
+      db = null;
       db = require('./database');
       db.initDatabase(app);
       console.log('[Restore] Database reinitialized with restored data.');
@@ -1860,7 +1884,7 @@ function applyStagedDeltaUpdate() {
     if (!fs.existsSync(pendingDeltaPath)) return;
 
     const pending = JSON.parse(fs.readFileSync(pendingDeltaPath, 'utf8'));
-    // Since delta updates only replace out/ and electron/ (NOT package.json),
+    // Since delta updates only replace out/ and electron/ (NOT package.json in old versions),
     // APP_VERSION might still be the old version. The delta was staged for
     // a specific new version, so we should apply it regardless of current version.
     // Just verify the staged files exist before applying.
@@ -1870,7 +1894,7 @@ function applyStagedDeltaUpdate() {
       return;
     }
 
-    console.log(`[Delta] Applying staged delta update for v${pending.version}...`);
+    console.log(`[Delta] Applying staged delta update for v${pending.version} (current pkg: ${APP_VERSION})...`);
     const installDir = path.dirname(__dirname);
 
     // Copy staged electron files to install directory
@@ -1882,6 +1906,16 @@ function applyStagedDeltaUpdate() {
       try { fs.rmSync(pending.tempElectron, { recursive: true, force: true }); } catch (e) {}
     }
 
+    // If package.json was included in the delta, copy it too
+    if (pending.extractDir) {
+      const pkgSrc = path.join(pending.extractDir, 'package.json');
+      if (fs.existsSync(pkgSrc)) {
+        const pkgDest = path.join(installDir, 'package.json');
+        fs.copyFileSync(pkgSrc, pkgDest);
+        console.log('[Delta] package.json updated to v' + pending.version);
+      }
+    }
+
     // Clean up extraction dir
     if (pending.extractDir && fs.existsSync(pending.extractDir)) {
       try { fs.rmSync(pending.extractDir, { recursive: true, force: true }); } catch (e) {}
@@ -1891,8 +1925,10 @@ function applyStagedDeltaUpdate() {
     try { fs.unlinkSync(pendingDeltaPath); } catch (e) {}
 
     console.log('[Delta] Delta update applied successfully!');
+    updateLog(`Delta update to v${pending.version} applied successfully`);
   } catch (e) {
     console.error('[Delta] Failed to apply staged delta update:', e.message);
+    updateLog(`FAILED to apply delta update: ${e.message}`);
   }
 }
 
@@ -1907,6 +1943,112 @@ function copyDirRecursive(src, dest) {
     } else {
       fs.copyFileSync(srcPath, destPath);
     }
+  }
+}
+
+// ============================================================
+// PRE-INIT DATA RESTORE (runs BEFORE database init/seed)
+// This ensures the DB file exists before initDatabase tries to seed
+// ============================================================
+
+function restoreDataBeforeInit() {
+  const userDataDir = app.getPath('userData');
+  const dbPath = path.join(userDataDir, 'baga-hms.db');
+  
+  // If DB file exists, check if it's valid (not zero-byte)
+  if (fs.existsSync(dbPath)) {
+    const stat = fs.statSync(dbPath);
+    if (stat.size > 1024) { // A valid DB should be at least 1KB
+      console.log('[Restore] DB file exists (' + Math.round(stat.size / 1024) + 'KB), skipping pre-init restore.');
+      return;
+    } else {
+      console.log('[Restore] DB file exists but is suspiciously small (' + stat.size + ' bytes). Will check backup.');
+    }
+  }
+  
+  // DB missing or too small — try to restore from backup
+  const backupDir = path.join(userDataDir, 'baga-backups');
+  if (!fs.existsSync(backupDir)) {
+    console.log('[Restore] No backup directory found. DB will be initialized fresh.');
+    return;
+  }
+  
+  const backups = fs.readdirSync(backupDir)
+    .filter(f => fs.statSync(path.join(backupDir, f)).isDirectory())
+    .sort()
+    .reverse(); // newest first
+  
+  if (backups.length === 0) {
+    console.log('[Restore] No backups found. DB will be initialized fresh.');
+    return;
+  }
+  
+  const latestBackup = path.join(backupDir, backups[0]);
+  const backupDb = path.join(latestBackup, 'baga-hms.db');
+  
+  if (!fs.existsSync(backupDb)) {
+    console.log('[Restore] Latest backup has no DB file. Trying next...');
+    // Try next backup
+    for (let i = 1; i < backups.length; i++) {
+      const altBackup = path.join(backupDir, backups[i]);
+      const altDb = path.join(altBackup, 'baga-hms.db');
+      if (fs.existsSync(altDb)) {
+        console.log(`[Restore] Found DB in backup: ${backups[i]}`);
+        doRestore(altBackup, altDb, dbPath, userDataDir);
+        return;
+      }
+    }
+    console.log('[Restore] No backup with DB file found.');
+    return;
+  }
+  
+  console.log(`[Restore] Restoring DB from backup: ${backups[0]}`);
+  doRestore(latestBackup, backupDb, dbPath, userDataDir);
+}
+
+function doRestore(backupDirPath, backupDbPath, targetDbPath, userDataDir) {
+  try {
+    // Restore SQLite DB
+    fs.copyFileSync(backupDbPath, targetDbPath);
+    console.log('[Restore] SQLite DB restored.');
+    
+    // Restore WAL/SHM if they exist in backup
+    for (const suffix of ['-wal', '-shm']) {
+      const src = path.join(backupDirPath, 'baga-hms.db' + suffix);
+      if (fs.existsSync(src)) {
+        fs.copyFileSync(src, targetDbPath + suffix);
+        console.log(`[Restore] Restored ${suffix} file.`);
+      }
+    }
+    
+    // Restore store (license, machine ID)
+    const storeBak = path.join(backupDirPath, 'baga-store.json');
+    if (fs.existsSync(storeBak)) {
+      const storeDest = path.join(userDataDir, 'baga-store.json');
+      fs.copyFileSync(storeBak, storeDest);
+      console.log('[Restore] Store (license) restored.');
+    }
+    
+    // Restore config
+    const cfgBak = path.join(backupDirPath, 'baga-config.json');
+    if (fs.existsSync(cfgBak)) {
+      const cfgDest = path.join(userDataDir, 'baga-config.json');
+      fs.copyFileSync(cfgBak, cfgDest);
+      console.log('[Restore] Config restored.');
+    }
+    
+    // Restore custom logos
+    for (const ext of ['.png', '.jpg', '.jpeg']) {
+      const src = path.join(backupDirPath, 'hospital-logo-custom' + ext);
+      if (fs.existsSync(src)) {
+        fs.copyFileSync(src, path.join(userDataDir, 'hospital-logo-custom' + ext));
+      }
+    }
+    
+    updateLog(`Data restored from backup on startup`);
+    console.log('[Restore] Full data restoration complete.');
+  } catch (e) {
+    console.error('[Restore] Restoration failed:', e.message);
   }
 }
 
@@ -1970,6 +2112,7 @@ app.whenReady().then(async () => {
   cleanupOldUpdateFiles();
 
   // Apply staged delta update (if one was downloaded but not yet applied)
+  // This MUST run before DB init so new database.js code is loaded
   applyStagedDeltaUpdate();
 
   console.log('='.repeat(60));
@@ -1983,21 +2126,27 @@ app.whenReady().then(async () => {
   console.log(`[BAGA HMS] resourcesPath: ${process.resourcesPath || 'N/A'}`);
   console.log('='.repeat(60));
 
+  // CRITICAL: Restore DB file BEFORE initDatabase (which would seed empty tables)
+  // This prevents data loss when DB file is missing after update/reinstall
+  restoreDataBeforeInit();
+
   // 1. Initialize SQLite (non-fatal if it fails)
+  // This creates tables and seeds ONLY if tables are empty
+  // Since we restored above, tables should already have data
   initDatabaseSafe();
 
-  // 2. Check version change BEFORE updating tracker — create backup if version changed
+  // 2. Check version change — create backup if this is an update
   const prevVersion = getInstalledVersion();
   if (prevVersion && prevVersion !== APP_VERSION) {
-    // Version changed — this is an update! Create backup BEFORE restore check
+    // Version changed — this is an update! Create backup
     console.log(`[BAGA HMS] Version changed: ${prevVersion} → ${APP_VERSION}`);
     createDataBackup(prevVersion); // Backup with OLD version label
   }
   // NOW update the version tracker (after comparison)
   setInstalledVersion(APP_VERSION);
 
-  // 3. Check if data needs restoration (DB is empty after update)
-  //    This runs after DB init so we can check if data exists
+  // 3. Post-init safety check: if DB still looks like fresh seed data,
+  //    try one more restore from backup
   setTimeout(() => {
     restoreDataIfMissing();
   }, 2000); // Delay 2s to let DB fully initialize
@@ -2153,20 +2302,14 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   try {
+    // Force WAL checkpoint to flush all data to disk before quitting
+    forceWALCheckpoint();
     if (serverInstance) serverInstance.close();
-    if (db) db.close();
-  } catch (e) {}
-  // Clear session data on quit — forces re-login on next launch
-  try {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.session.clearStorageData({
-        storages: ['localstorage', 'sessionstorage'],
-      });
-    }
     if (db) {
-      safeDbSetKV('baga_session', '');
+      try { db.close(); } catch (e) {}
     }
   } catch (e) {}
+  // Session is preserved — user does NOT need to re-login on next launch
 });
 
 app.on('window-all-closed', () => {

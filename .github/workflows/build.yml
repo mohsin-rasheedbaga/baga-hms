@@ -50,8 +50,10 @@ jobs:
           mkdir -p delta-update
           cp -r out delta-update/out
           cp -r electron delta-update/electron
+          # Include package.json so the version is updated after delta apply
+          cp package.json delta-update/package.json
           cd delta-update
-          7z a -tzip "../BAGA-HMS-Update-${VERSION}.zip" out electron
+          7z a -tzip "../BAGA-HMS-Update-${VERSION}.zip" out electron package.json
           cd ..
           echo "Delta ZIP created: BAGA-HMS-Update-${VERSION}.zip"
           ls -lh "BAGA-HMS-Update-${VERSION}.zip"

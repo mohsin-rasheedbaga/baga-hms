@@ -52,6 +52,7 @@ const JSON_TABLES = [
 const KV_TABLES = [
   'counters',
   'kv_store',
+  'config',
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -691,6 +692,23 @@ function getDbPath() {
 }
 
 /**
+ * Force WAL checkpoint — ensures all data is flushed from WAL to the main DB file.
+ * Call this before backups, updates, or app quit to prevent data loss.
+ */
+function checkpoint() {
+  try {
+    if (db) {
+      db.pragma('wal_checkpoint(TRUNCATE)');
+      console.log('[DB] WAL checkpoint forced — all data flushed to disk');
+      return true;
+    }
+  } catch (err) {
+    console.error('[DB] WAL checkpoint error:', err.message);
+  }
+  return false;
+}
+
+/**
  * Close the database connection.
  */
 function close() {
@@ -726,4 +744,6 @@ module.exports = {
   backup,
   getDbPath,
   close,
+  closeDatabase: close,
+  checkpoint,
 };
