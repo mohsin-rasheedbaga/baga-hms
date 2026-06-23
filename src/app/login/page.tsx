@@ -228,9 +228,8 @@ export default function LoginPage() {
       };
     }
 
-    // LAN mode: validate against server's SQLite database FIRST (always has latest data)
-    // Then fall back to locally synced data if server is unreachable
-    if (!user && !isElectron && isLanMode()) {
+    // NON-ELECTRON MODE (browser/LAN): validate against server's SQLite database
+    if (!user && !isElectron) {
       // Try /api/login endpoint first (queries SQLite directly on the server)
       try {
         const baseUrl = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
@@ -265,9 +264,17 @@ export default function LoginPage() {
       if (!user) {
         try {
           const lanUsers = getUsers();
-          const lanUser = lanUsers.find(u => u.email === loginId.trim() && u.password === password.trim() && u.active);
+          // Unwrap double-wrapped records
+          const cleanUsers = (lanUsers || []).map((u: any) => {
+            if (u && typeof u.data === 'object' && u.data !== null && u.data.email) return u.data;
+            return u;
+          });
+          const lanUser = cleanUsers.find((u: any) => {
+            const uEmail = (u.email || u.login_id || '').trim().toLowerCase();
+            return uEmail === loginId.trim().toLowerCase() && u.password === password.trim() && u.active;
+          });
           if (lanUser) {
-            console.log('LAN Login: Found user in synced localStorage data:', lanUser.email);
+            console.log('LAN Login: Found user in synced data:', lanUser.email);
             user = lanUser;
           }
         } catch (e) {

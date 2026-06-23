@@ -563,19 +563,25 @@ function handleLanApi(req, res, url, method) {
           console.log(`[API Login] DB error:`, dbResult.error || 'no data');
           return sendJson(200, { success: false, error: 'Database not available. Please make sure the main app is running.' });
         }
-        const users = dbResult.data;
+        // Unwrap double-wrapped records if detected
+        // (some records may be stored as { id, data: { id, email, ... } } instead of flat)
+        const users = dbResult.data.map(u => {
+          if (u && typeof u.data === 'object' && u.data !== null && u.data.email) {
+            return u.data; // unwrap
+          }
+          return u;
+        });
         console.log(`[API Login] Found ${users.length} users in database`);
-        // Match by email/login_id field (trim both sides for safety)
         const trimmedUser = username.trim();
         const trimmedPass = password.trim();
         const user = users.find(u => {
-          const uEmail = (u.email || u.login_id || '').trim();
+          if (!u) return false;
+          const uEmail = (u.email || u.login_id || u.loginId || '').trim().toLowerCase();
           const uPass = (u.password || '').trim();
           const isActive = u.active !== false && u.active !== 'false';
-          return uEmail === trimmedUser && uPass === trimmedPass && isActive;
+          return uEmail === trimmedUser.toLowerCase() && uPass === trimmedPass && isActive;
         });
         if (!user) {
-          // Debug: log available usernames (not passwords) to help diagnose
           const activeEmails = users.filter(u => u.active !== false).map(u => (u.email || u.login_id || '').trim());
           console.log(`[API Login] No match. Active logins: [${activeEmails.join(', ')}], attempted: '${trimmedUser}'`);
           return sendJson(200, { success: false, error: 'Invalid Login ID or Password' });

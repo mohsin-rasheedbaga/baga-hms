@@ -66,6 +66,8 @@ interface PharmacySale {
   time: string;
   servedBy: string;
   paymentMethod: 'Cash' | 'Card' | 'Online';
+  dailyToken: string;
+  billSerial: string;
   discountPercent?: number;
   discountAmount?: number;
   discountType?: 'patient' | 'prescriber';
@@ -84,6 +86,8 @@ function lsSet<T>(key: string, data: T): void {
 const SALES_KEY = 'baga_pharmacy_sales';
 const OUTDOOR_COUNTER_KEY = 'baga_outdoor_counter';
 const RETURNS_KEY = 'baga_pharmacy_returns';
+const DAILY_TOKEN_KEY = 'baga_pharmacy_daily_token';
+const ANNUAL_SALE_COUNTER_KEY = 'baga_pharmacy_annual_sale_counter';
 
 function getPharmacySales(): PharmacySale[] { return lsGet<PharmacySale[]>(SALES_KEY, []); }
 function addPharmacySale(s: PharmacySale): void { const all = getPharmacySales(); all.push(s); lsSet(SALES_KEY, all); }
@@ -91,6 +95,34 @@ function getOutdoorCounter(): number { return lsGet<number>(OUTDOOR_COUNTER_KEY,
 function setOutdoorCounter(n: number): void { lsSet(OUTDOOR_COUNTER_KEY, n); }
 function getPharmacyReturns(): MedicineReturn[] { return lsGet<MedicineReturn[]>(RETURNS_KEY, []); }
 function addPharmacyReturn(r: MedicineReturn): void { const all = getPharmacyReturns(); all.push(r); lsSet(RETURNS_KEY, all); }
+
+/* ==================== DAILY TOKEN (resets 0001 every midnight) ==================== */
+function getDailyToken(): string {
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const stored = lsGet<{ date: string; token: number } | null>(DAILY_TOKEN_KEY, null);
+  if (stored && stored.date === today) {
+    return String(stored.token).padStart(4, '0');
+  }
+  // New day or first time — reset to 1
+  lsSet(DAILY_TOKEN_KEY, { date: today, token: 1 });
+  return '0001';
+}
+function incrementDailyToken(): string {
+  const today = new Date().toISOString().split('T')[0];
+  const stored = lsGet<{ date: string; token: number }>(DAILY_TOKEN_KEY, { date: today, token: 0 });
+  const newToken = (stored.date === today ? stored.token : 0) + 1;
+  lsSet(DAILY_TOKEN_KEY, { date: today, token: newToken });
+  return String(newToken).padStart(4, '0');
+}
+
+/* ==================== ANNUAL SERIAL INVOICE (resets 000001 every year) ==================== */
+function getAnnualSerial(): string {
+  const year = new Date().getFullYear();
+  const key = `${ANNUAL_SALE_COUNTER_KEY}_${year}`;
+  const counter = lsGet<number>(key, 0) + 1;
+  lsSet(key, counter);
+  return String(counter).padStart(6, '0');
+}
 
 /* ==================== BARCODE GENERATOR (Code 128B via Canvas) ==================== */
 function generateBarcodeDataURL(text: string): string {
@@ -452,6 +484,8 @@ export default function PharmacyPage() {
       time: timeStr(),
       servedBy: (typeof window !== 'undefined' && localStorage.getItem('baga_session')) ? JSON.parse(localStorage.getItem('baga_session')!).name || 'Pharmacist' : 'Pharmacist',
       paymentMethod,
+      dailyToken: incrementDailyToken(),
+      billSerial: getAnnualSerial(),
       discountPercent: billDiscount > 0 ? billDiscount : undefined,
       discountAmount: discountAmt > 0 ? discountAmt : undefined,
       discountType: billDiscount > 0 ? discountType : undefined,
@@ -542,10 +576,11 @@ export default function PharmacyPage() {
           <div class="hsub">Pharmacy Department</div>
         </div>
         <div class="info">
-          <div class="info-row"><span class="label">Bill No:</span><span class="value">${saleBill.id.slice(-6).toUpperCase()}</span></div>
+          <div class="info-row"><span class="label">Bill No:</span><span class="value">${saleBill.billSerial || saleBill.id.slice(-6).toUpperCase()}</span></div>
+          <div class="info-row"><span class="label">Daily Token:</span><span class="value">${saleBill.dailyToken || '-'}</span></div>
           <div style="text-align:center;padding:6px 0 2px;">
-            ${(() => { const bc = generateBarcodeDataURL(saleBill.id); return bc ? `<img src="${bc}" style="width:220px;height:40px;" />` : ''; })()}
-            <div style="font-size:8px;font-family:'Courier New',monospace;color:#333;margin-top:1px;">${saleBill.id.slice(-10).toUpperCase()}</div>
+            ${(() => { const bc = generateBarcodeDataURL(saleBill.billSerial || saleBill.id); return bc ? `<img src="${bc}" style="width:220px;height:40px;" />` : ''; })()}
+            <div style="font-size:8px;font-family:'Courier New',monospace;color:#333;margin-top:1px;">${(saleBill.billSerial || saleBill.id).toUpperCase()}</div>
           </div>
           <div class="info-row"><span class="label">Patient:</span><span class="value">${saleBill.patientName}</span></div>
           <div class="info-row"><span class="label">ID:</span><span class="value">${saleBill.patientNo}</span></div>
@@ -762,7 +797,8 @@ export default function PharmacyPage() {
               {/* Bill Info */}
               <div style={{ padding: '6px 0', borderBottom: '1px dashed #e2e8f0' }}>
                 {[
-                  ['Bill No', saleBill.id.slice(-6).toUpperCase()],
+                  ['Bill No', saleBill.billSerial || saleBill.id.slice(-6).toUpperCase()],
+                  ['Daily Token', saleBill.dailyToken || '-'],
                   ['Patient', saleBill.patientName],
                   ['ID', saleBill.patientNo],
                   ['Mobile', saleBill.patientMobile || '-'],

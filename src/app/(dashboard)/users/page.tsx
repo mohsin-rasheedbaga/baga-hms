@@ -225,7 +225,7 @@ export default function UsersPage() {
       id: genId(),
       name: foundEmployee.name,
       email: loginId.trim(),
-      password: loginPassword,
+      password: loginPassword.trim(),
       role: selectedRole as User['role'],
       department: selectedDept,
       active: true,
