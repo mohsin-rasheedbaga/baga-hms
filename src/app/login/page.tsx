@@ -230,9 +230,10 @@ export default function LoginPage() {
 
     // NON-ELECTRON MODE (browser/LAN): validate against server's SQLite database
     if (!user && !isElectron) {
-      // Try /api/login endpoint first (queries SQLite directly on the server)
+      const baseUrl = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
+
+      // METHOD 1: Try /api/login endpoint (server-side credential check)
       try {
-        const baseUrl = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
         const loginResp = await fetch(baseUrl + '/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -253,18 +254,57 @@ export default function LoginPage() {
               permissions: loginResult.user.permissions || ['all'],
             };
           } else {
-            console.log('LAN Login: Server rejected credentials');
+            console.log('LAN Login: /api/login rejected, trying direct DB fetch');
           }
         }
       } catch (e) {
-        console.error('LAN /api/login failed, trying local cache:', e);
+        console.error('LAN /api/login fetch error:', e);
       }
 
-      // Fall back to locally synced users if API login failed
+      // METHOD 2: Fetch users directly from /api/db/users and match locally
+      // This is the most reliable method — gets ALL users from SQLite and matches in browser
+      if (!user) {
+        try {
+          const dbResp = await fetch(baseUrl + '/api/db/users');
+          if (dbResp.ok) {
+            const dbResult = await dbResp.json();
+            if (dbResult.success && dbResult.data) {
+              // Unwrap double-wrapped records if any
+              const serverUsers = dbResult.data.map((u: any) => {
+                if (u && typeof u.data === 'object' && u.data !== null && u.data.email) return u.data;
+                return u;
+              });
+              const match = serverUsers.find((u: any) => {
+                if (!u) return false;
+                const uEmail = (u.email || u.login_id || u.loginId || '').trim().toLowerCase();
+                const uPass = (u.password || '').trim();
+                const isActive = u.active !== false && u.active !== 'false';
+                return uEmail === loginId.trim().toLowerCase() && uPass === password.trim() && isActive;
+              });
+              if (match) {
+                console.log('LAN Login: Matched via /api/db/users:', match.email);
+                user = {
+                  id: match.id,
+                  name: match.name,
+                  role: match.role,
+                  department: match.department || '',
+                  email: match.email,
+                  password: password.trim(),
+                  active: true,
+                  permissions: match.permissions || ['all'],
+                };
+              }
+            }
+          }
+        } catch (e) {
+          console.error('LAN /api/db/users fetch error:', e);
+        }
+      }
+
+      // METHOD 3: Last resort — check localStorage (seed/default users)
       if (!user) {
         try {
           const lanUsers = getUsers();
-          // Unwrap double-wrapped records
           const cleanUsers = (lanUsers || []).map((u: any) => {
             if (u && typeof u.data === 'object' && u.data !== null && u.data.email) return u.data;
             return u;
@@ -274,11 +314,11 @@ export default function LoginPage() {
             return uEmail === loginId.trim().toLowerCase() && u.password === password.trim() && u.active;
           });
           if (lanUser) {
-            console.log('LAN Login: Found user in synced data:', lanUser.email);
+            console.log('LAN Login: Found user in localStorage fallback:', lanUser.email);
             user = lanUser;
           }
         } catch (e) {
-          console.error('LAN local user lookup failed:', e);
+          console.error('LAN localStorage fallback failed:', e);
         }
       }
 
