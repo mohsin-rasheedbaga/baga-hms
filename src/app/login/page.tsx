@@ -46,8 +46,10 @@ export default function LoginPage() {
           const resp = await fetch(baseUrl + '/api/license-info', { signal: AbortSignal.timeout(3000) });
           if (resp.ok) {
             const info = await resp.json();
+            // Set LAN mode whenever API server is reachable (even if license mode is 'none')
+            setLanMode(true);
+            console.log('[LAN Init] Server reachable, mode:', info.mode);
             if (info.mode && info.mode !== 'none') {
-              setLanMode(true);
               // Fetch app version from LAN server
               try {
                 const verResp = await fetch(baseUrl + '/api/version', { signal: AbortSignal.timeout(3000) });

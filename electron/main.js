@@ -146,7 +146,6 @@ function safeDbGetPath() {
 // ============================================================
 let mainWindow = null;
 let licenseWindow = null;
-let updateDownloaded = false;
 
 // Log file for auto-update debugging
 const UPDATE_LOG = path.join(app.getPath('userData'), 'auto-update.log');
@@ -178,321 +177,23 @@ function sendToAllWindows(channel, data) {
   if (licenseWindow && !licenseWindow.isDestroyed()) licenseWindow.webContents.send(channel, data);
 }
 
-// Compare semver versions: returns 1 if b > a, -1 if b < a, 0 if equal
-function compareVersions(a, b) {
-  const pa = a.replace(/^v/, '').split('.').map(Number);
-  const pb = b.replace(/^v/, '').split('.').map(Number);
-  for (let i = 0; i < 3; i++) {
-    const na = pa[i] || 0;
-    const nb = pb[i] || 0;
-    if (nb > na) return 1;
-    if (nb < na) return -1;
-  }
-  return 0;
-}
 
-// Helper: make HTTPS GET request using Node.js https module (reliable, no fetch needed)
-function httpsGet(url, headers = {}) {
-  return new Promise((resolve, reject) => {
-    const urlObj = new URL(url);
-    const options = {
-      hostname: urlObj.hostname,
-      port: 443,
-      path: urlObj.pathname + urlObj.search,
-      method: 'GET',
-      headers: { 'User-Agent': 'BAGA-HMS-Updater', ...headers },
-    };
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        resolve({ statusCode: res.statusCode, headers: res.headers, body: data });
-      });
-    });
-    req.on('error', (err) => reject(err));
-    req.setTimeout(30000, () => { req.destroy(); reject(new Error('Request timeout')); });
-    req.end();
-  });
-}
 
-// Helper: download file using Node.js https module (streams to disk — reliable)
-function httpsDownload(url, destPath, onProgress) {
-  return new Promise((resolve, reject) => {
-    const urlObj = new URL(url);
-    const options = {
-      hostname: urlObj.hostname,
-      port: 443,
-      path: urlObj.pathname + urlObj.search,
-      method: 'GET',
-      headers: { 'User-Agent': 'BAGA-HMS-Updater' },
-    };
 
-    const fileStream = fs.createWriteStream(destPath);
-    let receivedBytes = 0;
-
-    const req = https.request(options, (res) => {
-      // Handle redirects (GitHub releases use 302)
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        fileStream.close();
-        fs.unlinkSync(destPath);
-        updateLog('Following redirect to: ' + res.headers.location);
-        httpsDownload(res.headers.location, destPath, onProgress).then(resolve).catch(reject);
-        return;
-      }
-
-      if (res.statusCode !== 200) {
-        fileStream.close();
-        fs.unlinkSync(destPath);
-        reject(new Error('Download failed: HTTP ' + res.statusCode));
-        return;
-      }
-
-      const totalBytes = parseInt(res.headers['content-length'] || '0');
-
-      res.on('data', (chunk) => {
-        receivedBytes += chunk.length;
-        if (totalBytes > 0 && onProgress) {
-          onProgress(Math.round((receivedBytes / totalBytes) * 100));
-        }
-      });
-
-      res.pipe(fileStream);
-      fileStream.on('finish', () => {
-        fileStream.close();
-        updateLog('Downloaded: ' + destPath + ' (' + Math.round(receivedBytes / 1024 / 1024) + 'MB)');
-        resolve(receivedBytes);
-      });
-    });
-
-    req.on('error', (err) => {
-      fileStream.close();
-      try { fs.unlinkSync(destPath); } catch (e) {}
-      reject(err);
-    });
-    req.setTimeout(600000, () => { // 10 min timeout for large files
-      req.destroy();
-      fileStream.close();
-      try { fs.unlinkSync(destPath); } catch (e) {}
-      reject(new Error('Download timeout'));
-    });
-    req.end();
-  });
-}
-
+// Native electron-updater check (uses latest.yml + .blockmap for differential updates)
 async function checkForUpdates() {
-  updateLog('=== UPDATE CHECK START ===');
-  updateLog('Token: ' + (GH_TOKEN ? 'SET' : 'EMPTY') + ' | Version: ' + APP_VERSION);
-  const now = new Date().toISOString();
-  sendToAllWindows('update-status', { status: 'checking', lastChecked: now });
-
   try {
-    // Step 1: Fetch latest release info from GitHub API
-    const apiHeaders = { 'Accept': 'application/vnd.github.v3+json' };
-    if (GH_TOKEN) apiHeaders['Authorization'] = 'token ' + GH_TOKEN;
-
-    updateLog('Fetching: https://api.github.com/repos/mohsin-rasheedbaga/baga-hms/releases/latest');
-    const apiResult = await httpsGet('https://api.github.com/repos/mohsin-rasheedbaga/baga-hms/releases/latest', apiHeaders);
-
-    if (apiResult.statusCode !== 200) {
-      updateLog('GitHub API error: HTTP ' + apiResult.statusCode);
-      sendToAllWindows('update-status', { status: 'error', message: 'GitHub API error: ' + apiResult.statusCode });
-      return;
-    }
-
-    let release;
-    try {
-      release = JSON.parse(apiResult.body);
-    } catch (e) {
-      updateLog('Failed to parse GitHub response: ' + e.message);
-      return;
-    }
-
-    const latestVersion = release.tag_name.replace(/^v/, '');
-    updateLog('Latest release: ' + latestVersion + ' | Current: ' + APP_VERSION + ' | Installed: ' + APP_VERSION);
-
-    // Version guard: NEVER download older or equal version
-    // compareVersions(a, b) returns 1 if b>a (newer), -1 if b<a (older), 0 if equal
-    // If installed >= latest, skip update (result <= 0)
-    if (compareVersions(APP_VERSION, latestVersion) <= 0) {
-      updateLog('Already up to date. Installed: ' + APP_VERSION + ', Latest: ' + latestVersion);
-      sendToAllWindows('update-status', { status: 'not-available', lastChecked: new Date().toISOString(), version: latestVersion });
-      return;
-    }
-
-    // Also check latest.yml in assets for accurate version info
-    const latestYmlAsset = release.assets.find(a => a.name === 'latest.yml');
-    if (latestYmlAsset) {
-      updateLog('Found latest.yml in release — version should be: ' + latestVersion);
+    updateLog('=== NATIVE UPDATE CHECK (electron-updater) ===');
+    updateLog('Token: ' + (GH_TOKEN ? 'SET' : 'EMPTY') + ' | Version: ' + APP_VERSION);
+    const result = await autoUpdater.checkForUpdates();
+    if (result) {
+      updateLog('Update check result: v' + (result.updateInfo?.version || 'same') + ' | downloaded: ' + (result.downloadProgress !== undefined));
     } else {
-      updateLog('WARNING: No latest.yml in release assets! Auto-update may not work correctly.');
+      updateLog('No update available (already up to date)');
+      sendToAllWindows('update-status', { status: 'not-available', lastChecked: new Date().toISOString() });
     }
-
-    // Step 2: Find delta update ZIP first (small ~20-30MB), then fallback to full installer (~134MB)
-    const deltaAsset = release.assets.find(a => a.name.includes('Update') && a.name.endsWith('.zip'));
-    const setupAsset = release.assets.find(a => a.name.includes('Setup') && a.name.endsWith('.exe'));
-    const portableAsset = release.assets.find(a => a.name.includes('Portable') && a.name.endsWith('.exe'));
-
-    updateLog('Assets found — Delta: ' + (deltaAsset ? deltaAsset.name : 'NONE') +
-      ' | Setup: ' + (setupAsset ? setupAsset.name : 'NONE'));
-
-    sendToAllWindows('update-status', {
-      status: 'available',
-      version: latestVersion,
-      releaseNotes: release.body || '',
-    });
-
-    // Step 3: Show notification that download is starting
-    try {
-      new Notification({
-        title: 'BAGA HMS — Update Available',
-        body: 'Version ' + latestVersion + ' is downloading...\nPlease keep the app open.',
-        silent: false,
-      }).show();
-    } catch (e) {}
-
-    // Step 4: ALWAYS create data backup before ANY update
-    createDataBackup(APP_VERSION);
-
-    // Step 5: Try DELTA update first (small, fast, no installer needed)
-    let useDelta = false;
-    if (deltaAsset) {
-      updateLog('Delta update available: ' + deltaAsset.name + ' (' + Math.round(deltaAsset.size / 1024 / 1024) + 'MB)');
-      useDelta = await performDeltaUpdate(latestVersion, deltaAsset.browser_download_url);
-    }
-
-    // Step 6: If delta succeeded, just restart
-    if (useDelta) {
-      sendToAllWindows('update-status', {
-        status: 'downloaded',
-        version: latestVersion,
-        isDelta: true,
-      });
-
-      try {
-        new Notification({
-          title: 'BAGA HMS — Update Ready!',
-          body: 'Version ' + latestVersion + ' downloaded (delta). Restart to apply.',
-          silent: false,
-        }).show();
-      } catch (e) {}
-
-      const result = await dialog.showMessageBox({
-        type: 'info',
-        title: 'Update Ready (Delta)',
-        message: 'BAGA HMS version ' + latestVersion + ' is ready.',
-        detail: 'Click "Restart Now" to close and restart with the new version.\nYour data is fully preserved.',
-        buttons: ['Restart Now', 'Later'],
-        noLink: true,
-        defaultId: 0,
-        cancelId: 1,
-      });
-
-      if (result.response === 0) {
-        updateLog('User chose Restart Now — restarting app for delta update...');
-        // Force WAL checkpoint before restart
-        forceWALCheckpoint();
-        app.relaunch({ args: process.argv.slice(1) });
-        app.quit();
-      } else {
-        updateLog('User chose Later — delta update will apply on next restart.');
-      }
-      return;
-    }
-
-    // Step 7: FALLBACK — Full installer update
-    const downloadAsset = setupAsset || portableAsset;
-    if (!downloadAsset) {
-      updateLog('No exe asset found in release.');
-      sendToAllWindows('update-status', { status: 'error', message: 'No downloadable update found.' });
-      return;
-    }
-
-    updateLog('Falling back to full installer: ' + downloadAsset.name + ' (' + Math.round(downloadAsset.size / 1024 / 1024) + 'MB)');
-    sendToAllWindows('update-status', { status: 'downloading', percent: 0 });
-    const downloadUrl = downloadAsset.browser_download_url;
-    updateLog('Downloading: ' + downloadUrl);
-
-    const updatePath = path.join(app.getPath('userData'), 'BAGA-HMS-Update-' + latestVersion + '.exe');
-
-    await httpsDownload(downloadUrl, updatePath, (percent) => {
-      sendToAllWindows('update-status', { status: 'downloading', percent });
-      updateLog('Download progress: ' + percent + '%');
-    });
-
-    updateDownloaded = true;
-    updateLog('Download complete! File: ' + updatePath);
-
-    // Save the pending update info so we can verify on next launch
-    try {
-      const pendingUpdatePath = path.join(app.getPath('userData'), 'baga-pending-update.json');
-      fs.writeFileSync(pendingUpdatePath, JSON.stringify({
-        version: latestVersion,
-        filePath: updatePath,
-        downloadedAt: new Date().toISOString(),
-      }, null, 2), 'utf8');
-    } catch (e) {
-      updateLog('Failed to save pending update info: ' + e.message);
-    }
-
-    sendToAllWindows('update-status', {
-      status: 'downloaded',
-      version: latestVersion,
-      filePath: updatePath,
-    });
-
-    // Step 8: Notify user — show install dialog
-    try {
-      new Notification({
-        title: 'BAGA HMS — Update Ready!',
-        body: 'Version ' + latestVersion + ' has been downloaded. Install now!',
-        silent: false,
-      }).show();
-    } catch (e) {}
-
-    const result = await dialog.showMessageBox({
-      type: 'info',
-      title: 'Update Available',
-      message: 'BAGA HMS version ' + latestVersion + ' is ready to install.',
-      detail: 'Click "Install Now" to close the app and install the update.\nClick "Later" to install on next launch.',
-      buttons: ['Install Now', 'Later'],
-      noLink: true,
-      defaultId: 0,
-      cancelId: 1,
-    });
-
-    if (result.response === 0) {
-      updateLog('User chose Install Now — launching installer...');
-      // Force WAL checkpoint before installer runs (ensures data is on disk)
-      forceWALCheckpoint();
-      shell.openPath(updatePath);
-      app.quit();
-    } else {
-      updateLog('User chose Later — will install on next launch.');
-    }
-
   } catch (err) {
-    updateLog('FAILED: ' + err.message);
-    updateLog('Stack: ' + (err.stack || 'N/A'));
-    sendToAllWindows('update-status', { status: 'error', message: err.message });
-
-    // Only show error notification for non-network errors (e.g., GitHub auth issues)
-    // Silently ignore network/offline errors to avoid annoying the user
-    const isNetworkError = err.code === 'ENOTFOUND' || err.code === 'ECONNREFUSED' ||
-                           err.code === 'ENETUNREACH' || err.code === 'ETIMEDOUT' ||
-                           err.code === 'ECONNRESET' || err.code === 'ESOCKETTIMEDOUT' ||
-                           (err.message && err.message.includes('network')) ||
-                           (err.message && err.message.includes('ENOTFOUND'));
-    if (!isNetworkError) {
-      try {
-        new Notification({
-          title: 'BAGA HMS — Update Check Failed',
-          body: err.message,
-          silent: false,
-        }).show();
-      } catch (e) {}
-    } else {
-      updateLog('Silently ignoring network error (user is likely offline)');
-    }
+    updateLog('Update check failed: ' + (err?.message || String(err)));
   }
 }
 
@@ -1786,9 +1487,6 @@ function cleanupOldBackups(keepCount) {
     }
   } catch (e) {}
 }
-
-// ============================================================
-// DELTA UPDATE SYSTEM
 // Downloads only changed files (out/ + electron/) instead of full installer
 // Falls back to full installer if delta ZIP not available
 // ============================================================
@@ -1798,159 +1496,11 @@ function cleanupOldBackups(keepCount) {
  * The ZIP contains: out/ (Next.js static export) + electron/ (main process)
  * This avoids running the NSIS installer entirely, preserving userData.
  */
-async function performDeltaUpdate(latestVersion, downloadUrl) {
-  const updateZipPath = path.join(app.getPath('userData'), `BAGA-HMS-Delta-${latestVersion}.zip`);
-  const extractDir = path.join(app.getPath('userData'), `BAGA-HMS-Delta-Extract-${latestVersion}`);
-
-  try {
-    // Step 1: Download delta ZIP
-    updateLog(`[Delta] Downloading: ${downloadUrl}`);
-    sendToAllWindows('update-status', { status: 'downloading', percent: 0, isDelta: true });
-
-    await httpsDownload(downloadUrl, updateZipPath, (percent) => {
-      sendToAllWindows('update-status', { status: 'downloading', percent, isDelta: true });
-      updateLog(`[Delta] Download progress: ${percent}%`);
-    });
-
-    // Step 2: Extract ZIP (using Node.js built-in or fallback)
-    updateLog('[Delta] Extracting update...');
-    sendToAllWindows('update-status', { status: 'extracting', isDelta: true });
-
-    if (!fs.existsSync(extractDir)) fs.mkdirSync(extractDir, { recursive: true });
-
-    // Use Node.js built-in zlib for ZIP extraction
-    const { execSync } = require('child_process');
-    try {
-      // Try PowerShell (available on all modern Windows)
-      execSync(`powershell -NoProfile -Command "Expand-Archive -Path '${updateZipPath}' -DestinationPath '${extractDir}' -Force"`, {
-        stdio: 'pipe', timeout: 60000
-      });
-    } catch (pwErr) {
-      // Fallback: try tar (Windows 10+ has tar)
-      try {
-        execSync(`tar -xf "${updateZipPath}" -C "${extractDir}"`, { stdio: 'pipe', timeout: 60000 });
-      } catch (tarErr) {
-        throw new Error('Failed to extract update ZIP. Will use full installer instead.');
-      }
-    }
-
-    // Step 3: Determine installation directory (where electron/main.js lives)
-    const installDir = path.dirname(__dirname); // Parent of electron/ directory
-    updateLog(`[Delta] Install directory: ${installDir}`);
-
-    // Step 4: Copy updated files to installation directory
-    const deltaOut = path.join(extractDir, 'out');
-    const deltaElectron = path.join(extractDir, 'electron');
-
-    if (fs.existsSync(deltaOut)) {
-      const targetOut = path.join(installDir, 'out');
-      copyDirRecursive(deltaOut, targetOut);
-      updateLog('[Delta] Updated out/ (Next.js static export)');
-    }
-
-    if (fs.existsSync(deltaElectron)) {
-      const targetElectron = path.join(installDir, 'electron');
-      // Don't overwrite database.js or main.js while they're in use — copy to temp first
-      const tempElectron = path.join(app.getPath('userData'), 'electron-temp');
-      if (fs.existsSync(tempElectron)) fs.rmSync(tempElectron, { recursive: true, force: true });
-      copyDirRecursive(deltaElectron, tempElectron);
-      updateLog('[Delta] Electron files staged in temp');
-    }
-
-    // Step 5: Save delta update info for post-restart application
-    const pendingDeltaPath = path.join(app.getPath('userData'), 'baga-pending-delta.json');
-    fs.writeFileSync(pendingDeltaPath, JSON.stringify({
-      version: latestVersion,
-      extractDir,
-      tempElectron: path.join(app.getPath('userData'), 'electron-temp'),
-      appliedAt: new Date().toISOString(),
-    }, null, 2), 'utf8');
-
-    // Clean up ZIP
-    try { fs.unlinkSync(updateZipPath); } catch (e) {}
-
-    updateLog(`[Delta] Delta update staged for v${latestVersion}. Restart required.`);
-    return true;
-
-  } catch (err) {
-    updateLog(`[Delta] Delta update failed: ${err.message}. Will try full installer.`);
-    // Clean up partial extraction
-    try { if (fs.existsSync(extractDir)) fs.rmSync(extractDir, { recursive: true, force: true }); } catch (e) {}
-    try { if (fs.existsSync(updateZipPath)) fs.unlinkSync(updateZipPath); } catch (e) {}
-    return false;
-  }
-}
 
 /**
  * Apply staged delta update files (called on startup before DB init)
  */
-function applyStagedDeltaUpdate() {
-  try {
-    const pendingDeltaPath = path.join(app.getPath('userData'), 'baga-pending-delta.json');
-    if (!fs.existsSync(pendingDeltaPath)) return;
 
-    const pending = JSON.parse(fs.readFileSync(pendingDeltaPath, 'utf8'));
-    // Since delta updates only replace out/ and electron/ (NOT package.json in old versions),
-    // APP_VERSION might still be the old version. The delta was staged for
-    // a specific new version, so we should apply it regardless of current version.
-    // Just verify the staged files exist before applying.
-    if (!pending.tempElectron || !fs.existsSync(pending.tempElectron)) {
-      // No staged files to apply — this is a stale marker, clean up
-      try { fs.unlinkSync(pendingDeltaPath); } catch (e) {}
-      return;
-    }
-
-    console.log(`[Delta] Applying staged delta update for v${pending.version} (current pkg: ${APP_VERSION})...`);
-    const installDir = path.dirname(__dirname);
-
-    // Copy staged electron files to install directory
-    if (pending.tempElectron && fs.existsSync(pending.tempElectron)) {
-      const targetElectron = path.join(installDir, 'electron');
-      copyDirRecursive(pending.tempElectron, targetElectron);
-      console.log('[Delta] Electron files applied successfully');
-      // Clean up temp
-      try { fs.rmSync(pending.tempElectron, { recursive: true, force: true }); } catch (e) {}
-    }
-
-    // If package.json was included in the delta, copy it too
-    if (pending.extractDir) {
-      const pkgSrc = path.join(pending.extractDir, 'package.json');
-      if (fs.existsSync(pkgSrc)) {
-        const pkgDest = path.join(installDir, 'package.json');
-        fs.copyFileSync(pkgSrc, pkgDest);
-        console.log('[Delta] package.json updated to v' + pending.version);
-      }
-    }
-
-    // Clean up extraction dir
-    if (pending.extractDir && fs.existsSync(pending.extractDir)) {
-      try { fs.rmSync(pending.extractDir, { recursive: true, force: true }); } catch (e) {}
-    }
-
-    // Remove pending marker
-    try { fs.unlinkSync(pendingDeltaPath); } catch (e) {}
-
-    console.log('[Delta] Delta update applied successfully!');
-    updateLog(`Delta update to v${pending.version} applied successfully`);
-  } catch (e) {
-    console.error('[Delta] Failed to apply staged delta update:', e.message);
-    updateLog(`FAILED to apply delta update: ${e.message}`);
-  }
-}
-
-function copyDirRecursive(src, dest) {
-  if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
-  const entries = fs.readdirSync(src, { withFileTypes: true });
-  for (const entry of entries) {
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
-    if (entry.isDirectory()) {
-      copyDirRecursive(srcPath, destPath);
-    } else {
-      fs.copyFileSync(srcPath, destPath);
-    }
-  }
-}
 
 // ============================================================
 // PRE-INIT DATA RESTORE (runs BEFORE database init/seed)
@@ -2116,10 +1666,6 @@ function cleanupOldUpdateFiles() {
 app.whenReady().then(async () => {
   // Clean up stale update files on startup
   cleanupOldUpdateFiles();
-
-  // Apply staged delta update (if one was downloaded but not yet applied)
-  // This MUST run before DB init so new database.js code is loaded
-  applyStagedDeltaUpdate();
 
   console.log('='.repeat(60));
   console.log(`[BAGA HMS] v${APP_VERSION} starting...`);
