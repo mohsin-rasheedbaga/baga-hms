@@ -34,6 +34,15 @@ contextBridge.exposeInMainWorld('bagaAPI', {
     return () => ipcRenderer.removeListener('update-status', listener);
   },
   openUpdateFile: (filePath) => ipcRenderer.invoke('open-update-file', filePath),
+
+  // Delta Update Control
+  applyDeltaUpdate: () => ipcRenderer.invoke('apply-delta-update'),
+  restartForUpdate: () => ipcRenderer.invoke('restart-for-update'),
+  getUpdatePrefs: () => ipcRenderer.invoke('get-update-prefs'),
+  setUpdatePrefs: (prefs) => ipcRenderer.invoke('set-update-prefs', prefs),
+  getUpdateLog: () => ipcRenderer.invoke('get-update-log'),
+  getPendingDelta: () => ipcRenderer.invoke('get-pending-delta'),
+  dismissPendingDelta: () => ipcRenderer.invoke('dismiss-pending-delta'),
   
   // App Control
   quitApp: () => ipcRenderer.invoke('quit-app'),

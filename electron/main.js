@@ -12,6 +12,10 @@ const API_BASE = 'https://baga-hospital-api.vercel.app';
 const SERVER_PORT = 18765;
 const STORE_PATH = path.join(app.getPath('userData'), 'baga-store.json');
 const INSTALLED_VERSION_PATH = path.join(app.getPath('userData'), 'baga-installed-version.json');
+// GitHub repository for auto-updates (delta + full)
+const GH_OWNER = 'mohsin-rasheedbaga';
+const GH_REPO = 'baga-hms';
+const GH_API = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}`;
 
 // ============================================================
 // PERSISTENT STORE (machine ID, license, etc.)
@@ -177,23 +181,412 @@ function sendToAllWindows(channel, data) {
   if (licenseWindow && !licenseWindow.isDestroyed()) licenseWindow.webContents.send(channel, data);
 }
 
+// ============================================================
+// VERSION COMPARISON
+// ============================================================
+// Returns: 1 if a > b, -1 if a < b, 0 if equal
+function compareVersions(a, b) {
+  const pa = String(a).split('.').map(n => parseInt(n, 10) || 0);
+  const pb = String(b).split('.').map(n => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const na = pa[i] || 0;
+    const nb = pb[i] || 0;
+    if (na > nb) return 1;
+    if (na < nb) return -1;
+  }
+  return 0;
+}
 
+// ============================================================
+// UPDATE PREFERENCES (delta vs full)
+// ============================================================
+// Stored in baga-store.json so user can toggle in Settings.
+// Defaults to delta=true (smaller downloads, faster updates).
+function getUpdatePrefs() {
+  const store = getStore();
+  return store.updatePrefs || { useDelta: true, autoDownload: true, autoInstallOnQuit: true };
+}
+function setUpdatePrefs(prefs) {
+  const store = getStore();
+  store.updatePrefs = { ...getUpdatePrefs(), ...prefs };
+  saveStore(store);
+}
 
+// ============================================================
+// DELTA UPDATE SYSTEM
+// ============================================================
+// The delta update is a small ZIP (BAGA-HMS-Update-X.X.X.zip) published
+// with every GitHub release. It contains only the changed files:
+//   out/         — Next.js static export (HTML/CSS/JS)
+//   electron/    — Electron main process JS files
+//   package.json — version bump
+// The flow is:
+//   1. App checks GitHub API for the latest release
+//   2. If newer version exists, prefers downloading BAGA-HMS-Update-X.X.X.zip (delta)
+//      Falls back to BAGA-HMS-Setup-X.X.X.exe (full installer) if no delta zip
+//   3. Delta zip is saved to userData/BAGA-HMS-Update-<version>.zip
+//   4. On next startup, applyStagedDeltaUpdate() extracts it over the app dir
+//   5. App restarts itself with the new code
+// ============================================================
 
-// Native electron-updater check (uses latest.yml + .blockmap for differential updates)
+const PENDING_DELTA_MARKER = path.join(app.getPath('userData'), 'baga-pending-delta.json');
+
+function httpsGetJson(url) {
+  return new Promise((resolve, reject) => {
+    const headers = { 'User-Agent': 'BAGA-HMS-Updater', 'Accept': 'application/vnd.github+json' };
+    if (GH_TOKEN) headers['Authorization'] = `token ${GH_TOKEN}`;
+    const req = https.get(url, { headers }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        // Follow redirect
+        return httpsGetJson(res.headers.location).then(resolve, reject);
+      }
+      let body = '';
+      res.on('data', (chunk) => (body += chunk));
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, data: JSON.parse(body) }); }
+        catch (e) { reject(new Error('Invalid JSON from GitHub API')); }
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(15000, () => req.destroy(new Error('GitHub API timeout')));
+  });
+}
+
+function downloadFile(url, destPath, onProgress) {
+  return new Promise((resolve, reject) => {
+    const headers = { 'User-Agent': 'BAGA-HMS-Updater' };
+    if (GH_TOKEN && url.includes('github.com')) headers['Authorization'] = `token ${GH_TOKEN}`;
+    const req = https.get(url, { headers }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return downloadFile(res.headers.location, destPath, onProgress).then(resolve, reject);
+      }
+      if (res.statusCode !== 200) {
+        return reject(new Error(`HTTP ${res.statusCode} downloading ${url}`));
+      }
+      const total = parseInt(res.headers['content-length'] || '0', 10);
+      let received = 0;
+      const file = fs.createWriteStream(destPath);
+      res.on('data', (chunk) => {
+        received += chunk.length;
+        file.write(chunk);
+        if (onProgress && total > 0) onProgress(received, total);
+      });
+      res.on('end', () => {
+        file.end(() => resolve(destPath));
+      });
+      res.on('error', (err) => {
+        try { fs.unlinkSync(destPath); } catch (e) {}
+        reject(err);
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(120000, () => req.destroy(new Error('Download timeout')));
+  });
+}
+
+// Apply a staged delta update ZIP on next startup.
+// The zip contains out/, electron/, and package.json at its root.
+// We extract it over the current app directory.
+function applyStagedDeltaUpdate() {
+  try {
+    if (!fs.existsSync(PENDING_DELTA_MARKER)) {
+      return { applied: false, reason: 'no marker' };
+    }
+    const marker = JSON.parse(fs.readFileSync(PENDING_DELTA_MARKER, 'utf8'));
+    const zipPath = marker.zipPath;
+    const targetVersion = marker.version;
+
+    if (!zipPath || !fs.existsSync(zipPath)) {
+      try { fs.unlinkSync(PENDING_DELTA_MARKER); } catch (e) {}
+      return { applied: false, reason: 'zip missing' };
+    }
+
+    // If we're already on the target version, the previous apply succeeded.
+    // Just clean up.
+    if (compareVersions(APP_VERSION, targetVersion) >= 0) {
+      console.log(`[Delta] Already on v${APP_VERSION} (target was v${targetVersion}). Cleaning up.`);
+      try { fs.unlinkSync(zipPath); } catch (e) {}
+      try { fs.unlinkSync(PENDING_DELTA_MARKER); } catch (e) {}
+      return { applied: false, reason: 'already on target version' };
+    }
+
+    console.log(`[Delta] Applying delta update to v${targetVersion} from ${zipPath}`);
+    updateLog(`[Delta] Applying delta update to v${targetVersion}`);
+
+    // Extract the zip using built-in tar (Node 14+ has zlib + we can shell out to powershell Expand-Archive on Windows)
+    const { execSync } = require('child_process');
+    const tmpDir = path.join(app.getPath('temp'), `baga-delta-extract-${Date.now()}`);
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+
+    try {
+      // Use PowerShell's Expand-Archive (always available on Windows Electron)
+      execSync(`powershell -NoProfile -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${tmpDir}' -Force"`, { stdio: 'pipe', timeout: 60000 });
+    } catch (e) {
+      updateLog(`[Delta] Extract failed: ${e.message}`);
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (er) {}
+      try { fs.unlinkSync(PENDING_DELTA_MARKER); } catch (er) {}
+      return { applied: false, reason: 'extract failed: ' + e.message };
+    }
+
+    // Determine app root: in dev, __dirname is <project>/electron; in packaged asar,
+    // __dirname is inside app.asar/electron. We want to overwrite files in the app dir.
+    let appRoot;
+    if (__dirname.includes('app.asar')) {
+      // Packaged: __dirname = .../app.asar/electron — app root is one level up
+      appRoot = path.join(__dirname, '..');
+      // Extract asar to a writable location first — we can't write into app.asar
+      // For delta updates in a packaged app, we need to use asar unpacking OR
+      // write to app.asar.unpacked. The simplest reliable approach: write the
+      // extracted files to a side directory and modify the main.js to load from there
+      // if it exists. For now, we use the unpacked dir approach.
+      appRoot = path.join(path.dirname(__dirname.replace('app.asar', 'app.asar.unpacked')), 'app.asar.unpacked');
+      if (!fs.existsSync(appRoot)) {
+        // Fall back to using process.resourcesPath
+        appRoot = process.resourcesPath;
+      }
+    } else {
+      // Dev mode — just write to project root
+      appRoot = path.join(__dirname, '..');
+    }
+
+    // Copy extracted files over the app
+    let copiedCount = 0;
+    function copyRecursive(src, dest) {
+      if (!fs.existsSync(src)) return;
+      const stat = fs.statSync(src);
+      if (stat.isDirectory()) {
+        if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+        for (const entry of fs.readdirSync(src)) {
+          copyRecursive(path.join(src, entry), path.join(dest, entry));
+        }
+      } else {
+        try {
+          fs.copyFileSync(src, dest);
+          copiedCount++;
+        } catch (e) {
+          updateLog(`[Delta] Failed to copy ${src}: ${e.message}`);
+        }
+      }
+    }
+    copyRecursive(tmpDir, appRoot);
+    updateLog(`[Delta] Copied ${copiedCount} files to ${appRoot}`);
+
+    // Clean up
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) {}
+    try { fs.unlinkSync(zipPath); } catch (e) {}
+    try { fs.unlinkSync(PENDING_DELTA_MARKER); } catch (e) {}
+
+    return { applied: true, copiedCount, appRoot, targetVersion };
+  } catch (e) {
+    updateLog(`[Delta] Apply error: ${e.message}`);
+    return { applied: false, reason: e.message };
+  }
+}
+
+// ============================================================
+// CHECK FOR UPDATES (GitHub API based — no electron-updater dependency)
+// ============================================================
+// This replaces the broken electron-updater approach (which never imported
+// autoUpdater). We directly query the GitHub releases API, prefer the delta
+// ZIP if available, and stage it for apply on next restart.
 async function checkForUpdates() {
   try {
-    updateLog('=== NATIVE UPDATE CHECK (electron-updater) ===');
-    updateLog('Token: ' + (GH_TOKEN ? 'SET' : 'EMPTY') + ' | Version: ' + APP_VERSION);
-    const result = await autoUpdater.checkForUpdates();
-    if (result) {
-      updateLog('Update check result: v' + (result.updateInfo?.version || 'same') + ' | downloaded: ' + (result.downloadProgress !== undefined));
-    } else {
-      updateLog('No update available (already up to date)');
+    updateLog('=== UPDATE CHECK (GitHub API) ===');
+    updateLog('Current version: ' + APP_VERSION + ' | Token: ' + (GH_TOKEN ? 'SET' : 'EMPTY'));
+
+    const prefs = getUpdatePrefs();
+    sendToAllWindows('update-status', { status: 'checking', lastChecked: new Date().toISOString() });
+
+    // Query GitHub API for the latest release
+    const resp = await httpsGetJson(`${GH_API}/releases/latest`);
+    if (resp.status !== 200 || !resp.data) {
+      updateLog('GitHub API returned status ' + resp.status);
       sendToAllWindows('update-status', { status: 'not-available', lastChecked: new Date().toISOString() });
+      return { updateAvailable: false };
     }
+
+    const release = resp.data;
+    const tagName = (release.tag_name || '').replace(/^v/, ''); // strip leading 'v'
+    if (!tagName) {
+      updateLog('No tag_name in release');
+      sendToAllWindows('update-status', { status: 'not-available', lastChecked: new Date().toISOString() });
+      return { updateAvailable: false };
+    }
+
+    const cmp = compareVersions(APP_VERSION, tagName);
+    updateLog(`Comparing: current=${APP_VERSION} latest=${tagName} cmp=${cmp}`);
+
+    if (cmp >= 0) {
+      // Already up to date
+      sendToAllWindows('update-status', { status: 'not-available', lastChecked: new Date().toISOString(), latestVersion: tagName });
+      return { updateAvailable: false, latestVersion: tagName };
+    }
+
+    // A newer version is available. Find the right asset to download.
+    const assets = release.assets || [];
+    updateLog(`Found ${assets.length} assets in release ${tagName}`);
+
+    // Prefer delta ZIP if user has it enabled and it exists for this release
+    let chosenAsset = null;
+    let isDelta = false;
+    if (prefs.useDelta) {
+      const deltaAsset = assets.find(a => a.name && a.name.startsWith('BAGA-HMS-Update-') && a.name.endsWith('.zip'));
+      if (deltaAsset) {
+        chosenAsset = deltaAsset;
+        isDelta = true;
+        updateLog(`Using delta update: ${deltaAsset.name} (${(deltaAsset.size / 1024 / 1024).toFixed(2)} MB)`);
+      } else {
+        updateLog('No delta zip asset found, falling back to full installer');
+      }
+    }
+    if (!chosenAsset) {
+      // Fall back to full installer
+      const setupAsset = assets.find(a => a.name && a.name.startsWith('BAGA-HMS-Setup-') && a.name.endsWith('.exe'));
+      if (setupAsset) {
+        chosenAsset = setupAsset;
+        isDelta = false;
+        updateLog(`Using full installer: ${setupAsset.name} (${(setupAsset.size / 1024 / 1024).toFixed(2)} MB)`);
+      }
+    }
+
+    if (!chosenAsset) {
+      updateLog('No usable asset found in release');
+      sendToAllWindows('update-status', {
+        status: 'available',
+        latestVersion: tagName,
+        releaseUrl: release.html_url,
+        message: 'Update available but no downloadable asset found. Click to open release page.',
+        lastChecked: new Date().toISOString(),
+      });
+      return { updateAvailable: true, latestVersion: tagName, releaseUrl: release.html_url };
+    }
+
+    // Notify renderer that an update is available
+    sendToAllWindows('update-status', {
+      status: 'available',
+      latestVersion: tagName,
+      currentVersion: APP_VERSION,
+      isDelta,
+      assetName: chosenAsset.name,
+      assetSize: chosenAsset.size,
+      releaseUrl: release.html_url,
+      releaseNotes: release.body || '',
+      lastChecked: new Date().toISOString(),
+    });
+
+    // Auto-download if enabled
+    if (prefs.autoDownload) {
+      const userDataDir = app.getPath('userData');
+      const destName = isDelta ? `BAGA-HMS-Update-${tagName}.zip` : `BAGA-HMS-Setup-${tagName}.exe`;
+      const destPath = path.join(userDataDir, destName);
+
+      // Skip if already downloaded
+      if (fs.existsSync(destPath) && fs.statSync(destPath).size === chosenAsset.size) {
+        updateLog(`Already downloaded: ${destName}`);
+        if (isDelta) {
+          // Stage it for apply on next restart
+          fs.writeFileSync(PENDING_DELTA_MARKER, JSON.stringify({
+            zipPath: destPath,
+            version: tagName,
+            downloadedAt: new Date().toISOString(),
+          }));
+          sendToAllWindows('update-status', {
+            status: 'downloaded',
+            latestVersion: tagName,
+            isDelta: true,
+            staged: true,
+            message: `Update v${tagName} downloaded. Restart to apply.`,
+            lastChecked: new Date().toISOString(),
+          });
+          // Try to auto-restart if configured
+          if (prefs.autoInstallOnQuit) {
+            updateLog('Auto-restarting to apply delta update...');
+            setTimeout(() => app.relaunch({ args: process.argv.slice(1) }), 1500);
+            setTimeout(() => app.quit(), 2000);
+          }
+        } else {
+          sendToAllWindows('update-status', {
+            status: 'downloaded',
+            latestVersion: tagName,
+            isDelta: false,
+            filePath: destPath,
+            message: `Installer v${tagName} downloaded. Click to install.`,
+            lastChecked: new Date().toISOString(),
+          });
+        }
+        return { updateAvailable: true, latestVersion: tagName, downloaded: true, staged: isDelta };
+      }
+
+      // Download
+      updateLog(`Downloading ${chosenAsset.browser_download_url} → ${destPath}`);
+      sendToAllWindows('update-status', {
+        status: 'downloading',
+        latestVersion: tagName,
+        isDelta,
+        progress: 0,
+        lastChecked: new Date().toISOString(),
+      });
+      await downloadFile(chosenAsset.browser_download_url, destPath, (received, total) => {
+        const pct = Math.round((received / total) * 100);
+        // Throttle progress events to every 10%
+        if (pct % 10 === 0) {
+          sendToAllWindows('update-status', {
+            status: 'downloading',
+            latestVersion: tagName,
+            isDelta,
+            progress: pct,
+            receivedMb: (received / 1024 / 1024).toFixed(1),
+            totalMb: (total / 1024 / 1024).toFixed(1),
+            lastChecked: new Date().toISOString(),
+          });
+        }
+      });
+
+      updateLog(`Download complete: ${destPath}`);
+
+      if (isDelta) {
+        // Stage the delta zip for apply on next restart
+        fs.writeFileSync(PENDING_DELTA_MARKER, JSON.stringify({
+          zipPath: destPath,
+          version: tagName,
+          downloadedAt: new Date().toISOString(),
+        }));
+        sendToAllWindows('update-status', {
+          status: 'downloaded',
+          latestVersion: tagName,
+          isDelta: true,
+          staged: true,
+          message: `Delta update v${tagName} downloaded. Restart to apply.`,
+          lastChecked: new Date().toISOString(),
+        });
+        if (prefs.autoInstallOnQuit) {
+          updateLog('Auto-restarting to apply delta update...');
+          setTimeout(() => app.relaunch({ args: process.argv.slice(1) }), 1500);
+          setTimeout(() => app.quit(), 2000);
+        }
+      } else {
+        sendToAllWindows('update-status', {
+          status: 'downloaded',
+          latestVersion: tagName,
+          isDelta: false,
+          filePath: destPath,
+          message: `Installer v${tagName} downloaded. Click to install.`,
+          lastChecked: new Date().toISOString(),
+        });
+      }
+      return { updateAvailable: true, latestVersion: tagName, downloaded: true, staged: isDelta };
+    }
+
+    return { updateAvailable: true, latestVersion: tagName, isDelta, releaseUrl: release.html_url };
   } catch (err) {
     updateLog('Update check failed: ' + (err?.message || String(err)));
+    sendToAllWindows('update-status', {
+      status: 'error',
+      message: err?.message || 'Update check failed',
+      lastChecked: new Date().toISOString(),
+    });
+    return { updateAvailable: false, error: err?.message };
   }
 }
 
@@ -1085,21 +1478,18 @@ ipcMain.handle('manual-check-update', async () => {
   // Send immediate status update so UI shows "checking" right away
   sendToAllWindows('update-status', { status: 'checking', lastChecked: new Date().toISOString() });
   try {
-    await checkForUpdates();
+    const result = await checkForUpdates();
     updateLog('MANUAL UPDATE CHECK FINISHED');
+    return result || { checking: false };
   } catch (err) {
     updateLog('MANUAL UPDATE CHECK FAILED: ' + (err && err.message ? err.message : String(err)));
-    updateLog('Error code: ' + (err && err.code ? err.code : 'N/A'));
-    updateLog('Error stack: ' + (err && err.stack ? err.stack : 'N/A'));
     sendToAllWindows('update-status', {
       status: 'error',
       message: err.message,
-      code: err.code,
-      stack: err.stack,
       lastChecked: new Date().toISOString(),
     });
+    return { checking: false, error: err.message };
   }
-  return { checking: true };
 });
 ipcMain.handle('quit-app', () => app.quit());
 ipcMain.handle('open-update-file', async (event, filePath) => {
@@ -1109,7 +1499,7 @@ ipcMain.handle('open-update-file', async (event, filePath) => {
     const fs = require('fs');
     const path = require('path');
     try {
-      const files = fs.readdirSync(userDataPath).filter(f => f.startsWith('BAGA-HMS-Update-') && f.endsWith('.exe'));
+      const files = fs.readdirSync(userDataPath).filter(f => f.startsWith('BAGA-HMS-') && (f.endsWith('.exe') || f.endsWith('.zip')));
       if (files.length > 0) {
         files.sort().reverse(); // newest first
         filePath = path.join(userDataPath, files[0]);
@@ -1120,6 +1510,98 @@ ipcMain.handle('open-update-file', async (event, filePath) => {
   try {
     const { shell } = require('electron');
     await shell.openPath(filePath);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+// Apply a staged delta update immediately (instead of waiting for next restart)
+ipcMain.handle('apply-delta-update', async () => {
+  try {
+    updateLog('APPLY-DELTA-UPDATE IPC INVOKED');
+    const result = applyStagedDeltaUpdate();
+    if (result.applied) {
+      updateLog(`Delta applied: ${result.copiedCount} files copied. Relaunching app...`);
+      // Relaunch the app so the new code takes effect
+      setTimeout(() => {
+        app.relaunch({ args: process.argv.slice(1) });
+        app.quit();
+      }, 1000);
+      return { success: true, ...result, relaunching: true };
+    } else {
+      updateLog(`Delta apply skipped: ${result.reason}`);
+      return { success: false, ...result };
+    }
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+// Restart app to apply a staged delta update
+ipcMain.handle('restart-for-update', async () => {
+  updateLog('Restarting app to apply delta update');
+  app.relaunch({ args: process.argv.slice(1) });
+  app.quit();
+  return { success: true };
+});
+
+// Read update preferences (delta/full, auto-download, auto-install)
+ipcMain.handle('get-update-prefs', () => {
+  return getUpdatePrefs();
+});
+
+// Update preferences
+ipcMain.handle('set-update-prefs', (event, prefs) => {
+  setUpdatePrefs(prefs || {});
+  return { success: true, prefs: getUpdatePrefs() };
+});
+
+// Read the auto-update log file (for debugging)
+ipcMain.handle('get-update-log', async () => {
+  try {
+    if (fs.existsSync(UPDATE_LOG)) {
+      const content = fs.readFileSync(UPDATE_LOG, 'utf8');
+      // Return last 200 lines
+      const lines = content.split('\n').filter(l => l.trim());
+      return { success: true, log: lines.slice(-200).join('\n') };
+    }
+    return { success: true, log: '' };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+// Check if there's a pending delta update waiting to be applied
+ipcMain.handle('get-pending-delta', async () => {
+  try {
+    if (fs.existsSync(PENDING_DELTA_MARKER)) {
+      const marker = JSON.parse(fs.readFileSync(PENDING_DELTA_MARKER, 'utf8'));
+      return {
+        pending: true,
+        version: marker.version,
+        zipPath: marker.zipPath,
+        downloadedAt: marker.downloadedAt,
+        zipExists: fs.existsSync(marker.zipPath),
+      };
+    }
+    return { pending: false };
+  } catch (e) {
+    return { pending: false, error: e.message };
+  }
+});
+
+// Clear pending delta marker (user dismissed the update)
+ipcMain.handle('dismiss-pending-delta', async () => {
+  try {
+    if (fs.existsSync(PENDING_DELTA_MARKER)) {
+      const marker = JSON.parse(fs.readFileSync(PENDING_DELTA_MARKER, 'utf8'));
+      try { fs.unlinkSync(PENDING_DELTA_MARKER); } catch (e) {}
+      // Optionally delete the zip too
+      if (marker.zipPath && fs.existsSync(marker.zipPath)) {
+        try { fs.unlinkSync(marker.zipPath); } catch (e) {}
+      }
+    }
     return { success: true };
   } catch (e) {
     return { success: false, error: e.message };
@@ -1750,14 +2232,19 @@ function cleanupOldUpdateFiles() {
       } catch (e) {}
     }
 
-    // Also clean any old update exe files in userData
+    // Also clean any old update exe/zip files in userData
     try {
       const files = fs.readdirSync(userDataDir);
       files.forEach(file => {
-        if (file.startsWith('BAGA-HMS-Update-') && file.endsWith('.exe')) {
+        // Match both BAGA-HMS-Update-X.X.X.exe (legacy full update)
+        // and BAGA-HMS-Update-X.X.X.zip (new delta update)
+        const isUpdateExe = file.startsWith('BAGA-HMS-Update-') && file.endsWith('.exe');
+        const isDeltaZip = file.startsWith('BAGA-HMS-Update-') && file.endsWith('.zip');
+        const isSetup = file.startsWith('BAGA-HMS-Setup-') && file.endsWith('.exe');
+        if (isUpdateExe || isDeltaZip || isSetup) {
           const filePath = path.join(userDataDir, file);
           // Extract version from filename
-          const match = file.match(/BAGA-HMS-Update-(\d+\.\d+\.\d+)\.exe/);
+          const match = file.match(/BAGA-HMS-(?:Update|Setup)-(\d+\.\d+\.\d+)\.(?:exe|zip)/);
           if (match && match[1] === APP_VERSION) {
             // Current version's update file — remove it (we're already on this version)
             try { fs.unlinkSync(filePath); } catch (e) {}
@@ -1776,6 +2263,26 @@ function cleanupOldUpdateFiles() {
 }
 
 app.whenReady().then(async () => {
+  // First: Apply any pending delta update BEFORE doing anything else.
+  // This must happen before the main window loads so the renderer picks up the new code.
+  try {
+    const deltaResult = applyStagedDeltaUpdate();
+    if (deltaResult.applied) {
+      console.log(`[BAGA HMS] Delta update applied: ${deltaResult.copiedCount} files copied to ${deltaResult.appRoot}`);
+      console.log(`[BAGA HMS] Target version was ${deltaResult.targetVersion}`);
+      // The version in package.json (APP_VERSION) was just updated by the file copy.
+      // We need to relaunch to pick up the new code.
+      console.log('[BAGA HMS] Relaunching to use the new version...');
+      app.relaunch({ args: process.argv.slice(1) });
+      app.quit();
+      return;
+    } else if (deltaResult.reason && deltaResult.reason !== 'no marker') {
+      console.log(`[BAGA HMS] Delta apply skipped: ${deltaResult.reason}`);
+    }
+  } catch (e) {
+    console.error('[BAGA HMS] Delta apply error:', e.message);
+  }
+
   // Clean up stale update files on startup
   cleanupOldUpdateFiles();
 

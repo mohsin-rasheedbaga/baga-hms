@@ -194,7 +194,17 @@ export default function SettingsPage() {
     checking: boolean;
     downloadPercent: number;
     downloadedFile: string | null;
+    isDelta?: boolean;
+    staged?: boolean;
   }>({ status: 'idle', lastChecked: null, latestVersion: null, error: null, checking: false, downloadPercent: 0, downloadedFile: null });
+
+  // Delta update preferences (Electron-only)
+  const [updatePrefs, setUpdatePrefsState] = useState<{ useDelta: boolean; autoDownload: boolean; autoInstallOnQuit: boolean }>({
+    useDelta: true, autoDownload: true, autoInstallOnQuit: true,
+  });
+  const [pendingDelta, setPendingDelta] = useState<{ pending: boolean; version?: string; zipPath?: string; downloadedAt?: string } | null>(null);
+  const [updateLogView, setUpdateLogView] = useState<string>('');
+  const [showUpdateLog, setShowUpdateLog] = useState(false);
 
   // Room type modal
   const [roomModal, setRoomModal] = useState(false);
@@ -268,13 +278,25 @@ export default function SettingsPage() {
             ...prev,
             status: data.status || prev.status,
             lastChecked: data.lastChecked || prev.lastChecked,
-            latestVersion: data.version || prev.latestVersion,
+            latestVersion: data.latestVersion || data.version || prev.latestVersion,
             error: data.message || data.error || null,
             checking: data.status === 'checking' || data.status === 'downloading',
-            downloadPercent: data.percent ?? prev.downloadPercent,
+            downloadPercent: data.progress ?? prev.downloadPercent,
             downloadedFile: data.filePath || prev.downloadedFile,
+            isDelta: data.isDelta,
+            staged: data.staged,
           }));
         });
+        // Load update preferences
+        (window as any).bagaAPI.getUpdatePrefs().then((p: any) => {
+          if (p) setUpdatePrefsState({
+            useDelta: p.useDelta !== false,
+            autoDownload: p.autoDownload !== false,
+            autoInstallOnQuit: p.autoInstallOnQuit !== false,
+          });
+        }).catch(() => {});
+        // Load pending delta status
+        (window as any).bagaAPI.getPendingDelta().then((p: any) => setPendingDelta(p)).catch(() => {});
       } catch (e) {}
     }
   }, []);
@@ -1131,29 +1153,172 @@ export default function SettingsPage() {
               {updateDiag.status === 'downloaded' && (
                 <div className="mt-3">
                   <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg mb-2">
-                    <p className="text-xs font-semibold text-emerald-700">Update v{updateDiag.latestVersion} downloaded successfully!</p>
+                    <p className="text-xs font-semibold text-emerald-700">
+                      {updateDiag.isDelta
+                        ? `Delta update v${updateDiag.latestVersion} downloaded successfully! (~1 MB)`
+                        : `Full installer v${updateDiag.latestVersion} downloaded successfully!`}
+                    </p>
+                    {updateDiag.isDelta && (
+                      <p className="text-xs text-emerald-600 mt-1">App will restart to apply the delta update. Your data is safe.</p>
+                    )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <button
                       onClick={() => {
-                        try { (window as any).bagaAPI.openUpdateFile(updateDiag.downloadedFile); } catch (e: any) { alert('Error: ' + e.message); }
+                        if (updateDiag.isDelta) {
+                          // Delta: apply and restart
+                          try {
+                            (window as any).bagaAPI.applyDeltaUpdate();
+                          } catch (e: any) { alert('Error: ' + e.message); }
+                        } else {
+                          // Full: open the installer exe
+                          try { (window as any).bagaAPI.openUpdateFile(updateDiag.downloadedFile); } catch (e: any) { alert('Error: ' + e.message); }
+                        }
                       }}
                       className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition font-medium text-sm"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                      Install Now
+                      {updateDiag.isDelta ? 'Apply & Restart' : 'Install Now'}
                     </button>
-                    <button
-                      onClick={() => {
-                        setUpdateDiag({ status: 'idle', lastChecked: null, latestVersion: null, error: null, checking: false, downloadPercent: 0, downloadedFile: null });
-                      }}
-                      className="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 rounded-lg transition font-medium text-sm"
-                    >
-                      Dismiss
-                    </button>
+                    {!updateDiag.isDelta && (
+                      <button
+                        onClick={() => {
+                          setUpdateDiag({ status: 'idle', lastChecked: null, latestVersion: null, error: null, checking: false, downloadPercent: 0, downloadedFile: null });
+                        }}
+                        className="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 rounded-lg transition font-medium text-sm"
+                      >
+                        Dismiss
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
+
+              {/* Delta Update Preferences */}
+              <div className="mt-5 border-t border-slate-200 pt-5">
+                <h5 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                  Delta Update Settings
+                </h5>
+                <p className="text-xs text-slate-500 mb-3">
+                  Delta updates download only changed files (~1 MB) instead of the full installer (~135 MB).
+                  Faster downloads, no reinstall required, all data preserved.
+                </p>
+                <div className="space-y-3">
+                  <label className="flex items-center justify-between p-3 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition">
+                    <div>
+                      <div className="text-sm font-medium text-slate-700">Use Delta Updates (recommended)</div>
+                      <div className="text-xs text-slate-500">Download only changed files when available</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={updatePrefs.useDelta}
+                      onChange={e => {
+                        const newPrefs = { ...updatePrefs, useDelta: e.target.checked };
+                        setUpdatePrefsState(newPrefs);
+                        try { (window as any).bagaAPI.setUpdatePrefs(newPrefs); } catch (er) {}
+                      }}
+                      className="w-5 h-5"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between p-3 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition">
+                    <div>
+                      <div className="text-sm font-medium text-slate-700">Auto-Download Updates</div>
+                      <div className="text-xs text-slate-500">Automatically download when an update is found</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={updatePrefs.autoDownload}
+                      onChange={e => {
+                        const newPrefs = { ...updatePrefs, autoDownload: e.target.checked };
+                        setUpdatePrefsState(newPrefs);
+                        try { (window as any).bagaAPI.setUpdatePrefs(newPrefs); } catch (er) {}
+                      }}
+                      className="w-5 h-5"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between p-3 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition">
+                    <div>
+                      <div className="text-sm font-medium text-slate-700">Auto-Restart for Delta Updates</div>
+                      <div className="text-xs text-slate-500">Automatically restart to apply delta after download</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={updatePrefs.autoInstallOnQuit}
+                      onChange={e => {
+                        const newPrefs = { ...updatePrefs, autoInstallOnQuit: e.target.checked };
+                        setUpdatePrefsState(newPrefs);
+                        try { (window as any).bagaAPI.setUpdatePrefs(newPrefs); } catch (er) {}
+                      }}
+                      className="w-5 h-5"
+                    />
+                  </label>
+                </div>
+
+                {/* Pending delta indicator */}
+                {pendingDelta?.pending && (
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="text-sm font-semibold text-amber-800">Pending Delta Update: v{pendingDelta.version}</p>
+                        <p className="text-xs text-amber-700">Downloaded {pendingDelta.downloadedAt ? new Date(pendingDelta.downloadedAt).toLocaleString() : ''}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          try { (window as any).bagaAPI.applyDeltaUpdate(); } catch (e: any) { alert('Error: ' + e.message); }
+                        }}
+                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-medium"
+                      >
+                        Apply & Restart Now
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!confirm('Dismiss this pending update? The downloaded file will be deleted.')) return;
+                          try { (window as any).bagaAPI.dismissPendingDelta(); } catch (e) {}
+                          setPendingDelta({ pending: false });
+                        }}
+                        className="px-3 py-1.5 bg-white border border-amber-300 hover:bg-amber-50 text-amber-700 rounded-lg text-xs font-medium"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Update log viewer */}
+                <div className="mt-4">
+                  <button
+                    onClick={() => {
+                      if (!showUpdateLog) {
+                        try {
+                          (window as any).bagaAPI.getUpdateLog().then((r: any) => {
+                            setUpdateLogView(r?.log || '(no log entries)');
+                            setShowUpdateLog(true);
+                          }).catch((e: any) => {
+                            setUpdateLogView('Error: ' + e.message);
+                            setShowUpdateLog(true);
+                          });
+                        } catch (e: any) {
+                          setUpdateLogView('Error: ' + e.message);
+                          setShowUpdateLog(true);
+                        }
+                      } else {
+                        setShowUpdateLog(false);
+                      }
+                    }}
+                    className="text-xs text-blue-600 hover:text-blue-800 underline"
+                  >
+                    {showUpdateLog ? 'Hide update log' : 'View update log (for debugging)'}
+                  </button>
+                  {showUpdateLog && (
+                    <pre className="mt-2 p-3 bg-slate-900 text-green-300 rounded-lg text-xs font-mono overflow-x-auto max-h-60 overflow-y-auto">
+                      {updateLogView || '(no log entries)'}
+                    </pre>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>
