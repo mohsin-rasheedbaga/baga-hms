@@ -6,6 +6,8 @@ import {
   getMedicineCategories, getActivePrescriptions, updatePrescription, addDispense,
   getPatientCounter, setPatientCounter, addPatient, genId, todayStr, timeStr, getHospitalSettings,
   getExpiredMedicines, getLowStockMedicines,
+  getPharmacySalesDB, addPharmacySaleDB,
+  nextPharmacyBillSerial, nextPharmacyDailyToken,
 } from '@/lib/store';
 import type { Patient, Prescription, MedicineItem } from '@/lib/types';
 import { triggerPrint } from '@/lib/print-utils';
@@ -89,8 +91,13 @@ const RETURNS_KEY = 'baga_pharmacy_returns';
 const DAILY_TOKEN_KEY = 'baga_pharmacy_daily_token';
 const ANNUAL_SALE_COUNTER_KEY = 'baga_pharmacy_annual_sale_counter';
 
-function getPharmacySales(): PharmacySale[] { return lsGet<PharmacySale[]>(SALES_KEY, []); }
-function addPharmacySale(s: PharmacySale): void { const all = getPharmacySales(); all.push(s); lsSet(SALES_KEY, all); }
+// NOTE: Pharmacy sales are now stored in SQLite (table `pharmacy_sales`) via
+// getPharmacySalesDB() / addPharmacySaleDB() so they sync across LAN browsers
+// and the bill serial counter is unique per machine. The localStorage SALES_KEY
+// is kept only as a fallback mirror for offline mode.
+
+function getPharmacySales(): PharmacySale[] { return getPharmacySalesDB() as PharmacySale[]; }
+function addPharmacySale(s: PharmacySale): void { addPharmacySaleDB(s); }
 function getOutdoorCounter(): number { return lsGet<number>(OUTDOOR_COUNTER_KEY, 1); }
 function setOutdoorCounter(n: number): void { lsSet(OUTDOOR_COUNTER_KEY, n); }
 function getPharmacyReturns(): MedicineReturn[] { return lsGet<MedicineReturn[]>(RETURNS_KEY, []); }
@@ -484,8 +491,8 @@ export default function PharmacyPage() {
       time: timeStr(),
       servedBy: (typeof window !== 'undefined' && localStorage.getItem('baga_session')) ? JSON.parse(localStorage.getItem('baga_session')!).name || 'Pharmacist' : 'Pharmacist',
       paymentMethod,
-      dailyToken: incrementDailyToken(),
-      billSerial: getAnnualSerial(),
+      dailyToken: nextPharmacyDailyToken(),
+      billSerial: nextPharmacyBillSerial(),
       discountPercent: billDiscount > 0 ? billDiscount : undefined,
       discountAmount: discountAmt > 0 ? discountAmt : undefined,
       discountType: billDiscount > 0 ? discountType : undefined,
@@ -554,6 +561,9 @@ export default function PharmacyPage() {
         .info-row{display:flex;justify-content:space-between;font-size:10px;padding:1px 0;}
         .info-row .label{color:#64748b;font-weight:600;}
         .info-row .value{color:#1e293b;font-weight:500;}
+        .serial-box{text-align:center;padding:6px 0 4px;border:1.5px solid #0c2340;border-radius:6px;margin:6px 0;background:#f8fafc;}
+        .serial-box .serial-label{font-size:8px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:1px;}
+        .serial-box .serial-no{font-size:18px;font-weight:900;color:#0c2340;font-family:'Courier New',monospace;letter-spacing:3px;margin:2px 0;}
         .title-bar{text-align:center;padding:4px 0;border-bottom:1px dashed #e2e8f0;border-top:1px dashed #e2e8f0;}
         .title-bar h3{font-size:12px;font-weight:800;color:#0c2340;letter-spacing:1px;}
         table{width:100%;border-collapse:collapse;}
@@ -575,15 +585,15 @@ export default function PharmacyPage() {
           ${hospitalPhone ? `<div class="hphone">${hospitalPhone}</div>` : ''}
           <div class="hsub">Pharmacy Department</div>
         </div>
+        <div class="serial-box">
+          <div class="serial-label">Serial No</div>
+          <div class="serial-no">${saleBill.billSerial || saleBill.id.slice(-6).toUpperCase()}</div>
+          ${(() => { const bc = generateBarcodeDataURL(saleBill.billSerial || saleBill.id); return bc ? `<img src="${bc}" style="width:240px;height:42px;margin-top:2px;" />` : ''; })()}
+          <div style="font-size:9px;font-family:'Courier New',monospace;color:#0c2340;font-weight:700;margin-top:2px;">${(saleBill.billSerial || saleBill.id).toUpperCase()}</div>
+        </div>
         <div class="info">
-          <div class="info-row"><span class="label">Bill No:</span><span class="value">${saleBill.billSerial || saleBill.id.slice(-6).toUpperCase()}</span></div>
           <div class="info-row"><span class="label">Daily Token:</span><span class="value">${saleBill.dailyToken || '-'}</span></div>
-          <div style="text-align:center;padding:6px 0 2px;">
-            ${(() => { const bc = generateBarcodeDataURL(saleBill.billSerial || saleBill.id); return bc ? `<img src="${bc}" style="width:220px;height:40px;" />` : ''; })()}
-            <div style="font-size:8px;font-family:'Courier New',monospace;color:#333;margin-top:1px;">${(saleBill.billSerial || saleBill.id).toUpperCase()}</div>
-          </div>
           <div class="info-row"><span class="label">Patient:</span><span class="value">${saleBill.patientName}</span></div>
-          <div class="info-row"><span class="label">ID:</span><span class="value">${saleBill.patientNo}</span></div>
           <div class="info-row"><span class="label">Mobile:</span><span class="value">${saleBill.patientMobile || '-'}</span></div>
           <div class="info-row"><span class="label">Date:</span><span class="value">${saleBill.date} ${saleBill.time}</span></div>
           <div class="info-row"><span class="label">Served By:</span><span class="value">${saleBill.servedBy}</span></div>
@@ -602,6 +612,7 @@ export default function PharmacyPage() {
         <div class="footer">
           <div class="ty">Thank you for visiting ${hospitalName}!</div>
           <div class="info">Computer Generated Bill | ${saleBill.date} ${saleBill.time}</div>
+          <div class="info" style="margin-top:2px;font-size:7px;">Keep this slip for returns — bring Serial No to pharmacy</div>
         </div>
       </body></html>`;
       triggerPrint(html);
@@ -797,10 +808,8 @@ export default function PharmacyPage() {
               {/* Bill Info */}
               <div style={{ padding: '6px 0', borderBottom: '1px dashed #e2e8f0' }}>
                 {[
-                  ['Bill No', saleBill.billSerial || saleBill.id.slice(-6).toUpperCase()],
                   ['Daily Token', saleBill.dailyToken || '-'],
                   ['Patient', saleBill.patientName],
-                  ['ID', saleBill.patientNo],
                   ['Mobile', saleBill.patientMobile || '-'],
                   ['Date', `${saleBill.date} ${saleBill.time}`],
                   ['Served By', saleBill.servedBy],

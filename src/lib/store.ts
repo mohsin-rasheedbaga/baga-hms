@@ -699,3 +699,180 @@ export function deletePharmacyExpense(id: string): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem(PHARMACY_EXPENSES_KEY, JSON.stringify(getPharmacyExpenses().filter(e => e.id !== id)));
 }
+
+/* ========== PHARMACY SALES (SQLite-backed for LAN sync + unique serial) ========== */
+// Sales are stored in the `pharmacy_sales` SQLite table (and localStorage as fallback).
+// This ensures that sales are:
+//   1. Synced across all LAN browsers (each browser sees all sales from the host)
+//   2. The bill serial counter is shared (so each sale gets a UNIQUE serial across machines)
+
+export interface PharmacySaleRecord {
+  id: string;
+  patientNo: string;
+  patientName: string;
+  patientMobile: string;
+  type: 'Indoor' | 'Outdoor';
+  items: any[];
+  totalAmount: number;
+  date: string;
+  time: string;
+  servedBy: string;
+  paymentMethod: 'Cash' | 'Card' | 'Online';
+  dailyToken: string;
+  billSerial: string;
+  discountPercent?: number;
+  discountAmount?: number;
+  discountType?: 'patient' | 'prescriber';
+}
+
+const PHARMACY_SALES_LS_KEY = 'baga_pharmacy_sales';
+
+/**
+ * Read pharmacy sales from SQLite (preferred) or localStorage (fallback).
+ * Returns an empty array if neither is available.
+ */
+export function getPharmacySalesDB(): PharmacySaleRecord[] {
+  if (typeof window === 'undefined') return [];
+  // Try SQLite via db-bridge (works for both Electron host and LAN browsers)
+  try {
+    if (isElectron() || isLanMode()) {
+      const data = dbGetAll('pharmacy_sales');
+      if (Array.isArray(data)) return data as PharmacySaleRecord[];
+    }
+  } catch {}
+  // Fallback to localStorage (preserves backward compat with existing data)
+  try {
+    const d = localStorage.getItem(PHARMACY_SALES_LS_KEY);
+    return d ? JSON.parse(d) as PharmacySaleRecord[] : [];
+  } catch { return []; }
+}
+
+/**
+ * Persist the full pharmacy sales array back to SQLite (and localStorage mirror).
+ * Use this after adding/updating a sale.
+ */
+export function setPharmacySalesDB(sales: PharmacySaleRecord[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (isElectron() || isLanMode()) {
+      dbSetAll('pharmacy_sales', sales);
+    }
+  } catch (e) { console.error('setPharmacySalesDB SQLite failed:', e); }
+  // Always mirror to localStorage as a safety net
+  try { localStorage.setItem(PHARMACY_SALES_LS_KEY, JSON.stringify(sales)); } catch {}
+}
+
+export function addPharmacySaleDB(sale: PharmacySaleRecord): void {
+  const all = getPharmacySalesDB();
+  all.push(sale);
+  setPharmacySalesDB(all);
+}
+
+export function updatePharmacySaleDB(id: string, data: Partial<PharmacySaleRecord>): void {
+  const all = getPharmacySalesDB().map(s => s.id === id ? { ...s, ...data } : s);
+  setPharmacySalesDB(all);
+}
+
+/* ========== PHARMACY RETURNS (SQLite-backed for LAN sync) ========== */
+export interface PharmacyReturnRecord {
+  id: string;
+  slipId: string;
+  slipBillSerial?: string;
+  patientNo: string;
+  patientName: string;
+  items: Array<{ medicineId: string; name: string; quantity: number; price: number }>;
+  totalRefund: number;
+  returnedBy: string;
+  date: string;
+  time: string;
+}
+
+const PHARMACY_RETURNS_LS_KEY = 'baga_pharmacy_returns';
+
+export function getPharmacyReturnsDB(): PharmacyReturnRecord[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const d = localStorage.getItem(PHARMACY_RETURNS_LS_KEY);
+    return d ? JSON.parse(d) as PharmacyReturnRecord[] : [];
+  } catch { return []; }
+}
+
+export function setPharmacyReturnsDB(returns: PharmacyReturnRecord[]): void {
+  if (typeof window === 'undefined') return;
+  try { localStorage.setItem(PHARMACY_RETURNS_LS_KEY, JSON.stringify(returns)); } catch {}
+}
+
+export function addPharmacyReturnDB(r: PharmacyReturnRecord): void {
+  const all = getPharmacyReturnsDB();
+  all.push(r);
+  setPharmacyReturnsDB(all);
+}
+
+/* ========== PHARMACY SALE SERIAL COUNTER (SQLite-backed, unique across LAN) ========== */
+/**
+ * Generates a unique 6-digit annual serial number for each pharmacy sale.
+ * The counter is stored in SQLite's `counters` table so it's shared across
+ * all machines on the LAN — every sale (whether on the host or a LAN browser)
+ * gets the next sequential number, preventing fraud.
+ *
+ * Format: 000001, 000002, ... resets to 000001 at the start of each year.
+ */
+export function nextPharmacyBillSerial(): string {
+  if (typeof window === 'undefined') return '000001';
+  const year = new Date().getFullYear();
+  const counterKey = `pharmacy_sale_serial_${year}`;
+  let nextVal = 1;
+
+  // Try SQLite counter (works for both Electron host and LAN browsers)
+  if (isElectron() || isLanMode()) {
+    try {
+      const current = dbGetCounter(counterKey);
+      nextVal = (typeof current === 'number' ? current : 0) + 1;
+      dbSetCounter(counterKey, nextVal);
+      return String(nextVal).padStart(6, '0');
+    } catch (e) {
+      console.error('nextPharmacyBillSerial SQLite failed, falling back to localStorage:', e);
+    }
+  }
+
+  // Fallback: localStorage (single-machine only, may collide on LAN)
+  const lsKey = `baga_pharmacy_annual_sale_counter_${year}`;
+  try {
+    const cur = parseInt(localStorage.getItem(lsKey) || '0', 10);
+    nextVal = cur + 1;
+    localStorage.setItem(lsKey, String(nextVal));
+  } catch {}
+  return String(nextVal).padStart(6, '0');
+}
+
+/* ========== PHARMACY DAILY TOKEN (SQLite-backed, resets daily) ========== */
+/**
+ * Generates a 4-digit daily token that resets at midnight.
+ * Stored in SQLite so the token sequence is shared across all LAN machines.
+ */
+export function nextPharmacyDailyToken(): string {
+  if (typeof window === 'undefined') return '0001';
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const counterKey = `pharmacy_daily_token_${today}`;
+  let nextVal = 1;
+
+  if (isElectron() || isLanMode()) {
+    try {
+      const current = dbGetCounter(counterKey);
+      nextVal = (typeof current === 'number' ? current : 0) + 1;
+      dbSetCounter(counterKey, nextVal);
+      return String(nextVal).padStart(4, '0');
+    } catch (e) {
+      console.error('nextPharmacyDailyToken SQLite failed, falling back to localStorage:', e);
+    }
+  }
+
+  // Fallback: localStorage
+  const lsKey = 'baga_pharmacy_daily_token';
+  try {
+    const stored = JSON.parse(localStorage.getItem(lsKey) || '{"date":"","token":0}');
+    nextVal = (stored.date === today ? stored.token : 0) + 1;
+    localStorage.setItem(lsKey, JSON.stringify({ date: today, token: nextVal }));
+  } catch {}
+  return String(nextVal).padStart(4, '0');
+}

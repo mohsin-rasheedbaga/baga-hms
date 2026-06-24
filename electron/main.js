@@ -255,7 +255,7 @@ function handleLanApi(req, res, url, method) {
 
   // POST /api/login
   if (url === '/api/login' && method === 'POST') {
-    return readBody(({ username, password }) => {
+    return readBody(async ({ username, password }) => {
       if (!username || !password) return sendJson(400, { success: false, error: 'Missing credentials' });
       try {
         console.log(`[API Login] Attempt: username='${username.trim()}'`);
@@ -282,16 +282,79 @@ function handleLanApi(req, res, url, method) {
           const isActive = u.active !== false && u.active !== 'false';
           return uEmail === trimmedUser.toLowerCase() && uPass === trimmedPass && isActive;
         });
-        if (!user) {
-          const activeEmails = users.filter(u => u.active !== false).map(u => (u.email || u.login_id || '').trim());
-          console.log(`[API Login] No match. Active logins: [${activeEmails.join(', ')}], attempted: '${trimmedUser}'`);
-          return sendJson(200, { success: false, error: 'Invalid Login ID or Password' });
+
+        if (user) {
+          console.log(`[API Login] Success: ${user.email} (${user.name})`);
+          return sendJson(200, {
+            success: true,
+            user: { id: user.id, name: user.name, role: user.role, department: user.department || '', email: user.email, active: user.active, permissions: user.permissions || ['all'] },
+          });
         }
-        console.log(`[API Login] Success: ${user.email} (${user.name})`);
-        return sendJson(200, {
-          success: true,
-          user: { id: user.id, name: user.name, role: user.role, department: user.department || '', email: user.email, active: user.active, permissions: user.permissions || ['all'] },
-        });
+
+        // ----- REMOTE API FALLBACK -----
+        // If local SQLite doesn't have this user, try the remote license API.
+        // This is essential for LAN browsers because admin-panel-generated users
+        // (auto-created with the license) live in Supabase, not local SQLite.
+        // They get cached locally on first successful remote login.
+        console.log(`[API Login] No local match. Trying remote API fallback...`);
+        const store = getStore();
+        const licenseKey = store.license ? store.license.key : null;
+        if (licenseKey) {
+          try {
+            const resp = await fetch(`${API_BASE}/api/auth/login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username: trimmedUser, password: trimmedPass, license_key: licenseKey }),
+            });
+            const data = await resp.json();
+            console.log(`[API Login] Remote response:`, resp.status, JSON.stringify(data).substring(0, 200));
+            if (resp.ok && data.success !== false && (data.user || (data.user && data.user.user))) {
+              const remoteUser = data.user?.user ? data.user.user : data.user;
+              const mappedUser = {
+                id: remoteUser.id || remoteUser.user_id || `api-${Date.now()}`,
+                name: remoteUser.full_name || remoteUser.name || trimmedUser,
+                role: remoteUser.role || 'super_admin',
+                department: remoteUser.hospital_name || data.hospital?.name || (store.license ? store.license.hospitalName : ''),
+                email: trimmedUser,
+                password: trimmedPass,
+                active: true,
+                permissions: ['all'],
+              };
+              // Cache this user in local SQLite so future LAN logins are instant
+              try {
+                const existing = users.findIndex(u => (u.email || '').toLowerCase() === trimmedUser.toLowerCase());
+                if (existing === -1) {
+                  // Add new user
+                  const newUsers = [...users, mappedUser];
+                  safeDbSetAll('users', newUsers);
+                  console.log(`[API Login] Cached remote user "${trimmedUser}" to local SQLite`);
+                } else {
+                  // Update existing user
+                  const newUsers = [...users];
+                  newUsers[existing] = { ...newUsers[existing], ...mappedUser };
+                  safeDbSetAll('users', newUsers);
+                  console.log(`[API Login] Updated cached user "${trimmedUser}" in local SQLite`);
+                }
+              } catch (cacheErr) {
+                console.error(`[API Login] Failed to cache remote user:`, cacheErr.message);
+              }
+              return sendJson(200, {
+                success: true,
+                user: { id: mappedUser.id, name: mappedUser.name, role: mappedUser.role, department: mappedUser.department, email: mappedUser.email, active: true, permissions: mappedUser.permissions },
+              });
+            } else {
+              console.log(`[API Login] Remote API rejected:`, data.error || 'no error msg');
+            }
+          } catch (remoteErr) {
+            console.error(`[API Login] Remote API fallback error:`, remoteErr.message);
+          }
+        } else {
+          console.log(`[API Login] No license key, skipping remote API fallback`);
+        }
+
+        const activeEmails = users.filter(u => u.active !== false).map(u => (u.email || u.login_id || '').trim());
+        console.log(`[API Login] No match. Active logins: [${activeEmails.join(', ')}], attempted: '${trimmedUser}'`);
+        return sendJson(200, { success: false, error: 'Invalid Login ID or Password' });
       } catch (err) { return sendJson(500, { success: false, error: err.message }); }
     });
   }
@@ -299,7 +362,7 @@ function handleLanApi(req, res, url, method) {
   // GET /api/db/:table
   if (url.startsWith('/api/db/') && !url.includes('/kv/') && method === 'GET') {
     const table = url.replace('/api/db/', '');
-    const allowed = ['hospital','hospital_settings','users','patients','medicines','prescriptions','bills','appointments','admissions','lab_orders','lab_test_catalog','room_types','employees','attendance','salaries','xray_orders','ultrasound_orders','dispenses','visits'];
+    const allowed = ['hospital','hospital_settings','users','patients','medicines','prescriptions','bills','appointments','admissions','lab_orders','lab_test_catalog','room_types','employees','attendance','salaries','xray_orders','ultrasound_orders','dispenses','visits','pharmacy_sales','pharmacy_expenses'];
     if (!allowed.includes(table)) return sendJson(403, { success: false, error: 'Forbidden' });
     try {
       const data = db ? db.getAll(table) : null;
@@ -311,7 +374,7 @@ function handleLanApi(req, res, url, method) {
   // POST /api/db/:table
   if (url.startsWith('/api/db/') && method === 'POST') {
     const table = url.replace('/api/db/', '');
-    const allowed = ['hospital','hospital_settings','users','patients','medicines','prescriptions','bills','appointments','admissions','lab_orders','lab_test_catalog','room_types','employees','attendance','salaries','xray_orders','ultrasound_orders','dispenses','visits'];
+    const allowed = ['hospital','hospital_settings','users','patients','medicines','prescriptions','bills','appointments','admissions','lab_orders','lab_test_catalog','room_types','employees','attendance','salaries','xray_orders','ultrasound_orders','dispenses','visits','pharmacy_sales','pharmacy_expenses'];
     if (!allowed.includes(table)) return sendJson(403, { success: false, error: 'Forbidden' });
     return readBody(({ data }) => {
       if (!Array.isArray(data)) return sendJson(400, { success: false, error: 'Data must be array' });
@@ -690,6 +753,55 @@ ipcMain.handle('license-activate', async (event, licenseKey) => {
         machineId: machineId,
       };
       saveStore(store);
+
+      // ----- AUTO-CACHE HOSPITAL USERS FROM REMOTE API -----
+      // This ensures that admin-panel-generated users (admin, reception, etc.)
+      // are immediately available for LAN browser login, without requiring
+      // the customer to first login on the Electron host.
+      try {
+        console.log('[License] Fetching hospital users for caching...');
+        const usersResp = await fetch(`${API_BASE}/api/admin/hospitals/${data.hospital_id}/users`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        // The admin endpoints require auth, but the license/check endpoint already
+        // returned the admin user's username. We use a different approach:
+        // Try fetching the admin user directly via /api/license/check (already done above)
+        // and cache it. For other users, they will be cached on first login via
+        // the remote API fallback in /api/login.
+        if (usersResp.ok) {
+          const usersData = await usersResp.json();
+          if (usersData.success && Array.isArray(usersData.users)) {
+            const dbUsers = (safeDbGetAll('users').success ? safeDbGetAll('users').data : []) || [];
+            const cleanDbUsers = dbUsers.map(u => (u && u.data && u.data.email) ? u.data : u);
+            let changed = false;
+            for (const u of usersData.users) {
+              const exists = cleanDbUsers.find(d => (d.email || '').toLowerCase() === (u.username || '').toLowerCase());
+              if (!exists) {
+                cleanDbUsers.push({
+                  id: String(u.id),
+                  email: u.username,
+                  password: '', // password is not returned by admin API for security
+                  name: u.full_name || u.username,
+                  role: u.role || 'staff',
+                  department: '',
+                  active: u.is_active !== false,
+                  permissions: ['all'],
+                });
+                changed = true;
+              }
+            }
+            if (changed) {
+              safeDbSetAll('users', cleanDbUsers);
+              console.log(`[License] Cached ${usersData.users.length} users from admin API`);
+            }
+          }
+        }
+      } catch (usersErr) {
+        console.log('[License] User pre-fetch skipped (admin API requires auth):', usersErr.message);
+        // That's OK — users will be cached on first login via remote API fallback
+      }
+
       return { success: true, data: store.license };
     } else {
       return { success: false, error: data.error || 'Invalid license key' };

@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { todayStr, timeStr, genId, getHospitalSettings } from '@/lib/store';
+import { todayStr, timeStr, genId, getHospitalSettings, getPharmacySalesDB, addPharmacyReturnDB, getPharmacyReturnsDB, getMedicines, updateMedicine } from '@/lib/store';
 import { triggerPrint } from '@/lib/print-utils';
 
 /* ==================== TYPES ==================== */
@@ -29,6 +29,8 @@ interface PharmacySale {
   time: string;
   servedBy: string;
   paymentMethod: 'Cash' | 'Card' | 'Online';
+  dailyToken?: string;
+  billSerial?: string;
   discountPercent?: number;
   discountAmount?: number;
 }
@@ -43,6 +45,7 @@ interface ReturnItem {
 interface PharmacyReturn {
   id: string;
   slipId: string;
+  slipBillSerial?: string;
   patientNo: string;
   patientName: string;
   items: ReturnItem[];
@@ -69,9 +72,8 @@ function lsSet<T>(key: string, data: T): void {
   localStorage.setItem(key, JSON.stringify(data));
 }
 
-const SALES_KEY = 'baga_pharmacy_sales';
-const RETURNS_KEY = 'baga_pharmacy_returns';
-const MEDICINES_KEY = 'baga_medicines';
+const SALES_KEY = 'baga_pharmacy_sales'; // legacy, kept for backward compat
+const RETURNS_KEY = 'baga_pharmacy_returns'; // legacy, kept for backward compat
 
 async function getPrintHeader(): Promise<{ hospitalName: string; hospitalLogo: string; hospitalAddress: string; hospitalPhone: string }> {
   let hospitalName = 'BAGA HOSPITAL';
@@ -151,7 +153,7 @@ export default function PharmacyReturnsPage() {
   };
 
   const loadReturns = useCallback(() => {
-    setReturns(lsGet<PharmacyReturn[]>(RETURNS_KEY, []));
+    setReturns(getPharmacyReturnsDB() as PharmacyReturn[]);
   }, []);
 
   useEffect(() => {
@@ -192,19 +194,38 @@ export default function PharmacyReturnsPage() {
   const searchSlip = () => {
     const q = slipQuery.trim();
     if (!q) {
-      setSearchError('Please enter a Slip ID');
+      setSearchError('Please enter a Slip Serial No');
       setFoundSale(null);
       setItemStates({});
       setAllSelected(false);
       return;
     }
-    const sales = lsGet<PharmacySale[]>(SALES_KEY, []);
-    // Match by full ID or last 6 chars (common pattern)
-    const sale = sales.find(
-      (s) => s.id === q || s.id.toLowerCase() === q.toLowerCase() || s.id.slice(-6).toUpperCase() === q.toUpperCase()
-    );
+    // Pull sales from SQLite (works for both Electron host and LAN browsers)
+    const sales = getPharmacySalesDB() as PharmacySale[];
+    if (sales.length === 0) {
+      setSearchError('No sales found in database. Make sure the main app is running and has sales.');
+      setFoundSale(null);
+      setItemStates({});
+      setAllSelected(false);
+      return;
+    }
+    // Match by billSerial (the 6-digit number printed on the slip),
+    // OR by full sale.id, OR by last 6 chars of sale.id (legacy compat).
+    // The billSerial is the primary identifier the customer brings back.
+    const normalizedQ = q.replace(/\s/g, '').toUpperCase();
+    // Pad short numeric queries to 6 digits so "1" matches "000001"
+    const paddedQ = /^\d+$/.test(q) ? q.padStart(6, '0') : null;
+    const sale = sales.find((s) => {
+      const bs = (s.billSerial || '').toUpperCase();
+      const sid = (s.id || '').toUpperCase();
+      if (bs && (bs === normalizedQ || (paddedQ && bs === paddedQ))) return true;
+      if (sid === normalizedQ) return true;
+      if (sid.slice(-6) === normalizedQ) return true;
+      if (paddedQ && sid.slice(-6) === paddedQ) return true;
+      return false;
+    });
     if (!sale) {
-      setSearchError('No sale found with this Slip ID');
+      setSearchError(`No sale found with Serial No "${q}". Please check and try again.`);
       setFoundSale(null);
       setItemStates({});
       setAllSelected(false);
@@ -302,21 +323,18 @@ export default function PharmacyReturnsPage() {
     setProcessing(true);
 
     try {
-      // 1. Add stock back for each selected item
-      const medicines = lsGet<any[]>(MEDICINES_KEY, []);
-      const updatedMeds = [...medicines];
+      // 1. Add stock back for each selected item (use store.ts helpers so it
+      //    syncs across LAN via SQLite, not just localStorage)
+      const medicines = getMedicines();
       const returnItems: ReturnItem[] = [];
 
       for (const item of selectedItems) {
         const rQty = itemStates[item.medicineId]?.returnQty || 0;
         if (rQty <= 0) continue;
 
-        const medIndex = updatedMeds.findIndex((m) => m.id === item.medicineId);
-        if (medIndex !== -1) {
-          updatedMeds[medIndex] = {
-            ...updatedMeds[medIndex],
-            stock: (updatedMeds[medIndex].stock || 0) + rQty,
-          };
+        const med = medicines.find((m: any) => m.id === item.medicineId);
+        if (med) {
+          updateMedicine(med.id, { stock: (med.stock || 0) + rQty });
         }
 
         returnItems.push({
@@ -326,8 +344,6 @@ export default function PharmacyReturnsPage() {
           price: item.price,
         });
       }
-
-      lsSet(MEDICINES_KEY, updatedMeds);
 
       // 2. Save return record
       const sessionData = JSON.parse(
@@ -340,6 +356,7 @@ export default function PharmacyReturnsPage() {
       const returnRecord: PharmacyReturn = {
         id: genId(),
         slipId: foundSale.id,
+        slipBillSerial: foundSale.billSerial,
         patientNo: foundSale.patientNo,
         patientName: foundSale.patientName,
         items: returnItems,
@@ -349,9 +366,7 @@ export default function PharmacyReturnsPage() {
         time: timeStr(),
       };
 
-      const allReturns = lsGet<PharmacyReturn[]>(RETURNS_KEY, []);
-      allReturns.push(returnRecord);
-      lsSet(RETURNS_KEY, allReturns);
+      addPharmacyReturnDB(returnRecord);
 
       // 3. Update UI
       loadReturns();
@@ -432,9 +447,8 @@ export default function PharmacyReturnsPage() {
         <div class="title-bar"><h3>MEDICINE RETURN SLIP</h3></div>
         <div class="info">
           <div class="info-row"><span class="label">Return ID:</span><span class="value">${lastReturn.id.slice(-6).toUpperCase()}</span></div>
-          <div class="info-row"><span class="label">Original Slip:</span><span class="value">${lastReturn.slipId.slice(-6).toUpperCase()}</span></div>
+          <div class="info-row"><span class="label">Original Slip Serial:</span><span class="value">${lastReturn.slipBillSerial || lastReturn.slipId.slice(-6).toUpperCase()}</span></div>
           <div class="info-row"><span class="label">Patient:</span><span class="value">${lastReturn.patientName}</span></div>
-          <div class="info-row"><span class="label">Patient ID:</span><span class="value">${lastReturn.patientNo}</span></div>
           <div class="info-row"><span class="label">Returned By:</span><span class="value">${lastReturn.returnedBy}</span></div>
           <div class="info-row"><span class="label">Date:</span><span class="value">${lastReturn.date} ${lastReturn.time}</span></div>
         </div>
@@ -476,7 +490,7 @@ export default function PharmacyReturnsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-slate-800">Return Medicine</h2>
-          <p className="text-sm text-slate-500">Process medicine returns by Slip ID</p>
+          <p className="text-sm text-slate-500">Process medicine returns by Slip Serial No</p>
         </div>
         {lastReturn && (
           <button onClick={printReturnSlip} className="btn btn-primary">
@@ -508,16 +522,16 @@ export default function PharmacyReturnsPage() {
         </div>
       </div>
 
-      {/* Slip ID Search Section */}
+      {/* Slip Serial Search Section */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200">
           <h3 className="font-bold text-slate-800 flex items-center gap-2">
             <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-            Search Sale by Slip ID
+            Search Sale by Serial No
           </h3>
-          <p className="text-xs text-slate-500 mt-0.5">Enter the full Slip ID or last 6 characters to find the sale</p>
+          <p className="text-xs text-slate-500 mt-0.5">Enter the 6-digit Serial No printed on the slip (e.g. 000123) to find the sale</p>
         </div>
         <div className="p-5">
           <div className="flex gap-2">
@@ -528,7 +542,7 @@ export default function PharmacyReturnsPage() {
               <input
                 type="text"
                 className="form-input pl-10"
-                placeholder="Enter Slip ID (e.g. m3abc12def)..."
+                placeholder="Enter Serial No from slip (e.g. 000123)..."
                 value={slipQuery}
                 onChange={(e) => {
                   setSlipQuery(e.target.value);
@@ -576,14 +590,14 @@ export default function PharmacyReturnsPage() {
                 <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                Sale Details — Slip #{foundSale.id.slice(-6).toUpperCase()}
+                Sale Details — Serial No: <span className="font-mono text-emerald-700">{foundSale.billSerial || foundSale.id.slice(-6).toUpperCase()}</span>
               </h3>
               <span className="badge badge-emerald">{foundSale.type}</span>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
               <div>
-                <span className="text-slate-500">Patient ID:</span>{' '}
-                <span className="font-mono font-bold text-blue-600">{foundSale.patientNo}</span>
+                <span className="text-slate-500">Daily Token:</span>{' '}
+                <span className="font-mono font-bold text-slate-700">{foundSale.dailyToken || '-'}</span>
               </div>
               <div>
                 <span className="text-slate-500">Name:</span>{' '}
@@ -755,7 +769,7 @@ export default function PharmacyReturnsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
             </svg>
             <p className="text-slate-400 font-medium">No returns recorded yet</p>
-            <p className="text-slate-300 text-sm mt-1">Search a Slip ID above to process a return</p>
+            <p className="text-slate-300 text-sm mt-1">Search a Slip Serial No above to process a return</p>
           </div>
         ) : (
           <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
@@ -765,7 +779,7 @@ export default function PharmacyReturnsPage() {
                   <th>#</th>
                   <th>Date</th>
                   <th>Time</th>
-                  <th>Slip ID</th>
+                  <th>Slip Serial</th>
                   <th>Patient</th>
                   <th className="text-center">Items</th>
                   <th className="text-right">Refund</th>
@@ -781,8 +795,8 @@ export default function PharmacyReturnsPage() {
                       <td className="font-medium text-slate-700">{r.date}</td>
                       <td className="text-slate-500">{r.time}</td>
                       <td>
-                        <span className="font-mono text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
-                          {r.slipId.slice(-6).toUpperCase()}
+                        <span className="font-mono text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-bold">
+                          {r.slipBillSerial || r.slipId.slice(-6).toUpperCase()}
                         </span>
                       </td>
                       <td>
