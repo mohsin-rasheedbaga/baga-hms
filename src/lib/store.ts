@@ -845,6 +845,17 @@ export function nextPharmacyBillSerial(): string {
   return String(nextVal).padStart(6, '0');
 }
 
+/**
+ * Formats a 6-digit bill serial as a full annual token with year prefix.
+ * Example: '000001' → '2026-000001'
+ * This is what appears on the printed slip so the customer and pharmacist
+ * can identify the sale for medicine returns.
+ */
+export function formatAnnualToken(billSerial: string): string {
+  const year = new Date().getFullYear();
+  return `${year}-${billSerial}`;
+}
+
 /* ========== PHARMACY DAILY TOKEN (SQLite-backed, resets daily) ========== */
 /**
  * Generates a 4-digit daily token that resets at midnight.

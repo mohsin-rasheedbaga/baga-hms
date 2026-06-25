@@ -7,7 +7,7 @@ import {
   getPatientCounter, setPatientCounter, addPatient, genId, todayStr, timeStr, getHospitalSettings,
   getExpiredMedicines, getLowStockMedicines,
   getPharmacySalesDB, addPharmacySaleDB,
-  nextPharmacyBillSerial, nextPharmacyDailyToken,
+  nextPharmacyBillSerial, nextPharmacyDailyToken, formatAnnualToken,
 } from '@/lib/store';
 import type { Patient, Prescription, MedicineItem } from '@/lib/types';
 import { triggerPrint } from '@/lib/print-utils';
@@ -131,21 +131,69 @@ function getAnnualSerial(): string {
   return String(counter).padStart(6, '0');
 }
 
-/* ==================== BARCODE GENERATOR (Code 128B via Canvas) ==================== */
+/* ==================== BARCODE GENERATOR (Code 128B) ==================== */
+// Returns an INLINE SVG string — more reliable than canvas data URLs for both
+// on-screen modal rendering AND Electron print (data: URLs sometimes get blocked
+// in the hidden print BrowserWindow's file:// context).
+const CODE128_PATTERNS = [
+  '212222','222122','222221','121223','121322','131222','122213','122312','132212','221213',
+  '221312','231212','112232','122132','122231','113222','123122','123221','223211','221132',
+  '221231','213212','223112','312131','311222','321122','321221','312212','322112','322211',
+  '212123','212321','232121','111323','131123','131321','112313','132113','132311','211313',
+  '231113','231311','112133','112331','132131','113123','113321','133121','313121','211331',
+  '231131','213113','213311','213131','311123','311321','331121','312113','312311','332111',
+  '314111','221411','431111','111224','111422','121124','121421','141122','141221','112214',
+  '112412','122114','122411','142112','142211','241211','221114','413111','241112','134111',
+  '111242','121142','121241','114212','124112','124211','411212','421112','421211','212141',
+  '214121','412121','111143','111341','131141','114113','114311','411113','411311','113141',
+  '114131','311141','411131','211412','211214','211232','2331112',
+];
+
+function generateBarcodeSVG(text: string, opts?: { width?: number; height?: number; showText?: boolean }): string {
+  const width = opts?.width ?? 240;
+  const height = opts?.height ?? 50;
+  const showText = opts?.showText !== false;
+  try {
+    const displayText = text.slice(-12).toUpperCase();
+    const values: number[] = [104]; // Start Code B
+    for (let i = 0; i < displayText.length; i++) {
+      const code = displayText.charCodeAt(i) - 32;
+      if (code >= 0 && code <= 95) values.push(code);
+    }
+    let checksum = 104;
+    for (let i = 1; i < values.length; i++) checksum += values[i] * i;
+    values.push(checksum % 103, 106); // checksum + Stop
+
+    // Build bar rectangles
+    const qz = 10; // quiet zone
+    const bw = 2; // bar width unit
+    let totalUnits = qz * 2;
+    for (const v of values) {
+      const p = CODE128_PATTERNS[v];
+      if (p) for (let i = 0; i < p.length; i++) totalUnits += parseInt(p[i]) * bw;
+    }
+    const scale = width / totalUnits;
+    let x = qz * scale;
+    let bars = '';
+    for (const v of values) {
+      const p = CODE128_PATTERNS[v];
+      if (!p) continue;
+      for (let i = 0; i < p.length; i++) {
+        const w = parseInt(p[i]) * bw * scale;
+        if (i % 2 === 0) {
+          bars += `<rect x="${x.toFixed(2)}" y="0" width="${w.toFixed(2)}" height="${height}" fill="#000"/>`;
+        }
+        x += w;
+      }
+    }
+    const textY = height + 10;
+    const svgHeight = showText ? height + 14 : height;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${svgHeight}" viewBox="0 0 ${width} ${svgHeight}">${bars}${showText ? `<text x="${width / 2}" y="${textY}" text-anchor="middle" font-family="'Courier New',monospace" font-size="10" font-weight="bold" fill="#000">${displayText}</text>` : ''}</svg>`;
+  } catch { return ''; }
+}
+
+// Legacy canvas-based generator (kept for backward compat, but SVG is preferred)
 function generateBarcodeDataURL(text: string): string {
-  const PATTERNS = [
-    '212222','222122','222221','121223','121322','131222','122213','122312','132212','221213',
-    '221312','231212','112232','122132','122231','113222','123122','123221','223211','221132',
-    '221231','213212','223112','312131','311222','321122','321221','312212','322112','322211',
-    '212123','212321','232121','111323','131123','131321','112313','132113','132311','211313',
-    '231113','231311','112133','112331','132131','113123','113321','133121','313121','211331',
-    '231131','213113','213311','213131','311123','311321','331121','312113','312311','332111',
-    '314111','221411','431111','111224','111422','121124','121421','141122','141221','112214',
-    '112412','122114','122411','142112','142211','241211','221114','413111','241112','134111',
-    '111242','121142','121241','114212','124112','124211','411212','421112','421211','212141',
-    '214121','412121','111143','111341','131141','114113','114311','411113','411311','113141',
-    '114131','311141','411131','211412','211214','211232','2331112',
-  ];
   try {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -161,12 +209,12 @@ function generateBarcodeDataURL(text: string): string {
     values.push(checksum % 103, 106); // checksum + Stop
     const bw = 2, bh = 40, qz = 10;
     let totalW = qz * 2;
-    for (const v of values) { const p = PATTERNS[v]; if (p) for (let i = 0; i < p.length; i++) totalW += parseInt(p[i]) * bw; }
+    for (const v of values) { const p = CODE128_PATTERNS[v]; if (p) for (let i = 0; i < p.length; i++) totalW += parseInt(p[i]) * bw; }
     canvas.width = totalW; canvas.height = bh;
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, totalW, bh);
     let x = qz; ctx.fillStyle = '#000';
     for (const v of values) {
-      const p = PATTERNS[v]; if (!p) continue;
+      const p = CODE128_PATTERNS[v]; if (!p) continue;
       for (let i = 0; i < p.length; i++) {
         const w = parseInt(p[i]) * bw;
         if (i % 2 === 0) ctx.fillRect(Math.round(x), 0, w, bh);
@@ -561,9 +609,11 @@ export default function PharmacyPage() {
         .info-row{display:flex;justify-content:space-between;font-size:10px;padding:1px 0;}
         .info-row .label{color:#64748b;font-weight:600;}
         .info-row .value{color:#1e293b;font-weight:500;}
-        .serial-box{text-align:center;padding:6px 0 4px;border:1.5px solid #0c2340;border-radius:6px;margin:6px 0;background:#f8fafc;}
+        .serial-box{text-align:center;padding:6px 4px 4px;border:2px solid #0c2340;border-radius:6px;margin:6px 0;background:#f8fafc;}
         .serial-box .serial-label{font-size:8px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:1px;}
         .serial-box .serial-no{font-size:18px;font-weight:900;color:#0c2340;font-family:'Courier New',monospace;letter-spacing:3px;margin:2px 0;}
+        .serial-box svg{display:block;margin:2px auto 0;}
+        .serial-box .serial-footer{font-size:9px;font-family:'Courier New',monospace;color:#0c2340;font-weight:700;margin-top:2px;}
         .title-bar{text-align:center;padding:4px 0;border-bottom:1px dashed #e2e8f0;border-top:1px dashed #e2e8f0;}
         .title-bar h3{font-size:12px;font-weight:800;color:#0c2340;letter-spacing:1px;}
         table{width:100%;border-collapse:collapse;}
@@ -586,13 +636,14 @@ export default function PharmacyPage() {
           <div class="hsub">Pharmacy Department</div>
         </div>
         <div class="serial-box">
-          <div class="serial-label">Serial No</div>
-          <div class="serial-no">${saleBill.billSerial || saleBill.id.slice(-6).toUpperCase()}</div>
-          ${(() => { const bc = generateBarcodeDataURL(saleBill.billSerial || saleBill.id); return bc ? `<img src="${bc}" style="width:240px;height:42px;margin-top:2px;" />` : ''; })()}
+          <div class="serial-label">Serial No (Annual)</div>
+          <div class="serial-no">${saleBill.billSerial ? formatAnnualToken(saleBill.billSerial) : saleBill.id.slice(-6).toUpperCase()}</div>
+          ${(() => { const svg = generateBarcodeSVG(saleBill.billSerial || saleBill.id, { width: 250, height: 42, showText: false }); return svg ? svg : ''; })()}
           <div style="font-size:9px;font-family:'Courier New',monospace;color:#0c2340;font-weight:700;margin-top:2px;">${(saleBill.billSerial || saleBill.id).toUpperCase()}</div>
         </div>
         <div class="info">
           <div class="info-row"><span class="label">Daily Token:</span><span class="value">${saleBill.dailyToken || '-'}</span></div>
+          <div class="info-row"><span class="label">Annual Token:</span><span class="value">${saleBill.billSerial ? formatAnnualToken(saleBill.billSerial) : '-'}</span></div>
           <div class="info-row"><span class="label">Patient:</span><span class="value">${saleBill.patientName}</span></div>
           <div class="info-row"><span class="label">Mobile:</span><span class="value">${saleBill.patientMobile || '-'}</span></div>
           <div class="info-row"><span class="label">Date:</span><span class="value">${saleBill.date} ${saleBill.time}</span></div>
@@ -789,6 +840,8 @@ export default function PharmacyPage() {
         const discAmt = saleBill.discountAmount ?? 0;
         const discTypeLabel = (saleBill.discountType ?? 'patient') === 'patient' ? 'Patient' : 'Prescriber';
         const hdr = receiptHeader;
+        const serialDisplay = saleBill.billSerial ? formatAnnualToken(saleBill.billSerial) : saleBill.id.slice(-6).toUpperCase();
+        const barcodeSvg = generateBarcodeSVG(saleBill.billSerial || saleBill.id, { width: 260, height: 40, showText: false });
         return (
           <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={closeBill}>
             <div onClick={e => e.stopPropagation()} style={{
@@ -805,10 +858,26 @@ export default function PharmacyPage() {
                 <div style={{ fontSize: 8, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>Pharmacy Department</div>
               </div>
 
+              {/* Serial No Box — prominent at top for medicine returns */}
+              <div style={{
+                textAlign: 'center', padding: '8px 4px 6px', margin: '6px 0',
+                border: '2px solid #0c2340', borderRadius: 6, background: '#f8fafc',
+              }}>
+                <div style={{ fontSize: 8, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Serial No (Annual)</div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: '#0c2340', fontFamily: "'Courier New', monospace", letterSpacing: 3, margin: '2px 0' }}>{serialDisplay}</div>
+                {barcodeSvg && (
+                  <div style={{ display: 'flex', justifyContent: 'center', marginTop: 2 }} dangerouslySetInnerHTML={{ __html: barcodeSvg }} />
+                )}
+                <div style={{ fontSize: 9, fontFamily: "'Courier New', monospace", color: '#0c2340', fontWeight: 700, marginTop: 2 }}>
+                  {(saleBill.billSerial || saleBill.id).toUpperCase()}
+                </div>
+              </div>
+
               {/* Bill Info */}
               <div style={{ padding: '6px 0', borderBottom: '1px dashed #e2e8f0' }}>
                 {[
                   ['Daily Token', saleBill.dailyToken || '-'],
+                  ['Annual Token', saleBill.billSerial ? formatAnnualToken(saleBill.billSerial) : '-'],
                   ['Patient', saleBill.patientName],
                   ['Mobile', saleBill.patientMobile || '-'],
                   ['Date', `${saleBill.date} ${saleBill.time}`],

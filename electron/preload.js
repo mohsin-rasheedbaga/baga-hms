@@ -24,6 +24,9 @@ contextBridge.exposeInMainWorld('bagaAPI', {
   
   // Login
   apiLogin: (credentials) => ipcRenderer.invoke('api-login', credentials),
+
+  // Sync remote users (admin-panel users) to local SQLite for LAN login
+  syncRemoteUsers: () => ipcRenderer.invoke('sync-remote-users'),
   
   // Update
   checkForUpdate: () => ipcRenderer.invoke('check-update'),

@@ -752,6 +752,16 @@ function handleLanApi(req, res, url, method) {
     });
   }
 
+  // POST /api/sync-users — trigger remote user sync (callable from LAN browser)
+  if (url === '/api/sync-users' && method === 'POST') {
+    syncRemoteUsers().then(result => {
+      sendJson(200, result);
+    }).catch(err => {
+      sendJson(500, { success: false, error: err.message });
+    });
+    return;
+  }
+
   // GET /api/db/:table
   if (url.startsWith('/api/db/') && !url.includes('/kv/') && method === 'GET') {
     const table = url.replace('/api/db/', '');
@@ -1147,52 +1157,23 @@ ipcMain.handle('license-activate', async (event, licenseKey) => {
       };
       saveStore(store);
 
-      // ----- AUTO-CACHE HOSPITAL USERS FROM REMOTE API -----
+      // ----- AUTO-SYNC HOSPITAL USERS FROM REMOTE API -----
       // This ensures that admin-panel-generated users (admin, reception, etc.)
       // are immediately available for LAN browser login, without requiring
       // the customer to first login on the Electron host.
+      // Uses the new /api/license/users endpoint which accepts a license_key
+      // and returns ALL users WITH passwords (needed for local auth).
       try {
-        console.log('[License] Fetching hospital users for caching...');
-        const usersResp = await fetch(`${API_BASE}/api/admin/hospitals/${data.hospital_id}/users`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        });
-        // The admin endpoints require auth, but the license/check endpoint already
-        // returned the admin user's username. We use a different approach:
-        // Try fetching the admin user directly via /api/license/check (already done above)
-        // and cache it. For other users, they will be cached on first login via
-        // the remote API fallback in /api/login.
-        if (usersResp.ok) {
-          const usersData = await usersResp.json();
-          if (usersData.success && Array.isArray(usersData.users)) {
-            const dbUsers = (safeDbGetAll('users').success ? safeDbGetAll('users').data : []) || [];
-            const cleanDbUsers = dbUsers.map(u => (u && u.data && u.data.email) ? u.data : u);
-            let changed = false;
-            for (const u of usersData.users) {
-              const exists = cleanDbUsers.find(d => (d.email || '').toLowerCase() === (u.username || '').toLowerCase());
-              if (!exists) {
-                cleanDbUsers.push({
-                  id: String(u.id),
-                  email: u.username,
-                  password: '', // password is not returned by admin API for security
-                  name: u.full_name || u.username,
-                  role: u.role || 'staff',
-                  department: '',
-                  active: u.is_active !== false,
-                  permissions: ['all'],
-                });
-                changed = true;
-              }
-            }
-            if (changed) {
-              safeDbSetAll('users', cleanDbUsers);
-              console.log(`[License] Cached ${usersData.users.length} users from admin API`);
-            }
-          }
+        console.log('[License] Syncing hospital users from remote API...');
+        const syncResult = await syncRemoteUsers();
+        if (syncResult.success) {
+          console.log(`[License] User sync complete: ${syncResult.added} added, ${syncResult.updated} updated, ${syncResult.total} total`);
+        } else {
+          console.log('[License] User sync deferred:', syncResult.reason);
+          // That's OK — users will be cached on first login via remote API fallback
         }
-      } catch (usersErr) {
-        console.log('[License] User pre-fetch skipped (admin API requires auth):', usersErr.message);
-        // That's OK — users will be cached on first login via remote API fallback
+      } catch (syncErr) {
+        console.log('[License] User sync error:', syncErr.message);
       }
 
       return { success: true, data: store.license };
@@ -1210,6 +1191,111 @@ ipcMain.handle('license-reset', async () => {
   store.license = null;
   saveStore(store);
   return { success: true };
+});
+
+// ============================================================
+// SYNC REMOTE USERS — fetch all hospital users from license API
+// ============================================================
+// This is CRITICAL for LAN sharing. When a browser on another PC
+// tries to log in, the Electron host's /api/login checks local
+// SQLite. Admin-panel-generated users live in Supabase, not local
+// SQLite. This function fetches ALL users (with passwords) from
+// the license API and caches them in local SQLite so LAN browsers
+// can authenticate them.
+async function syncRemoteUsers() {
+  try {
+    const store = getStore();
+    const licenseKey = store.license ? store.license.key : null;
+    if (!licenseKey) {
+      console.log('[SyncUsers] No license key, skipping');
+      return { success: false, reason: 'no license' };
+    }
+
+    console.log('[SyncUsers] Fetching users from license API for key:', licenseKey.substring(0, 10) + '...');
+    const resp = await fetch(`${API_BASE}/api/license/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ license_key: licenseKey }),
+    });
+
+    if (!resp.ok) {
+      console.error('[SyncUsers] API returned', resp.status);
+      return { success: false, reason: 'API error: ' + resp.status };
+    }
+
+    const data = await resp.json();
+    if (!data.success || !data.users) {
+      console.error('[SyncUsers] API returned failure:', data.error);
+      return { success: false, reason: data.error || 'API failure' };
+    }
+
+    console.log(`[SyncUsers] Received ${data.users.length} users from API`);
+
+    // Get current local users from SQLite
+    const dbResult = safeDbGetAll('users');
+    if (!dbResult.success) {
+      console.error('[SyncUsers] Cannot read local users:', dbResult.error);
+      return { success: false, reason: 'DB read error' };
+    }
+
+    const localUsers = dbResult.data.map(u => {
+      if (u && typeof u.data === 'object' && u.data !== null && u.data.email) return u.data;
+      return u;
+    });
+
+    let added = 0;
+    let updated = 0;
+    const newUsersList = [...localUsers];
+
+    for (const remoteUser of data.users) {
+      // Map remote user to local User format
+      const mappedUser = {
+        id: String(remoteUser.id),
+        email: remoteUser.username, // local uses 'email' field, remote uses 'username'
+        password: remoteUser.password,
+        name: remoteUser.full_name || remoteUser.username,
+        role: remoteUser.role || 'staff',
+        department: remoteUser.hospital_name || '',
+        active: remoteUser.is_active !== false,
+        permissions: ['all'], // admin-panel users get all permissions
+      };
+
+      // Check if user already exists (by email/username)
+      const existingIdx = newUsersList.findIndex(u =>
+        (u.email || '').toLowerCase() === mappedUser.email.toLowerCase()
+      );
+
+      if (existingIdx >= 0) {
+        // Update existing user's password if different
+        if (newUsersList[existingIdx].password !== mappedUser.password) {
+          newUsersList[existingIdx] = { ...newUsersList[existingIdx], ...mappedUser };
+          updated++;
+        }
+      } else {
+        // Add new user
+        newUsersList.push(mappedUser);
+        added++;
+      }
+    }
+
+    // Save back to SQLite
+    if (added > 0 || updated > 0) {
+      safeDbSetAll('users', newUsersList);
+      console.log(`[SyncUsers] Synced: ${added} added, ${updated} updated`);
+    } else {
+      console.log('[SyncUsers] All users already up to date');
+    }
+
+    return { success: true, added, updated, total: newUsersList.length };
+  } catch (err) {
+    console.error('[SyncUsers] Error:', err.message);
+    return { success: false, reason: err.message };
+  }
+}
+
+// IPC handler for manual user sync (can be called from Settings)
+ipcMain.handle('sync-remote-users', async () => {
+  return await syncRemoteUsers();
 });
 
 ipcMain.handle('demo-activate', async () => {
@@ -2321,6 +2407,20 @@ app.whenReady().then(async () => {
   setTimeout(() => {
     restoreDataIfMissing();
   }, 2000); // Delay 2s to let DB fully initialize
+
+  // 3b. Sync remote users on startup (non-blocking, runs in background)
+  // This ensures admin-panel-generated users are always available for LAN login.
+  // Runs 5 seconds after startup to not block initial UI load.
+  setTimeout(() => {
+    syncRemoteUsers().then(result => {
+      if (result.success) {
+        console.log(`[Startup] User sync: ${result.added} added, ${result.updated} updated, ${result.total} total`);
+      }
+    }).catch(err => {
+      console.log('[Startup] User sync deferred:', err.message);
+    });
+  }, 5000);
+
   try {
     serverInstance = await startServer();
     // Auto-configure Windows Firewall for LAN sharing

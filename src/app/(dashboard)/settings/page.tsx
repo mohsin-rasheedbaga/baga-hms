@@ -1324,6 +1324,43 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* ==================== SECTION: User Sync (LAN Login Fix) ==================== */}
+      {isElectron && visibility.showSystemInfo && (
+        <div className="bg-white rounded-xl border border-amber-200 p-6">
+          <h3 className="text-lg font-semibold text-slate-800 mb-2 flex items-center gap-2">
+            <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+            LAN Login — User Sync
+          </h3>
+          <p className="text-sm text-slate-500 mb-4">
+            Sync all admin-panel-generated users (created with the license) from the cloud to this computer.
+            This is required for LAN browser login — when another PC on the same network opens the software via link,
+            it needs all users to be cached locally on this host machine.
+          </p>
+          <button
+            onClick={async () => {
+              try {
+                const result = await (window as any).bagaAPI.syncRemoteUsers();
+                if (result.success) {
+                  alert(`User sync complete!\n${result.added} new users added\n${result.updated} users updated\n${result.total} total users in local database`);
+                } else {
+                  alert('User sync failed: ' + (result.reason || result.error || 'Unknown error'));
+                }
+              } catch (e: any) {
+                alert('Error: ' + e.message);
+              }
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition font-medium text-sm"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            Sync Users Now
+          </button>
+          <p className="text-xs text-slate-400 mt-2">
+            This runs automatically on startup and after license activation. Use this button to manually re-sync
+            if you've added new users via the admin panel.
+          </p>
+        </div>
+      )}
+
       {/* ==================== SECTION: Print Settings ==================== */}
       {visibility.showPrintSettings && (
         <div className="bg-white rounded-xl border-2 border-blue-200 p-6">
