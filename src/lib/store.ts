@@ -720,6 +720,7 @@ export interface PharmacySaleRecord {
   paymentMethod: 'Cash' | 'Card' | 'Online';
   dailyToken: string;
   billSerial: string;
+  returnCode?: string;
   discountPercent?: number;
   discountAmount?: number;
   discountType?: 'patient' | 'prescriber';
@@ -854,6 +855,45 @@ export function nextPharmacyBillSerial(): string {
 export function formatAnnualToken(billSerial: string): string {
   const year = new Date().getFullYear();
   return `${year}-${billSerial}`;
+}
+
+/**
+ * Generates a random alphanumeric Return Code for each pharmacy sale.
+ * Format: 7 characters, mixed case letters + digits (no ambiguous chars).
+ * Example: '3fgT4et', 'K7mP2xq', '9aB3rYn'
+ *
+ * This code is:
+ * - Printed prominently on the receipt (separate from the barcode area)
+ * - Unique per sale (practically impossible to guess)
+ * - Used by the medicine returns page to find the sale
+ * - Different every time, preventing fraud/duplicate returns
+ *
+ * The character set excludes: 0, O, I, 1, l (ambiguous characters).
+ */
+const RETURN_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+export function generateReturnCode(length: number = 7): string {
+  let code = '';
+  for (let i = 0; i < length; i++) {
+    code += RETURN_CODE_CHARS.charAt(Math.floor(Math.random() * RETURN_CODE_CHARS.length));
+  }
+  return code;
+}
+
+/**
+ * Generates a unique Return Code, checking against existing sales to avoid collisions.
+ */
+export function generateUniqueReturnCode(): string {
+  let code = generateReturnCode();
+  try {
+    const sales = getPharmacySalesDB();
+    const existingCodes = new Set(sales.map(s => (s as any).returnCode).filter(Boolean));
+    let attempts = 0;
+    while (existingCodes.has(code) && attempts < 10) {
+      code = generateReturnCode();
+      attempts++;
+    }
+  } catch {}
+  return code;
 }
 
 /* ========== PHARMACY DAILY TOKEN (SQLite-backed, resets daily) ========== */

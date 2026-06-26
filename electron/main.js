@@ -747,7 +747,17 @@ function handleLanApi(req, res, url, method) {
 
         const activeEmails = users.filter(u => u.active !== false).map(u => (u.email || u.login_id || '').trim());
         console.log(`[API Login] No match. Active logins: [${activeEmails.join(', ')}], attempted: '${trimmedUser}'`);
-        return sendJson(200, { success: false, error: 'Invalid Login ID or Password' });
+        return sendJson(200, {
+          success: false,
+          error: 'Invalid Login ID or Password',
+          debug: {
+            userCount: users.length,
+            activeUserCount: users.filter(u => u.active !== false).length,
+            attemptedEmail: trimmedUser,
+            activeEmails: activeEmails,
+            dbAvailable: !!db,
+          },
+        });
       } catch (err) { return sendJson(500, { success: false, error: err.message }); }
     });
   }
@@ -760,6 +770,36 @@ function handleLanApi(req, res, url, method) {
       sendJson(500, { success: false, error: err.message });
     });
     return;
+  }
+
+  // GET /api/debug/users — diagnostic endpoint that returns all user emails
+  // (for troubleshooting LAN login issues). Passwords are NOT returned.
+  if (url === '/api/debug/users' && method === 'GET') {
+    try {
+      const dbResult = safeDbGetAll('users');
+      if (!dbResult.success) {
+        return sendJson(200, { success: false, dbAvailable: false, error: dbResult.error, userCount: 0, users: [] });
+      }
+      const users = dbResult.data.map(u => {
+        if (u && typeof u.data === 'object' && u.data !== null && u.data.email) return u.data;
+        return u;
+      });
+      const userList = users.map(u => ({
+        email: u.email || u.login_id || '',
+        name: u.name || '',
+        role: u.role || '',
+        active: u.active !== false,
+        hasPassword: !!(u.password && u.password.length > 0),
+      }));
+      return sendJson(200, {
+        success: true,
+        dbAvailable: true,
+        userCount: users.length,
+        users: userList,
+      });
+    } catch (err) {
+      return sendJson(500, { success: false, error: err.message });
+    }
   }
 
   // GET /api/db/:table

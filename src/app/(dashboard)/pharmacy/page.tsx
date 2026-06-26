@@ -7,7 +7,7 @@ import {
   getPatientCounter, setPatientCounter, addPatient, genId, todayStr, timeStr, getHospitalSettings,
   getExpiredMedicines, getLowStockMedicines,
   getPharmacySalesDB, addPharmacySaleDB,
-  nextPharmacyBillSerial, nextPharmacyDailyToken, formatAnnualToken,
+  nextPharmacyBillSerial, nextPharmacyDailyToken, formatAnnualToken, generateUniqueReturnCode,
 } from '@/lib/store';
 import type { Patient, Prescription, MedicineItem } from '@/lib/types';
 import { triggerPrint } from '@/lib/print-utils';
@@ -70,6 +70,7 @@ interface PharmacySale {
   paymentMethod: 'Cash' | 'Card' | 'Online';
   dailyToken: string;
   billSerial: string;
+  returnCode?: string;
   discountPercent?: number;
   discountAmount?: number;
   discountType?: 'patient' | 'prescriber';
@@ -541,6 +542,7 @@ export default function PharmacyPage() {
       paymentMethod,
       dailyToken: nextPharmacyDailyToken(),
       billSerial: nextPharmacyBillSerial(),
+      returnCode: generateUniqueReturnCode(),
       discountPercent: billDiscount > 0 ? billDiscount : undefined,
       discountAmount: discountAmt > 0 ? discountAmt : undefined,
       discountType: billDiscount > 0 ? discountType : undefined,
@@ -609,11 +611,14 @@ export default function PharmacyPage() {
         .info-row{display:flex;justify-content:space-between;font-size:10px;padding:1px 0;}
         .info-row .label{color:#64748b;font-weight:600;}
         .info-row .value{color:#1e293b;font-weight:500;}
-        .serial-box{text-align:center;padding:6px 4px 4px;border:2px solid #0c2340;border-radius:6px;margin:6px 0;background:#f8fafc;}
+        .serial-box{text-align:center;padding:6px 4px 4px;border:1.5px solid #0c2340;border-radius:6px;margin:6px 0;background:#f8fafc;}
         .serial-box .serial-label{font-size:8px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:1px;}
         .serial-box .serial-no{font-size:18px;font-weight:900;color:#0c2340;font-family:'Courier New',monospace;letter-spacing:3px;margin:2px 0;}
         .serial-box svg{display:block;margin:2px auto 0;}
         .serial-box .serial-footer{font-size:9px;font-family:'Courier New',monospace;color:#0c2340;font-weight:700;margin-top:2px;}
+        .return-code-box{text-align:center;padding:8px 4px;margin:6px 0;border:2px dashed #dc2626;border-radius:6px;background:#fef2f2;}
+        .return-code-box .return-code-label{font-size:7px;color:#dc2626;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;}
+        .return-code-box .return-code-no{font-size:20px;font-weight:900;color:#dc2626;font-family:'Courier New',monospace;letter-spacing:4px;margin:3px 0;}
         .title-bar{text-align:center;padding:4px 0;border-bottom:1px dashed #e2e8f0;border-top:1px dashed #e2e8f0;}
         .title-bar h3{font-size:12px;font-weight:800;color:#0c2340;letter-spacing:1px;}
         table{width:100%;border-collapse:collapse;}
@@ -636,14 +641,18 @@ export default function PharmacyPage() {
           <div class="hsub">Pharmacy Department</div>
         </div>
         <div class="serial-box">
-          <div class="serial-label">Serial No (Annual)</div>
-          <div class="serial-no">${saleBill.billSerial ? formatAnnualToken(saleBill.billSerial) : saleBill.id.slice(-6).toUpperCase()}</div>
+          <div class="serial-label">Barcode No (Annual)</div>
           ${(() => { const svg = generateBarcodeSVG(saleBill.billSerial || saleBill.id, { width: 250, height: 42, showText: false }); return svg ? svg : ''; })()}
           <div style="font-size:9px;font-family:'Courier New',monospace;color:#0c2340;font-weight:700;margin-top:2px;">${(saleBill.billSerial || saleBill.id).toUpperCase()}</div>
         </div>
+        <div class="return-code-box">
+          <div class="return-code-label">Return Code (for medicine returns)</div>
+          <div class="return-code-no">${saleBill.returnCode || '---------'}</div>
+          <div style="font-size:7px;color:#64748b;margin-top:2px;">Bring this code to pharmacy for returns</div>
+        </div>
         <div class="info">
           <div class="info-row"><span class="label">Daily Token:</span><span class="value">${saleBill.dailyToken || '-'}</span></div>
-          <div class="info-row"><span class="label">Annual Token:</span><span class="value">${saleBill.billSerial ? formatAnnualToken(saleBill.billSerial) : '-'}</span></div>
+          <div class="info-row"><span class="label">Annual No:</span><span class="value">${saleBill.billSerial ? formatAnnualToken(saleBill.billSerial) : '-'}</span></div>
           <div class="info-row"><span class="label">Patient:</span><span class="value">${saleBill.patientName}</span></div>
           <div class="info-row"><span class="label">Mobile:</span><span class="value">${saleBill.patientMobile || '-'}</span></div>
           <div class="info-row"><span class="label">Date:</span><span class="value">${saleBill.date} ${saleBill.time}</span></div>
@@ -663,7 +672,7 @@ export default function PharmacyPage() {
         <div class="footer">
           <div class="ty">Thank you for visiting ${hospitalName}!</div>
           <div class="info">Computer Generated Bill | ${saleBill.date} ${saleBill.time}</div>
-          <div class="info" style="margin-top:2px;font-size:7px;">Keep this slip for returns — bring Serial No to pharmacy</div>
+          <div class="info" style="margin-top:2px;font-size:7px;">Keep this slip for returns — bring Return Code to pharmacy</div>
         </div>
       </body></html>`;
       triggerPrint(html);
@@ -858,13 +867,12 @@ export default function PharmacyPage() {
                 <div style={{ fontSize: 8, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>Pharmacy Department</div>
               </div>
 
-              {/* Serial No Box — prominent at top for medicine returns */}
+              {/* Barcode Box — barcode + annual number (renamed from "Serial No") */}
               <div style={{
                 textAlign: 'center', padding: '8px 4px 6px', margin: '6px 0',
-                border: '2px solid #0c2340', borderRadius: 6, background: '#f8fafc',
+                border: '1.5px solid #0c2340', borderRadius: 6, background: '#f8fafc',
               }}>
-                <div style={{ fontSize: 8, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Serial No (Annual)</div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: '#0c2340', fontFamily: "'Courier New', monospace", letterSpacing: 3, margin: '2px 0' }}>{serialDisplay}</div>
+                <div style={{ fontSize: 8, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Barcode No (Annual)</div>
                 {barcodeSvg && (
                   <div style={{ display: 'flex', justifyContent: 'center', marginTop: 2 }} dangerouslySetInnerHTML={{ __html: barcodeSvg }} />
                 )}
@@ -873,11 +881,23 @@ export default function PharmacyPage() {
                 </div>
               </div>
 
+              {/* Return Code Box — random alphanumeric code for medicine returns */}
+              <div style={{
+                textAlign: 'center', padding: '8px 4px', margin: '6px 0',
+                border: '2px dashed #dc2626', borderRadius: 6, background: '#fef2f2',
+              }}>
+                <div style={{ fontSize: 7, color: '#dc2626', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Return Code (for medicine returns)</div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: '#dc2626', fontFamily: "'Courier New', monospace", letterSpacing: 4, margin: '3px 0' }}>
+                  {saleBill.returnCode || '---------'}
+                </div>
+                <div style={{ fontSize: 7, color: '#64748b', marginTop: 2 }}>Bring this code to pharmacy for returns</div>
+              </div>
+
               {/* Bill Info */}
               <div style={{ padding: '6px 0', borderBottom: '1px dashed #e2e8f0' }}>
                 {[
                   ['Daily Token', saleBill.dailyToken || '-'],
-                  ['Annual Token', saleBill.billSerial ? formatAnnualToken(saleBill.billSerial) : '-'],
+                  ['Annual No', saleBill.billSerial ? formatAnnualToken(saleBill.billSerial) : '-'],
                   ['Patient', saleBill.patientName],
                   ['Mobile', saleBill.patientMobile || '-'],
                   ['Date', `${saleBill.date} ${saleBill.time}`],

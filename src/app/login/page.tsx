@@ -33,6 +33,9 @@ export default function LoginPage() {
   const [changeLicenseStatus, setChangeLicenseStatus] = useState({ loading: false, error: '', success: '' });
   const [appVersion, setAppVersion] = useState('');
   const [redirecting, setRedirecting] = useState(false);
+  const [loginDebugInfo, setLoginDebugInfo] = useState<any>(null);
+  const [syncingUsers, setSyncingUsers] = useState(false);
+  const [syncResult, setSyncResult] = useState<string>('');
 
   useEffect(() => {
     async function init() {
@@ -257,6 +260,10 @@ export default function LoginPage() {
             };
           } else {
             console.log('LAN Login: /api/login rejected, trying direct DB fetch');
+            // Store debug info for display
+            if (loginResult.debug) {
+              setLoginDebugInfo(loginResult.debug);
+            }
           }
         }
       } catch (e) {
@@ -576,6 +583,47 @@ export default function LoginPage() {
             </div>
 
             {error && <div className="bg-red-500/20 border border-red-400/30 text-red-200 px-3 py-2 rounded-lg text-sm">{error}</div>}
+
+            {/* LAN Login Diagnostic — Sync Users button + debug info */}
+            {!isElectron && error && (
+              <div className="bg-amber-500/10 border border-amber-400/30 rounded-lg p-3 space-y-2">
+                <div className="text-amber-200 text-xs font-semibold">LAN Login Troubleshooting</div>
+                <button
+                  onClick={async () => {
+                    setSyncingUsers(true);
+                    setSyncResult('');
+                    try {
+                      const baseUrl = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
+                      const resp = await fetch(baseUrl + '/api/sync-users', { method: 'POST' });
+                      const data = await resp.json();
+                      if (data.success) {
+                        setSyncResult(`Sync complete: ${data.added} added, ${data.updated} updated, ${data.total} total users. Try logging in again.`);
+                      } else {
+                        setSyncResult('Sync failed: ' + (data.reason || data.error || 'Unknown error'));
+                      }
+                    } catch (e: any) {
+                      setSyncResult('Sync error: ' + e.message);
+                    } finally {
+                      setSyncingUsers(false);
+                    }
+                  }}
+                  disabled={syncingUsers}
+                  className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-amber-800 text-white text-sm font-medium py-2 px-3 rounded-lg transition"
+                >
+                  {syncingUsers ? 'Syncing...' : 'Sync Users from Cloud'}
+                </button>
+                {syncResult && <div className="text-amber-100 text-xs">{syncResult}</div>}
+                {loginDebugInfo && (
+                  <div className="text-amber-100/80 text-xs space-y-1">
+                    <div>Users in database: {loginDebugInfo.userCount}</div>
+                    <div>Active users: {loginDebugInfo.activeUserCount}</div>
+                    {loginDebugInfo.activeEmails && loginDebugInfo.activeEmails.length > 0 && (
+                      <div>Available logins: {loginDebugInfo.activeEmails.join(', ')}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             <button onClick={handleLogin} disabled={loading} className="btn btn-primary w-full justify-center btn-lg">
               {loading ? 'Logging in...' : 'Login'}

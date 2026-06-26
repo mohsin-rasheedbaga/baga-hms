@@ -31,6 +31,7 @@ interface PharmacySale {
   paymentMethod: 'Cash' | 'Card' | 'Online';
   dailyToken?: string;
   billSerial?: string;
+  returnCode?: string;
   discountPercent?: number;
   discountAmount?: number;
 }
@@ -194,7 +195,7 @@ export default function PharmacyReturnsPage() {
   const searchSlip = () => {
     const q = slipQuery.trim();
     if (!q) {
-      setSearchError('Please enter a Slip Serial No');
+      setSearchError('Please enter a Return Code');
       setFoundSale(null);
       setItemStates({});
       setAllSelected(false);
@@ -209,23 +210,27 @@ export default function PharmacyReturnsPage() {
       setAllSelected(false);
       return;
     }
-    // Match by billSerial (the 6-digit number printed on the slip),
-    // OR by full sale.id, OR by last 6 chars of sale.id (legacy compat).
-    // The billSerial is the primary identifier the customer brings back.
-    const normalizedQ = q.replace(/\s/g, '').toUpperCase();
-    // Pad short numeric queries to 6 digits so "1" matches "000001"
-    const paddedQ = /^\d+$/.test(q) ? q.padStart(6, '0') : null;
+    // PRIMARY: Match by returnCode (the random alphanumeric code printed on the slip).
+    // This is the code the customer brings back for returns.
+    // FALLBACK: Also match by billSerial (6-digit annual number) for older sales
+    // that don't have a returnCode yet.
+    const normalizedQ = q.replace(/\s/g, '');
     const sale = sales.find((s) => {
+      // Match by returnCode (case-insensitive)
+      if (s.returnCode && s.returnCode.toLowerCase() === normalizedQ.toLowerCase()) return true;
+      // Fallback: match by billSerial (6-digit annual number)
       const bs = (s.billSerial || '').toUpperCase();
+      const paddedQ = /^\d+$/.test(q) ? q.padStart(6, '0') : null;
+      if (bs && (bs === normalizedQ.toUpperCase() || (paddedQ && bs === paddedQ))) return true;
+      // Legacy: match by sale.id last 6 chars
       const sid = (s.id || '').toUpperCase();
-      if (bs && (bs === normalizedQ || (paddedQ && bs === paddedQ))) return true;
-      if (sid === normalizedQ) return true;
-      if (sid.slice(-6) === normalizedQ) return true;
+      if (sid === normalizedQ.toUpperCase()) return true;
+      if (sid.slice(-6) === normalizedQ.toUpperCase()) return true;
       if (paddedQ && sid.slice(-6) === paddedQ) return true;
       return false;
     });
     if (!sale) {
-      setSearchError(`No sale found with Serial No "${q}". Please check and try again.`);
+      setSearchError(`No sale found with Return Code "${q}". Please check and try again.`);
       setFoundSale(null);
       setItemStates({});
       setAllSelected(false);
@@ -490,7 +495,7 @@ export default function PharmacyReturnsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-slate-800">Return Medicine</h2>
-          <p className="text-sm text-slate-500">Process medicine returns by Slip Serial No</p>
+          <p className="text-sm text-slate-500">Process medicine returns by Return Code</p>
         </div>
         {lastReturn && (
           <button onClick={printReturnSlip} className="btn btn-primary">
@@ -529,9 +534,9 @@ export default function PharmacyReturnsPage() {
             <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-            Search Sale by Serial No
+            Search Sale by Return Code
           </h3>
-          <p className="text-xs text-slate-500 mt-0.5">Enter the 6-digit Serial No printed on the slip (e.g. 000123) to find the sale</p>
+          <p className="text-xs text-slate-500 mt-0.5">Enter the Return Code printed on the slip (e.g. 3fgT4et) to find the sale and process return</p>
         </div>
         <div className="p-5">
           <div className="flex gap-2">
@@ -542,7 +547,7 @@ export default function PharmacyReturnsPage() {
               <input
                 type="text"
                 className="form-input pl-10"
-                placeholder="Enter Serial No from slip (e.g. 000123)..."
+                placeholder="Enter Return Code from slip (e.g. 3fgT4et)..."
                 value={slipQuery}
                 onChange={(e) => {
                   setSlipQuery(e.target.value);
@@ -590,7 +595,7 @@ export default function PharmacyReturnsPage() {
                 <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                Sale Details — Serial No: <span className="font-mono text-emerald-700">{foundSale.billSerial || foundSale.id.slice(-6).toUpperCase()}</span>
+                Sale Details — Return Code: <span className="font-mono text-red-600 text-base">{foundSale.returnCode || foundSale.billSerial || foundSale.id.slice(-6).toUpperCase()}</span>
               </h3>
               <span className="badge badge-emerald">{foundSale.type}</span>
             </div>
@@ -779,7 +784,7 @@ export default function PharmacyReturnsPage() {
                   <th>#</th>
                   <th>Date</th>
                   <th>Time</th>
-                  <th>Slip Serial</th>
+                  <th>Return Code</th>
                   <th>Patient</th>
                   <th className="text-center">Items</th>
                   <th className="text-right">Refund</th>
