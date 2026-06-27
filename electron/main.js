@@ -638,11 +638,19 @@ function handleLanApi(req, res, url, method) {
       if (!username || !password) return sendJson(400, { success: false, error: 'Missing credentials' });
       try {
         console.log(`[API Login] Attempt: username='${username.trim()}'`);
-        const dbResult = safeDbGetAll('users');
-        if (!dbResult.success || !dbResult.data) {
-          console.log(`[API Login] DB error:`, dbResult.error || 'no data');
-          return sendJson(200, { success: false, error: 'Database not available. Please make sure the main app is running.' });
+        // Retry DB read up to 5 times if DB not ready (SQLite can be slow to init)
+        let dbResult = null;
+        for (let i = 0; i < 5; i++) {
+          dbResult = safeDbGetAll('users');
+          if (dbResult.success && Array.isArray(dbResult.data)) break;
+          console.log(`[API Login] DB not ready, retry ${i + 1}/5 in 500ms...`);
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
+        if (!dbResult || !dbResult.success || !dbResult.data) {
+          console.log(`[API Login] DB error after retries:`, dbResult?.error || 'no data');
+          return sendJson(200, { success: false, error: 'Database not available. Please make sure the main app is running and try again in a few seconds.' });
+        }
+        if (!Array.isArray(dbResult.data)) dbResult.data = [];
         // Unwrap double-wrapped records if detected
         // (some records may be stored as { id, data: { id, email, ... } } instead of flat)
         const users = dbResult.data.map(u => {
@@ -1259,11 +1267,23 @@ async function syncRemoteUsers() {
 
     console.log(`[SyncUsers] Received ${data.users.length} users from API`);
 
-    // Get current local users from SQLite
-    const dbResult = safeDbGetAll('users');
-    if (!dbResult.success) {
-      console.error('[SyncUsers] Cannot read local users:', dbResult.error);
-      return { success: false, reason: 'DB read error' };
+    // Get current local users from SQLite — retry up to 5 times if DB not ready
+    let dbResult = null;
+    let retryCount = 0;
+    while (retryCount < 5) {
+      dbResult = safeDbGetAll('users');
+      if (dbResult.success && Array.isArray(dbResult.data)) break;
+      console.log(`[SyncUsers] DB not ready, retry ${retryCount + 1}/5 in 1s...`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      retryCount++;
+    }
+    if (!dbResult || !dbResult.success) {
+      console.error('[SyncUsers] Cannot read local users after 5 retries:', dbResult?.error);
+      return { success: false, reason: 'Database not ready. Please wait a few seconds and try again.' };
+    }
+    if (!Array.isArray(dbResult.data)) {
+      console.error('[SyncUsers] DB returned non-array data');
+      dbResult.data = [];
     }
 
     const localUsers = dbResult.data.map(u => {

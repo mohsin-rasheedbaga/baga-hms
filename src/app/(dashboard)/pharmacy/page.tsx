@@ -646,9 +646,8 @@ export default function PharmacyPage() {
           <div style="font-size:9px;font-family:'Courier New',monospace;color:#0c2340;font-weight:700;margin-top:2px;">${(saleBill.billSerial || saleBill.id).toUpperCase()}</div>
         </div>
         <div class="return-code-box">
-          <div class="return-code-label">Return Code (for medicine returns)</div>
+          <div class="return-code-label">Serial No</div>
           <div class="return-code-no">${saleBill.returnCode || '---------'}</div>
-          <div style="font-size:7px;color:#64748b;margin-top:2px;">Bring this code to pharmacy for returns</div>
         </div>
         <div class="info">
           <div class="info-row"><span class="label">Daily Token:</span><span class="value">${saleBill.dailyToken || '-'}</span></div>
@@ -672,7 +671,7 @@ export default function PharmacyPage() {
         <div class="footer">
           <div class="ty">Thank you for visiting ${hospitalName}!</div>
           <div class="info">Computer Generated Bill | ${saleBill.date} ${saleBill.time}</div>
-          <div class="info" style="margin-top:2px;font-size:7px;">Keep this slip for returns — bring Return Code to pharmacy</div>
+          <div class="info" style="margin-top:2px;font-size:7px;">Keep this slip for returns — bring Serial No to pharmacy</div>
         </div>
       </body></html>`;
       triggerPrint(html);
@@ -881,16 +880,15 @@ export default function PharmacyPage() {
                 </div>
               </div>
 
-              {/* Return Code Box — random alphanumeric code for medicine returns */}
+              {/* Serial No Box — random alphanumeric code for medicine returns */}
               <div style={{
                 textAlign: 'center', padding: '8px 4px', margin: '6px 0',
                 border: '2px dashed #dc2626', borderRadius: 6, background: '#fef2f2',
               }}>
-                <div style={{ fontSize: 7, color: '#dc2626', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Return Code (for medicine returns)</div>
+                <div style={{ fontSize: 7, color: '#dc2626', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Serial No</div>
                 <div style={{ fontSize: 20, fontWeight: 900, color: '#dc2626', fontFamily: "'Courier New', monospace", letterSpacing: 4, margin: '3px 0' }}>
                   {saleBill.returnCode || '---------'}
                 </div>
-                <div style={{ fontSize: 7, color: '#64748b', marginTop: 2 }}>Bring this code to pharmacy for returns</div>
               </div>
 
               {/* Bill Info */}
