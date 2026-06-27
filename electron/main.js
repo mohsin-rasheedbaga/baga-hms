@@ -485,26 +485,18 @@ async function checkForUpdates() {
       if (fs.existsSync(destPath) && fs.statSync(destPath).size === chosenAsset.size) {
         updateLog(`Already downloaded: ${destName}`);
         if (isDelta) {
-          // Stage it for apply on next restart
-          fs.writeFileSync(PENDING_DELTA_MARKER, JSON.stringify({
-            zipPath: destPath,
-            version: tagName,
-            downloadedAt: new Date().toISOString(),
-          }));
+          // Delta updates don't work in packaged mode (asar is read-only).
+          // Just notify the user — they need to download the full installer instead.
           sendToAllWindows('update-status', {
-            status: 'downloaded',
+            status: 'available',
             latestVersion: tagName,
-            isDelta: true,
-            staged: true,
-            message: `Update v${tagName} downloaded. Restart to apply.`,
+            currentVersion: APP_VERSION,
+            isDelta: false,
+            assetName: `BAGA-HMS-Setup-${tagName}.exe`,
+            releaseUrl: release.html_url,
+            message: `Update v${tagName} available. Download the full installer to update.`,
             lastChecked: new Date().toISOString(),
           });
-          // Try to auto-restart if configured
-          if (prefs.autoInstallOnQuit) {
-            updateLog('Auto-restarting to apply delta update...');
-            setTimeout(() => app.relaunch({ args: process.argv.slice(1) }), 1500);
-            setTimeout(() => app.quit(), 2000);
-          }
         } else {
           sendToAllWindows('update-status', {
             status: 'downloaded',
@@ -515,26 +507,42 @@ async function checkForUpdates() {
             lastChecked: new Date().toISOString(),
           });
         }
-        return { updateAvailable: true, latestVersion: tagName, downloaded: true, staged: isDelta };
+        return { updateAvailable: true, latestVersion: tagName, downloaded: !isDelta };
       }
 
-      // Download
+      // Only download full installers, NOT delta zips
+      // (Delta updates don't work in packaged mode — asar is read-only)
+      if (isDelta) {
+        updateLog('Delta update skipped — not supported in packaged mode. Notifying user to download full installer.');
+        sendToAllWindows('update-status', {
+          status: 'available',
+          latestVersion: tagName,
+          currentVersion: APP_VERSION,
+          isDelta: false,
+          assetName: `BAGA-HMS-Setup-${tagName}.exe`,
+          releaseUrl: release.html_url,
+          message: `Update v${tagName} available. Click to open download page.`,
+          lastChecked: new Date().toISOString(),
+        });
+        return { updateAvailable: true, latestVersion: tagName, releaseUrl: release.html_url };
+      }
+
+      // Download full installer
       updateLog(`Downloading ${chosenAsset.browser_download_url} → ${destPath}`);
       sendToAllWindows('update-status', {
         status: 'downloading',
         latestVersion: tagName,
-        isDelta,
+        isDelta: false,
         progress: 0,
         lastChecked: new Date().toISOString(),
       });
       await downloadFile(chosenAsset.browser_download_url, destPath, (received, total) => {
         const pct = Math.round((received / total) * 100);
-        // Throttle progress events to every 10%
         if (pct % 10 === 0) {
           sendToAllWindows('update-status', {
             status: 'downloading',
             latestVersion: tagName,
-            isDelta,
+            isDelta: false,
             progress: pct,
             receivedMb: (received / 1024 / 1024).toFixed(1),
             totalMb: (total / 1024 / 1024).toFixed(1),
@@ -545,37 +553,15 @@ async function checkForUpdates() {
 
       updateLog(`Download complete: ${destPath}`);
 
-      if (isDelta) {
-        // Stage the delta zip for apply on next restart
-        fs.writeFileSync(PENDING_DELTA_MARKER, JSON.stringify({
-          zipPath: destPath,
-          version: tagName,
-          downloadedAt: new Date().toISOString(),
-        }));
-        sendToAllWindows('update-status', {
-          status: 'downloaded',
-          latestVersion: tagName,
-          isDelta: true,
-          staged: true,
-          message: `Delta update v${tagName} downloaded. Restart to apply.`,
-          lastChecked: new Date().toISOString(),
-        });
-        if (prefs.autoInstallOnQuit) {
-          updateLog('Auto-restarting to apply delta update...');
-          setTimeout(() => app.relaunch({ args: process.argv.slice(1) }), 1500);
-          setTimeout(() => app.quit(), 2000);
-        }
-      } else {
-        sendToAllWindows('update-status', {
-          status: 'downloaded',
-          latestVersion: tagName,
-          isDelta: false,
-          filePath: destPath,
-          message: `Installer v${tagName} downloaded. Click to install.`,
-          lastChecked: new Date().toISOString(),
-        });
-      }
-      return { updateAvailable: true, latestVersion: tagName, downloaded: true, staged: isDelta };
+      sendToAllWindows('update-status', {
+        status: 'downloaded',
+        latestVersion: tagName,
+        isDelta: false,
+        filePath: destPath,
+        message: `Installer v${tagName} downloaded. Click to install.`,
+        lastChecked: new Date().toISOString(),
+      });
+      return { updateAvailable: true, latestVersion: tagName, downloaded: true };
     }
 
     return { updateAvailable: true, latestVersion: tagName, isDelta, releaseUrl: release.html_url };
@@ -1101,13 +1087,15 @@ function createMainWindow() {
   });
 
   mainWindow.webContents.on('did-finish-load', () => {
-    updateLog('MAIN WINDOW DID FINISH LOAD — scheduling auto-update check in 3s');
+    updateLog('MAIN WINDOW DID FINISH LOAD');
     sendToAllWindows('update-status', { status: 'idle', lastChecked: null });
-    setTimeout(() => {
-      updateLog('AUTO UPDATE CHECK TRIGGERED (3s after load)');
-      sendToAllWindows('update-status', { status: 'checking', lastChecked: new Date().toISOString() });
-      checkForUpdates();
-    }, 3000);
+    // DISABLED: Auto-update check on window load.
+    // This was causing restart loops because the delta update system doesn't
+    // work in packaged mode (asar is read-only). The auto-update check would
+    // find a newer version, download a delta, stage it, and auto-restart —
+    // but the delta couldn't be applied, causing an infinite loop.
+    // Users can manually check for updates via Settings → Check Now.
+    // Update checks are now notification-only (no auto-download, no auto-restart).
   });
 
   mainWindow.webContents.on('render-process-gone', (event, details) => {
@@ -1644,29 +1632,14 @@ ipcMain.handle('open-update-file', async (event, filePath) => {
 
 // Apply a staged delta update immediately (instead of waiting for next restart)
 ipcMain.handle('apply-delta-update', async () => {
-  try {
-    updateLog('APPLY-DELTA-UPDATE IPC INVOKED');
-    const result = applyStagedDeltaUpdate();
-    if (result.applied) {
-      updateLog(`Delta applied: ${result.copiedCount} files copied. Relaunching app...`);
-      // Relaunch the app so the new code takes effect
-      setTimeout(() => {
-        app.relaunch({ args: process.argv.slice(1) });
-        app.quit();
-      }, 1000);
-      return { success: true, ...result, relaunching: true };
-    } else {
-      updateLog(`Delta apply skipped: ${result.reason}`);
-      return { success: false, ...result };
-    }
-  } catch (e) {
-    return { success: false, error: e.message };
-  }
+  // DISABLED: Delta updates don't work in packaged mode (asar is read-only).
+  // This was causing restart loops. Users must use the full installer.
+  return { success: false, error: 'Delta updates are disabled. Please use the full installer (BAGA-HMS-Setup-*.exe) to update.' };
 });
 
-// Restart app to apply a staged delta update
+// Restart app — only used for manual restart, NOT for delta updates
 ipcMain.handle('restart-for-update', async () => {
-  updateLog('Restarting app to apply delta update');
+  updateLog('Manual restart requested');
   app.relaunch({ args: process.argv.slice(1) });
   app.quit();
   return { success: true };
@@ -2389,24 +2362,59 @@ function cleanupOldUpdateFiles() {
 }
 
 app.whenReady().then(async () => {
-  // First: Apply any pending delta update BEFORE doing anything else.
-  // This must happen before the main window loads so the renderer picks up the new code.
+  // ============================================================
+  // RESTART LOOP DETECTION (critical safety check)
+  // ============================================================
+  // If the app restarts 3+ times within 30 seconds, it's stuck in a
+  // restart loop. We abort ALL auto-update logic and just start normally.
+  // The loop counter is stored in a file with timestamps.
+  const LOOP_COUNTER_PATH = path.join(app.getPath('userData'), 'baga-restart-counter.json');
+  const LOOP_WINDOW_MS = 30000; // 30 seconds
+  const LOOP_THRESHOLD = 3; // max 3 restarts in 30s
+
+  let isLoopDetected = false;
   try {
-    const deltaResult = applyStagedDeltaUpdate();
-    if (deltaResult.applied) {
-      console.log(`[BAGA HMS] Delta update applied: ${deltaResult.copiedCount} files copied to ${deltaResult.appRoot}`);
-      console.log(`[BAGA HMS] Target version was ${deltaResult.targetVersion}`);
-      // The version in package.json (APP_VERSION) was just updated by the file copy.
-      // We need to relaunch to pick up the new code.
-      console.log('[BAGA HMS] Relaunching to use the new version...');
-      app.relaunch({ args: process.argv.slice(1) });
-      app.quit();
-      return;
-    } else if (deltaResult.reason && deltaResult.reason !== 'no marker') {
-      console.log(`[BAGA HMS] Delta apply skipped: ${deltaResult.reason}`);
+    let restartHistory = [];
+    if (fs.existsSync(LOOP_COUNTER_PATH)) {
+      restartHistory = JSON.parse(fs.readFileSync(LOOP_COUNTER_PATH, 'utf8'));
+    }
+    const now = Date.now();
+    // Keep only restarts within the window
+    restartHistory = restartHistory.filter(ts => now - ts < LOOP_WINDOW_MS);
+    // Add current restart
+    restartHistory.push(now);
+    // Save
+    fs.writeFileSync(LOOP_COUNTER_PATH, JSON.stringify(restartHistory), 'utf8');
+
+    if (restartHistory.length > LOOP_THRESHOLD) {
+      console.error(`[BAGA HMS] RESTART LOOP DETECTED: ${restartHistory.length} restarts in ${LOOP_WINDOW_MS / 1000}s. Disabling auto-update.`);
+      isLoopDetected = true;
+      // Clean up any pending delta markers to break the loop
+      try { fs.unlinkSync(PENDING_DELTA_MARKER); } catch (e) {}
+      try { fs.unlinkSync(path.join(app.getPath('userData'), 'baga-pending-update.json')); } catch (e) {}
+      // Clear the counter so next restart is clean
+      fs.writeFileSync(LOOP_COUNTER_PATH, JSON.stringify([now]), 'utf8');
     }
   } catch (e) {
-    console.error('[BAGA HMS] Delta apply error:', e.message);
+    console.error('[BAGA HMS] Loop detection error:', e.message);
+  }
+
+  // DISABLED: Delta update apply on startup.
+  // The delta update system doesn't work in packaged Electron apps because
+  // app.asar is read-only. Files cannot be overwritten at runtime.
+  // This was causing an infinite restart loop (delta "applied" → relaunch →
+  // delta still pending → relaunch → ...).
+  // Future updates will use the full installer only.
+  if (!isLoopDetected) {
+    try {
+      // Just clean up any stale marker files — don't try to apply
+      if (fs.existsSync(PENDING_DELTA_MARKER)) {
+        console.log('[BAGA HMS] Cleaning up stale delta marker (delta updates disabled)');
+        try { fs.unlinkSync(PENDING_DELTA_MARKER); } catch (e) {}
+      }
+    } catch (e) {
+      console.error('[BAGA HMS] Delta cleanup error:', e.message);
+    }
   }
 
   // Clean up stale update files on startup
