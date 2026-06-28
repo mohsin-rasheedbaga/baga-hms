@@ -1133,10 +1133,10 @@ export default function SettingsPage() {
 
               {/* Action Buttons when update found */}
               {updateDiag.status === 'available' && (
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex gap-2 flex-wrap">
                   <button
                     onClick={() => {
-                      setUpdateDiag(prev => ({ ...prev, checking: true }));
+                      setUpdateDiag(prev => ({ ...prev, status: 'downloading', checking: true, error: null }));
                       try { (window as any).bagaAPI.manualCheckUpdate(); } catch (e: any) {
                         setUpdateDiag(prev => ({ ...prev, checking: false, error: e.message }));
                       }
@@ -1146,6 +1146,20 @@ export default function SettingsPage() {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                     Download v{updateDiag.latestVersion}
                   </button>
+                  {updateDiag.error && updateDiag.error.includes('download page') && (
+                    <button
+                      onClick={() => {
+                        // Open release page in browser
+                        if (updateDiag.error && updateDiag.error.includes('download page')) {
+                          window.open(`https://github.com/mohsin-rasheedbaga/baga-hms/releases/tag/v${updateDiag.latestVersion}`, '_blank');
+                        }
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition font-medium text-sm"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                      Open Download Page
+                    </button>
+                  )}
                 </div>
               )}
 

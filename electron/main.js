@@ -423,120 +423,70 @@ async function checkForUpdates() {
       return { updateAvailable: false, latestVersion: tagName };
     }
 
-    // A newer version is available. Find the right asset to download.
+    // A newer version is available. Find the full installer asset.
+    // NOTE: Delta updates are NOT used — they don't work in packaged mode (asar is read-only).
     const assets = release.assets || [];
     updateLog(`Found ${assets.length} assets in release ${tagName}`);
 
-    // Prefer delta ZIP if user has it enabled and it exists for this release
-    let chosenAsset = null;
-    let isDelta = false;
-    if (prefs.useDelta) {
-      const deltaAsset = assets.find(a => a.name && a.name.startsWith('BAGA-HMS-Update-') && a.name.endsWith('.zip'));
-      if (deltaAsset) {
-        chosenAsset = deltaAsset;
-        isDelta = true;
-        updateLog(`Using delta update: ${deltaAsset.name} (${(deltaAsset.size / 1024 / 1024).toFixed(2)} MB)`);
-      } else {
-        updateLog('No delta zip asset found, falling back to full installer');
-      }
-    }
-    if (!chosenAsset) {
-      // Fall back to full installer
-      const setupAsset = assets.find(a => a.name && a.name.startsWith('BAGA-HMS-Setup-') && a.name.endsWith('.exe'));
-      if (setupAsset) {
-        chosenAsset = setupAsset;
-        isDelta = false;
-        updateLog(`Using full installer: ${setupAsset.name} (${(setupAsset.size / 1024 / 1024).toFixed(2)} MB)`);
-      }
-    }
-
-    if (!chosenAsset) {
-      updateLog('No usable asset found in release');
+    // Find the full Setup installer (.exe)
+    const setupAsset = assets.find(a => a.name && a.name.startsWith('BAGA-HMS-Setup-') && a.name.endsWith('.exe'));
+    if (!setupAsset) {
+      updateLog('No Setup installer found in release');
       sendToAllWindows('update-status', {
         status: 'available',
         latestVersion: tagName,
         releaseUrl: release.html_url,
-        message: 'Update available but no downloadable asset found. Click to open release page.',
+        message: `Update v${tagName} available. Click to open download page.`,
         lastChecked: new Date().toISOString(),
       });
       return { updateAvailable: true, latestVersion: tagName, releaseUrl: release.html_url };
     }
+
+    updateLog(`Found Setup installer: ${setupAsset.name} (${(setupAsset.size / 1024 / 1024).toFixed(2)} MB)`);
+    const downloadUrl = setupAsset.browser_download_url;
+    const userDataDir = app.getPath('userData');
+    const destName = `BAGA-HMS-Setup-${tagName}.exe`;
+    const destPath = path.join(userDataDir, destName);
 
     // Notify renderer that an update is available
     sendToAllWindows('update-status', {
       status: 'available',
       latestVersion: tagName,
       currentVersion: APP_VERSION,
-      isDelta,
-      assetName: chosenAsset.name,
-      assetSize: chosenAsset.size,
+      isDelta: false,
+      assetName: setupAsset.name,
+      assetSize: setupAsset.size,
       releaseUrl: release.html_url,
       releaseNotes: release.body || '',
+      message: `Update v${tagName} available (${(setupAsset.size / 1024 / 1024).toFixed(1)} MB). Downloading...`,
       lastChecked: new Date().toISOString(),
     });
 
-    // Auto-download if enabled
-    if (prefs.autoDownload) {
-      const userDataDir = app.getPath('userData');
-      const destName = isDelta ? `BAGA-HMS-Update-${tagName}.zip` : `BAGA-HMS-Setup-${tagName}.exe`;
-      const destPath = path.join(userDataDir, destName);
-
-      // Skip if already downloaded
-      if (fs.existsSync(destPath) && fs.statSync(destPath).size === chosenAsset.size) {
-        updateLog(`Already downloaded: ${destName}`);
-        if (isDelta) {
-          // Delta updates don't work in packaged mode (asar is read-only).
-          // Just notify the user — they need to download the full installer instead.
-          sendToAllWindows('update-status', {
-            status: 'available',
-            latestVersion: tagName,
-            currentVersion: APP_VERSION,
-            isDelta: false,
-            assetName: `BAGA-HMS-Setup-${tagName}.exe`,
-            releaseUrl: release.html_url,
-            message: `Update v${tagName} available. Download the full installer to update.`,
-            lastChecked: new Date().toISOString(),
-          });
-        } else {
-          sendToAllWindows('update-status', {
-            status: 'downloaded',
-            latestVersion: tagName,
-            isDelta: false,
-            filePath: destPath,
-            message: `Installer v${tagName} downloaded. Click to install.`,
-            lastChecked: new Date().toISOString(),
-          });
-        }
-        return { updateAvailable: true, latestVersion: tagName, downloaded: !isDelta };
-      }
-
-      // Only download full installers, NOT delta zips
-      // (Delta updates don't work in packaged mode — asar is read-only)
-      if (isDelta) {
-        updateLog('Delta update skipped — not supported in packaged mode. Notifying user to download full installer.');
-        sendToAllWindows('update-status', {
-          status: 'available',
-          latestVersion: tagName,
-          currentVersion: APP_VERSION,
-          isDelta: false,
-          assetName: `BAGA-HMS-Setup-${tagName}.exe`,
-          releaseUrl: release.html_url,
-          message: `Update v${tagName} available. Click to open download page.`,
-          lastChecked: new Date().toISOString(),
-        });
-        return { updateAvailable: true, latestVersion: tagName, releaseUrl: release.html_url };
-      }
-
-      // Download full installer
-      updateLog(`Downloading ${chosenAsset.browser_download_url} → ${destPath}`);
+    // Skip download if already downloaded (size matches)
+    if (fs.existsSync(destPath) && fs.statSync(destPath).size === setupAsset.size) {
+      updateLog(`Already downloaded: ${destName}`);
       sendToAllWindows('update-status', {
-        status: 'downloading',
+        status: 'downloaded',
         latestVersion: tagName,
         isDelta: false,
-        progress: 0,
+        filePath: destPath,
+        message: `Installer v${tagName} downloaded. Click to install.`,
         lastChecked: new Date().toISOString(),
       });
-      await downloadFile(chosenAsset.browser_download_url, destPath, (received, total) => {
+      return { updateAvailable: true, latestVersion: tagName, downloaded: true, filePath: destPath };
+    }
+
+    // Download the full installer
+    updateLog(`Downloading ${downloadUrl} → ${destPath}`);
+    sendToAllWindows('update-status', {
+      status: 'downloading',
+      latestVersion: tagName,
+      isDelta: false,
+      progress: 0,
+      lastChecked: new Date().toISOString(),
+    });
+    try {
+      await downloadFile(downloadUrl, destPath, (received, total) => {
         const pct = Math.round((received / total) * 100);
         if (pct % 10 === 0) {
           sendToAllWindows('update-status', {
@@ -550,21 +500,27 @@ async function checkForUpdates() {
           });
         }
       });
-
-      updateLog(`Download complete: ${destPath}`);
-
+    } catch (dlErr) {
+      updateLog(`Download failed: ${dlErr.message}`);
       sendToAllWindows('update-status', {
-        status: 'downloaded',
-        latestVersion: tagName,
-        isDelta: false,
-        filePath: destPath,
-        message: `Installer v${tagName} downloaded. Click to install.`,
+        status: 'error',
+        message: `Download failed: ${dlErr.message}. Click to open download page.`,
+        releaseUrl: release.html_url,
         lastChecked: new Date().toISOString(),
       });
-      return { updateAvailable: true, latestVersion: tagName, downloaded: true };
+      return { updateAvailable: true, latestVersion: tagName, error: dlErr.message, releaseUrl: release.html_url };
     }
 
-    return { updateAvailable: true, latestVersion: tagName, isDelta, releaseUrl: release.html_url };
+    updateLog(`Download complete: ${destPath}`);
+    sendToAllWindows('update-status', {
+      status: 'downloaded',
+      latestVersion: tagName,
+      isDelta: false,
+      filePath: destPath,
+      message: `Installer v${tagName} downloaded. Click to install.`,
+      lastChecked: new Date().toISOString(),
+    });
+    return { updateAvailable: true, latestVersion: tagName, downloaded: true, filePath: destPath };
   } catch (err) {
     updateLog('Update check failed: ' + (err?.message || String(err)));
     sendToAllWindows('update-status', {
