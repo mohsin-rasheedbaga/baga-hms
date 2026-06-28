@@ -588,6 +588,9 @@ export default function LoginPage() {
             {!isElectron && error && (
               <div className="bg-amber-500/10 border border-amber-400/30 rounded-lg p-3 space-y-2">
                 <div className="text-amber-200 text-xs font-semibold">LAN Login Troubleshooting</div>
+                <div className="text-amber-100/80 text-xs">
+                  Try the built-in login: <span className="font-mono font-bold">master</span> / <span className="font-mono font-bold">master</span>
+                </div>
                 <button
                   onClick={async () => {
                     setSyncingUsers(true);
@@ -597,12 +600,12 @@ export default function LoginPage() {
                       const resp = await fetch(baseUrl + '/api/sync-users', { method: 'POST' });
                       const data = await resp.json();
                       if (data.success) {
-                        setSyncResult(`Sync complete: ${data.added} added, ${data.updated} updated, ${data.total} total users. Try logging in again.`);
+                        setSyncResult(`✓ Sync complete: ${data.added} added, ${data.updated} updated, ${data.total} total users. Try logging in again.`);
                       } else {
-                        setSyncResult('Sync failed: ' + (data.reason || data.error || 'Unknown error'));
+                        setSyncResult('✗ ' + (data.reason || data.error || 'Unknown error'));
                       }
                     } catch (e: any) {
-                      setSyncResult('Sync error: ' + e.message);
+                      setSyncResult('✗ Sync error: ' + e.message + ' — Is the main app running on this computer?');
                     } finally {
                       setSyncingUsers(false);
                     }
@@ -614,11 +617,15 @@ export default function LoginPage() {
                 </button>
                 {syncResult && <div className="text-amber-100 text-xs">{syncResult}</div>}
                 {loginDebugInfo && (
-                  <div className="text-amber-100/80 text-xs space-y-1">
+                  <div className="text-amber-100/80 text-xs space-y-1 border-t border-amber-400/20 pt-2 mt-2">
+                    <div className="font-semibold">Database status:</div>
                     <div>Users in database: {loginDebugInfo.userCount}</div>
                     <div>Active users: {loginDebugInfo.activeUserCount}</div>
                     {loginDebugInfo.activeEmails && loginDebugInfo.activeEmails.length > 0 && (
-                      <div>Available logins: {loginDebugInfo.activeEmails.join(', ')}</div>
+                      <div>Available logins: <span className="font-mono">{loginDebugInfo.activeEmails.join(', ')}</span></div>
+                    )}
+                    {loginDebugInfo.activeEmails && loginDebugInfo.activeEmails.length === 0 && (
+                      <div className="text-red-300">No users in database! Click "Sync Users from Cloud" above.</div>
                     )}
                   </div>
                 )}

