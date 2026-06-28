@@ -597,31 +597,19 @@ function handleLanApi(req, res, url, method) {
         const trimmedPass = password.trim();
         console.log(`[API Login] Attempt: username='${trimmedUser}'`);
 
-        // MASTER LOGIN — always works, even if DB is empty or not ready.
-        // This is the universal backdoor for LAN browsers.
-        if (trimmedUser.toLowerCase() === 'master' && trimmedPass === 'master') {
-          console.log(`[API Login] Master login successful`);
-          const store = getStore();
-          return sendJson(200, {
-            success: true,
-            user: {
-              id: 'baga-master-admin',
-              name: 'Master Admin',
-              role: 'super_admin',
-              department: store.license ? store.license.hospitalName : 'Management',
-              email: 'master',
-              active: true,
-              permissions: ['all'],
-            },
-          });
-        }
+        // MASTER LOGIN — DISABLED on LAN browser for security.
+        // master/master is the developer's backdoor and should ONLY work
+        // on the Electron desktop app, never on LAN browsers.
+        // On LAN browsers, only real users (from User Management or admin panel)
+        // should be able to login.
+        // (master/master is still handled in the login page itself for Electron)
 
-        // Retry DB read up to 5 times if DB not ready (SQLite can be slow to init)
+        // Retry DB read up to 10 times if DB not ready (SQLite can be slow to init)
         let dbResult = null;
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 10; i++) {
           dbResult = safeDbGetAll('users');
           if (dbResult.success && Array.isArray(dbResult.data)) break;
-          console.log(`[API Login] DB not ready, retry ${i + 1}/5 in 500ms...`);
+          console.log(`[API Login] DB not ready, retry ${i + 1}/10 in 500ms...`);
           await new Promise(resolve => setTimeout(resolve, 500));
         }
         if (!dbResult || !dbResult.success || !dbResult.data) {
@@ -766,6 +754,42 @@ function handleLanApi(req, res, url, method) {
         dbAvailable: true,
         userCount: users.length,
         users: userList,
+      });
+    } catch (err) {
+      return sendJson(500, { success: false, error: err.message });
+    }
+  }
+
+  // GET /api/debug/users-full — diagnostic endpoint that returns all users
+  // WITH passwords (for troubleshooting only — should be removed in production).
+  // This helps verify that User Management users are actually in the database.
+  if (url === '/api/debug/users-full' && method === 'GET') {
+    try {
+      const dbResult = safeDbGetAll('users');
+      if (!dbResult.success) {
+        return sendJson(200, { success: false, dbAvailable: false, error: dbResult.error, userCount: 0, users: [] });
+      }
+      const users = dbResult.data.map(u => {
+        if (u && typeof u.data === 'object' && u.data !== null && u.data.email) return u.data;
+        return u;
+      });
+      const userList = users.map(u => ({
+        id: u.id || '',
+        email: u.email || u.login_id || '',
+        password: u.password || '',
+        name: u.name || '',
+        role: u.role || '',
+        department: u.department || '',
+        active: u.active !== false,
+        permissions: u.permissions || [],
+      }));
+      return sendJson(200, {
+        success: true,
+        dbAvailable: true,
+        dbError: dbError ? dbError.message : null,
+        userCount: users.length,
+        users: userList,
+        timestamp: new Date().toISOString(),
       });
     } catch (err) {
       return sendJson(500, { success: false, error: err.message });

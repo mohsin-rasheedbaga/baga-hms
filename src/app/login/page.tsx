@@ -589,7 +589,7 @@ export default function LoginPage() {
               <div className="bg-amber-500/10 border border-amber-400/30 rounded-lg p-3 space-y-2">
                 <div className="text-amber-200 text-xs font-semibold">LAN Login Troubleshooting</div>
                 <div className="text-amber-100/80 text-xs">
-                  Try the built-in login: <span className="font-mono font-bold">master</span> / <span className="font-mono font-bold">master</span>
+                  Login with the User ID and Password created in User Management on the main app.
                 </div>
                 <button
                   onClick={async () => {
@@ -625,7 +625,7 @@ export default function LoginPage() {
                       <div>Available logins: <span className="font-mono">{loginDebugInfo.activeEmails.join(', ')}</span></div>
                     )}
                     {loginDebugInfo.activeEmails && loginDebugInfo.activeEmails.length === 0 && (
-                      <div className="text-red-300">No users in database! Click "Sync Users from Cloud" above.</div>
+                      <div className="text-red-300">No users in database! Create users in User Management on the main app, or click "Sync Users from Cloud" above.</div>
                     )}
                   </div>
                 )}
