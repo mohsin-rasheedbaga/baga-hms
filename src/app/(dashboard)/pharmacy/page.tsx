@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
-  searchPatients, searchMedicines, getMedicines, addMedicine, updateMedicine, deleteMedicine,
+  searchPatients, searchMedicines, getMedicines, setMedicines, addMedicine, updateMedicine, deleteMedicine,
   getMedicineCategories, getActivePrescriptions, updatePrescription, addDispense,
   getPatientCounter, setPatientCounter, addPatient, genId, todayStr, timeStr, getHospitalSettings,
   getExpiredMedicines, getLowStockMedicines,
@@ -549,13 +549,21 @@ export default function PharmacyPage() {
     };
 
     addPharmacySale(sale);
-    // Deduct stock for sold medicines (read once)
+    // Deduct stock for sold medicines — batch update for reliability
+    // Read all medicines ONCE, modify stock for all cart items, write back ONCE
     const allMeds = getMedicines();
+    let stockChanged = false;
     for (const item of cart) {
       const med = allMeds.find(m => m.id === item.medicineId);
       if (med) {
-        updateMedicine(med.id, { stock: Math.max(0, med.stock - item.quantity) });
+        med.stock = Math.max(0, (med.stock || 0) - item.quantity);
+        stockChanged = true;
       }
+    }
+    if (stockChanged) {
+      // Write all medicines back at once (atomic update)
+      setMedicines(allMeds);
+      console.log('[Pharmacy] Stock deducted for', cart.length, 'items');
     }
     loadInventory();
     showToast(`Sale completed! ${currency} ${grandTotal.toLocaleString()}`, 'success');

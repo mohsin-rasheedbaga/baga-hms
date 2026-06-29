@@ -167,7 +167,10 @@ export default function LoginPage() {
               mode: 'demo',
             };
             localStorage.setItem('baga_session', JSON.stringify(sessionData));
-            try { (window as any).bagaAPI.dbSetKV('baga_session', JSON.stringify(sessionData)); } catch (e) {}
+            if (isElectron) {
+              try { (window as any).bagaAPI.dbSetKV('baga_session', JSON.stringify(sessionData)); } catch (e) {}
+            }
+            // LAN browser: session stays in localStorage only
             setRedirecting(true);
             router.push(getHomePath(info.licenseType || 'hospital'));
             return;
@@ -407,16 +410,11 @@ export default function LoginPage() {
     };
     localStorage.setItem('baga_session', JSON.stringify(sessionData));
     if (isElectron) {
+      // Electron desktop app: save to KV store for offline login persistence
       try { (window as any).bagaAPI.dbSetKV('baga_session', JSON.stringify(sessionData)); } catch (e) {}
     }
-    if (isLanMode()) {
-      try {
-        await fetch(`${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/kv/baga_session`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ value: JSON.stringify(sessionData) }),
-        });
-      } catch {}
-    }
+    // LAN browser: session stays in localStorage ONLY (per-browser, not shared)
+    // Do NOT save to KV store — that would share the session with all browsers
 
     setRedirecting(true);
     router.push(getHomePath(licenseType));

@@ -131,22 +131,30 @@ export function dbSetKV(key: string, value: any): boolean {
 }
 
 // Session management
+// CRITICAL: Each browser (LAN mode) must have its OWN session in localStorage.
+// Sessions are NOT shared via the KV store — that would cause one browser's
+// login to appear on all other browsers on refresh.
+// Only the Electron desktop app uses the KV store for session (single-user).
 export function getSession(): any {
   if (typeof window === 'undefined') return null;
+  // Electron desktop app: read from KV store (SQLite)
   if (isElectron()) {
     try { const kv = dbGetKV('baga_session'); if (kv) { const parsed = JSON.parse(kv); if (parsed && parsed.userId) return parsed; } } catch {}
   }
-  if (isLanMode()) {
-    try { const kv = dbGetKV('baga_session'); if (kv) { const parsed = JSON.parse(kv); if (parsed && parsed.userId) return parsed; } } catch {}
-  }
+  // LAN browser: ONLY use localStorage (per-browser, not shared)
+  // Do NOT read from KV store — that would pick up the main app's session
   try { const s = localStorage.getItem('baga_session'); return s ? JSON.parse(s) : null; } catch { return null; }
 }
 
 export function clearSession(): void {
   if (typeof window === 'undefined') return;
+  // Electron desktop app: clear from KV store
   if (isElectron()) { try { dbSetKV('baga_session', ''); } catch {} }
-  if (isLanMode()) { try { dbSetKV('baga_session', ''); } catch {} }
+  // All modes: clear localStorage (per-browser session)
   try { localStorage.removeItem('baga_session'); } catch {}
+  // LAN browser: also clear the shared KV session so it doesn't leak
+  // (but we don't read from KV in LAN mode, so this is just cleanup)
+  if (isLanMode()) { try { dbSetKV('baga_session', ''); } catch {} }
 }
 
 // Hospital data
