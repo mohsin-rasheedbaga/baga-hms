@@ -36,6 +36,7 @@ export default function LoginPage() {
   const [loginDebugInfo, setLoginDebugInfo] = useState<any>(null);
   const [syncingUsers, setSyncingUsers] = useState(false);
   const [syncResult, setSyncResult] = useState<string>('');
+  const [debugTestResult, setDebugTestResult] = useState<any>(null);
 
   useEffect(() => {
     async function init() {
@@ -627,6 +628,49 @@ export default function LoginPage() {
                     {loginDebugInfo.activeEmails && loginDebugInfo.activeEmails.length === 0 && (
                       <div className="text-red-300">No users in database! Create users in User Management on the main app, or click "Sync Users from Cloud" above.</div>
                     )}
+                  </div>
+                )}
+                {/* Debug Login Test Button */}
+                <button
+                  onClick={async () => {
+                    try {
+                      const baseUrl = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
+                      const resp = await fetch(baseUrl + '/api/debug/login-test', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: loginId.trim(), password: password.trim() }),
+                      });
+                      const data = await resp.json();
+                      setDebugTestResult(data);
+                    } catch (e: any) {
+                      setDebugTestResult({ error: e.message });
+                    }
+                  }}
+                  className="w-full bg-slate-700 hover:bg-slate-800 text-white text-xs font-medium py-1.5 px-3 rounded-lg transition"
+                >
+                  🔍 Debug Login Test
+                </button>
+                {debugTestResult && (
+                  <div className="text-xs space-y-1 bg-slate-900/50 p-2 rounded border border-slate-600 max-h-60 overflow-y-auto">
+                    <div className="text-slate-300 font-semibold">Debug Result:</div>
+                    <div className="text-slate-400">DB Path: <span className="font-mono text-amber-300">{debugTestResult.dbPath || 'unknown'}</span></div>
+                    <div className="text-slate-400">DB Available: {String(debugTestResult.dbAvailable)}</div>
+                    <div className="text-slate-400">Users in DB: {debugTestResult.userCount}</div>
+                    <div className="text-slate-400">Attempted: <span className="font-mono">{debugTestResult.attemptedUsername}</span> (passLen: {debugTestResult.attemptedPasswordLength})</div>
+                    <div className={debugTestResult.matchResult?.startsWith('✅') ? 'text-green-400 font-semibold' : 'text-red-400 font-semibold'}>
+                      {debugTestResult.matchResult}
+                    </div>
+                    {debugTestResult.users && debugTestResult.users.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <div className="text-slate-300 font-semibold">Users in DB:</div>
+                        {debugTestResult.users.map((u: any, i: number) => (
+                          <div key={i} className={`text-xs font-mono ${u.fullMatch ? 'text-green-400' : u.emailMatch ? 'text-amber-400' : 'text-slate-500'}`}>
+                            {u.email} / {u.password} | active={String(u.active)} | emailMatch={String(u.emailMatch)} | passMatch={String(u.passMatch)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {debugTestResult.error && <div className="text-red-400">Error: {debugTestResult.error}</div>}
                   </div>
                 )}
               </div>

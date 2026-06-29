@@ -561,6 +561,17 @@ function setById(table, id, data) {
  */
 function setAll(table, dataArray) {
   try {
+    if (!Array.isArray(dataArray)) {
+      console.error(`[DB] setAll(${table}) error: dataArray is not an array`);
+      throw new Error('dataArray is not an array');
+    }
+    // Validate that every record has an id field
+    for (let i = 0; i < dataArray.length; i++) {
+      if (!dataArray[i] || !dataArray[i].id) {
+        console.error(`[DB] setAll(${table}) error: record at index ${i} has no id field:`, JSON.stringify(dataArray[i]));
+        throw new Error(`record at index ${i} has no id field`);
+      }
+    }
     const deleteAll = db.prepare(`DELETE FROM [${table}]`);
     const insert = db.prepare(`INSERT INTO [${table}] (id, data) VALUES (?, ?)`);
 
@@ -572,8 +583,10 @@ function setAll(table, dataArray) {
     });
 
     tx(dataArray);
+    console.log(`[DB] setAll(${table}) success: ${dataArray.length} records written`);
   } catch (err) {
     console.error(`[DB] setAll(${table}) error:`, err.message);
+    throw err; // RETHROW so safeDbSetAll can detect the failure
   }
 }
 

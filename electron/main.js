@@ -90,9 +90,15 @@ function initDatabaseSafe() {
 
 // Safe DB wrappers that work even if SQLite is unavailable
 function safeDbGetAll(table) {
-  if (!db) return { success: false, error: dbError ? dbError.message : 'DB not available' };
-  try { return { success: true, data: db.getAll(table) }; }
-  catch (err) { return { success: false, error: err.message }; }
+  if (!db) return { success: false, error: dbError ? dbError.message : 'DB not available', dbPath: null };
+  try {
+    const data = db.getAll(table);
+    return { success: true, data: data, dbPath: db.getDbPath() };
+  }
+  catch (err) {
+    console.error(`[safeDbGetAll] ${table} failed:`, err.message);
+    return { success: false, error: err.message, dbPath: db.getDbPath() };
+  }
 }
 function safeDbGetById(table, id) {
   if (!db) return { success: false, error: dbError ? dbError.message : 'DB not available' };
@@ -106,8 +112,14 @@ function safeDbSetById(table, id, data) {
 }
 function safeDbSetAll(table, dataArray) {
   if (!db) return { success: false, error: dbError ? dbError.message : 'DB not available' };
-  try { db.setAll(table, dataArray); return { success: true }; }
-  catch (err) { return { success: false, error: err.message }; }
+  try {
+    db.setAll(table, dataArray);
+    return { success: true };
+  }
+  catch (err) {
+    console.error(`[safeDbSetAll] ${table} failed:`, err.message);
+    return { success: false, error: err.message };
+  }
 }
 function safeDbDeleteById(table, id) {
   if (!db) return { success: false, error: dbError ? dbError.message : 'DB not available' };
@@ -617,6 +629,12 @@ function handleLanApi(req, res, url, method) {
           return sendJson(200, { success: false, error: 'Database not available. Please make sure the main app is running and try again in a few seconds.' });
         }
         if (!Array.isArray(dbResult.data)) dbResult.data = [];
+
+        // LOG: DB path for verification
+        const dbPath = dbResult.dbPath || 'unknown';
+        console.log(`[API Login] DB path: ${dbPath}`);
+        console.log(`[API Login] Raw records from SQLite: ${dbResult.data.length}`);
+
         // Unwrap double-wrapped records if detected
         // (some records may be stored as { id, data: { id, email, ... } } instead of flat)
         const users = dbResult.data.map(u => {
@@ -626,16 +644,33 @@ function handleLanApi(req, res, url, method) {
           return u;
         });
         console.log(`[API Login] Found ${users.length} users in database`);
+
+        // LOG: List all users (with masked passwords) for diagnosis
+        for (const u of users) {
+          const uEmail = (u.email || u.login_id || u.loginId || '').trim();
+          const uPass = (u.password || '').trim();
+          const isActive = u.active !== false && u.active !== 'false';
+          console.log(`[API Login]   User: email='${uEmail}', passLen=${uPass.length}, passFirstChar='${uPass.charAt(0)}', active=${isActive}, role=${u.role || '?'}`);
+        }
+
+        // LOG: Attempted credentials
+        console.log(`[API Login] Attempting: username='${trimmedUser}', passLen=${trimmedPass.length}, passFirstChar='${trimmedPass.charAt(0)}'`);
+
         const user = users.find(u => {
           if (!u) return false;
           const uEmail = (u.email || u.login_id || u.loginId || '').trim().toLowerCase();
           const uPass = (u.password || '').trim();
           const isActive = u.active !== false && u.active !== 'false';
-          return uEmail === trimmedUser.toLowerCase() && uPass === trimmedPass && isActive;
+          const emailMatch = uEmail === trimmedUser.toLowerCase();
+          const passMatch = uPass === trimmedPass;
+          if (emailMatch) {
+            console.log(`[API Login]   Email MATCH for '${uEmail}': passMatch=${passMatch} (db='${uPass.substring(0,3)}...', input='${trimmedPass.substring(0,3)}...'), active=${isActive}`);
+          }
+          return emailMatch && passMatch && isActive;
         });
 
         if (user) {
-          console.log(`[API Login] Success: ${user.email} (${user.name})`);
+          console.log(`[API Login] ✅ SUCCESS: ${user.email} (${user.name})`);
           return sendJson(200, {
             success: true,
             user: { id: user.id, name: user.name, role: user.role, department: user.department || '', email: user.email, active: user.active, permissions: user.permissions || ['all'] },
@@ -767,7 +802,7 @@ function handleLanApi(req, res, url, method) {
     try {
       const dbResult = safeDbGetAll('users');
       if (!dbResult.success) {
-        return sendJson(200, { success: false, dbAvailable: false, error: dbResult.error, userCount: 0, users: [] });
+        return sendJson(200, { success: false, dbAvailable: false, error: dbResult.error, userCount: 0, users: [], dbPath: dbResult.dbPath });
       }
       const users = dbResult.data.map(u => {
         if (u && typeof u.data === 'object' && u.data !== null && u.data.email) return u.data;
@@ -786,6 +821,7 @@ function handleLanApi(req, res, url, method) {
       return sendJson(200, {
         success: true,
         dbAvailable: true,
+        dbPath: dbResult.dbPath,
         dbError: dbError ? dbError.message : null,
         userCount: users.length,
         users: userList,
@@ -794,6 +830,90 @@ function handleLanApi(req, res, url, method) {
     } catch (err) {
       return sendJson(500, { success: false, error: err.message });
     }
+  }
+
+  // POST /api/debug/login-test — diagnostic endpoint that tests login
+  // Returns detailed info about why login succeeded or failed.
+  // Body: { username, password }
+  if (url === '/api/debug/login-test' && method === 'POST') {
+    return readBody(async ({ username, password }) => {
+      try {
+        const result = {
+          timestamp: new Date().toISOString(),
+          attemptedUsername: username || '',
+          attemptedPasswordLength: password ? password.length : 0,
+          attemptedPasswordFirst3: password ? password.substring(0, 3) : '',
+          dbPath: null,
+          dbAvailable: false,
+          userCount: 0,
+          users: [],
+          matchResult: null,
+        };
+
+        const dbResult = safeDbGetAll('users');
+        result.dbPath = dbResult.dbPath || 'unknown';
+        result.dbAvailable = !!dbResult.success;
+        if (!dbResult.success) {
+          result.matchResult = `DB not available: ${dbResult.error}`;
+          return sendJson(200, result);
+        }
+
+        const users = dbResult.data.map(u => {
+          if (u && typeof u.data === 'object' && u.data !== null && u.data.email) return u.data;
+          return u;
+        });
+        result.userCount = users.length;
+
+        // Build user list with comparison details
+        for (const u of users) {
+          const uEmail = (u.email || u.login_id || u.loginId || '').trim();
+          const uPass = (u.password || '').trim();
+          const isActive = u.active !== false && u.active !== 'false';
+          const emailMatch = uEmail.toLowerCase() === (username || '').trim().toLowerCase();
+          const passMatch = uPass === (password || '').trim();
+          result.users.push({
+            email: uEmail,
+            password: uPass,
+            passwordLength: uPass.length,
+            active: isActive,
+            emailMatch,
+            passMatch,
+            fullMatch: emailMatch && passMatch && isActive,
+          });
+        }
+
+        // Find matching user
+        const matched = users.find(u => {
+          const uEmail = (u.email || u.login_id || u.loginId || '').trim().toLowerCase();
+          const uPass = (u.password || '').trim();
+          const isActive = u.active !== false && u.active !== 'false';
+          return uEmail === (username || '').trim().toLowerCase() && uPass === (password || '').trim() && isActive;
+        });
+
+        if (matched) {
+          result.matchResult = `✅ SUCCESS: matched user '${matched.email}' (${matched.name})`;
+        } else {
+          // Find why it failed
+          const emailMatches = users.filter(u => (u.email || '').toLowerCase() === (username || '').trim().toLowerCase());
+          if (emailMatches.length === 0) {
+            result.matchResult = `❌ FAILED: No user found with email '${username}'. Check if the user exists in User Management.`;
+          } else {
+            const em = emailMatches[0];
+            if (em.password !== password) {
+              result.matchResult = `❌ FAILED: Email '${username}' found but password mismatch. DB password='${em.password}', input password='${password}'.`;
+            } else if (em.active === false) {
+              result.matchResult = `❌ FAILED: Email '${username}' found, password matches, but user is inactive.`;
+            } else {
+              result.matchResult = `❌ FAILED: Email '${username}' found but unknown reason.`;
+            }
+          }
+        }
+
+        return sendJson(200, result);
+      } catch (err) {
+        return sendJson(500, { success: false, error: err.message });
+      }
+    });
   }
 
   // GET /api/db/:table
