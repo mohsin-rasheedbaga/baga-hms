@@ -373,12 +373,14 @@ function migrateDoubleWrapped() {
     }
 
     console.log('[DB] Checking for double-wrapped records...');
-    const update = db.prepare('UPDATE [?] SET data = ? WHERE id = ?');
+    // FIX: better-sqlite3 does not support [?] for table names.
+    // We prepare the statement inside the loop with the actual table name.
     let fixedCount = 0;
 
     for (const table of JSON_TABLES) {
       try {
         const rows = db.prepare(`SELECT id, data FROM [${table}]`).all();
+        const update = db.prepare(`UPDATE [${table}] SET data = ? WHERE id = ?`);
         for (const row of rows) {
           let parsed;
           try { parsed = JSON.parse(row.data); } catch { continue; }
@@ -392,7 +394,7 @@ function migrateDoubleWrapped() {
             // If inner has more than 2 keys including 'id', it's likely wrapped data
             if (innerKeys.length >= 2 && (inner.id === parsed.id || innerKeys.includes('name') || innerKeys.includes('email') || innerKeys.includes('type'))) {
               console.log(`[DB]   Fixing double-wrapped record in ${table}: id=${row.id}`);
-              update.run(table, JSON.stringify(inner), row.id);
+              update.run(JSON.stringify(inner), row.id);
               fixedCount++;
             }
           }
@@ -424,23 +426,26 @@ function seedIfEmpty() {
 
   console.log('[DB] Inserting seed data…');
 
-  // Use a single transaction for all seed inserts
-  const insertDoc = db.prepare('INSERT OR REPLACE INTO [?] (id, data) VALUES (?, ?)');
-  const insertKV   = db.prepare('INSERT OR REPLACE INTO [?] (key, value) VALUES (?, ?)');
-
+  // CRITICAL FIX: better-sqlite3 does NOT support parameterized identifiers
+  // (table names). The old code used [?] which is invalid SQL.
+  // We must use string interpolation for table names (safe here because
+  // table names come from the hardcoded JSON_TABLES array, not user input).
   const seedMany = db.transaction((records, table) => {
+    const insert = db.prepare(`INSERT OR REPLACE INTO [${table}] (id, data) VALUES (?, ?)`);
     for (const rec of records) {
-      insertDoc.run(table, rec.id, JSON.stringify(rec));
+      insert.run(rec.id, JSON.stringify(rec));
     }
   });
 
   const seedSingle = db.transaction((table, id, data) => {
-    insertDoc.run(table, id, JSON.stringify(data));
+    const insert = db.prepare(`INSERT OR REPLACE INTO [${table}] (id, data) VALUES (?, ?)`);
+    insert.run(id, JSON.stringify(data));
   });
 
   const seedKVMany = db.transaction((pairs, table) => {
+    const insert = db.prepare(`INSERT OR REPLACE INTO [${table}] (key, value) VALUES (?, ?)`);
     for (const [key, value] of Object.entries(pairs)) {
-      insertKV.run(table, key, String(value));
+      insert.run(key, String(value));
     }
   });
 
