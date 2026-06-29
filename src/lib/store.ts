@@ -101,9 +101,12 @@ function set<T>(key: string, data: T): void {
         const id = item.id || 'main';
         if (dbSetById(tableName, id, item)) return;
       } else {
-        // Array data: pass directly to dbSetAll (NO wrapping)
-        // database.js setAll expects flat objects with id field
+        // Array data: pass directly to dbSetAll
+        // CRITICAL FIX: If dbSetAll fails, log the error so we know
+        // SQLite is broken. Data will fall through to localStorage,
+        // which means browser login will fail (browser reads SQLite).
         if (dbSetAll(tableName, data)) return;
+        console.error(`[store.set] ⚠️ dbSetAll FAILED for table '${tableName}'! Data saved to localStorage only. Browser login will fail.`);
       }
     }
   }
@@ -168,7 +171,63 @@ export function updateHospitalSettings(data: Partial<HospitalSettings>): void {
 /* ========== USERS ========== */
 const defaultUsers: User[] = [];
 
-export function getUsers(): User[] { return get(KEYS.users, defaultUsers); }
+// Migrate users from localStorage to SQLite if they exist there
+// This fixes the root cause of LAN login failure:
+// users were saved to localStorage (because dbSetAll failed silently)
+// but browser reads from SQLite (which was empty).
+let _usersMigrated = false;
+export function migrateUsersToSQLite(): void {
+  if (_usersMigrated) return;
+  _usersMigrated = true;
+  if (typeof window === 'undefined') return;
+  if (!isElectron()) return;
+
+  try {
+    // Check if localStorage has users
+    const lsData = localStorage.getItem('baga_users');
+    if (!lsData) return;
+    const lsUsers = JSON.parse(lsData) as User[];
+    if (!Array.isArray(lsUsers) || lsUsers.length === 0) return;
+
+    // Check how many users are in SQLite
+    const sqliteUsers = dbGetAll('users');
+    const sqliteCount = Array.isArray(sqliteUsers) ? sqliteUsers.length : 0;
+
+    console.log(`[MigrateUsers] localStorage has ${lsUsers.length} users, SQLite has ${sqliteCount} users`);
+
+    // If SQLite has fewer users than localStorage, migrate them
+    if (sqliteCount < lsUsers.length) {
+      console.log(`[MigrateUsers] Migrating ${lsUsers.length} users from localStorage to SQLite...`);
+      // Merge: keep existing SQLite users, add localStorage users that are missing
+      const existingEmails = new Set((sqliteUsers || []).map((u: any) => (u.email || '').toLowerCase()));
+      const merged = [...(sqliteUsers || [])];
+      let added = 0;
+      for (const u of lsUsers) {
+        if (!existingEmails.has((u.email || '').toLowerCase())) {
+          merged.push(u);
+          added++;
+        }
+      }
+      if (added > 0) {
+        const success = dbSetAll('users', merged);
+        console.log(`[MigrateUsers] Migrated ${added} users to SQLite. Success: ${success}`);
+        if (success) {
+          // Clear localStorage users now that they're in SQLite
+          localStorage.removeItem('baga_users');
+          console.log('[MigrateUsers] Cleared localStorage users (now in SQLite)');
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[MigrateUsers] Error:', e);
+  }
+}
+
+export function getUsers(): User[] {
+  // Run migration on first call
+  if (!_usersMigrated) migrateUsersToSQLite();
+  return get(KEYS.users, defaultUsers);
+}
 export function setUsers(u: User[]): void { set(KEYS.users, u); }
 export function addUser(u: User): void { const all = getUsers(); all.push(u); setUsers(all); }
 export function updateUser(id: string, data: Partial<User>): void {
