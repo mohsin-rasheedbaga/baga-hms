@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
-import { getHospitalSettings, getVisits, getBills, getPatients, getAppointments, getAdmissions, getLabOrders, getPharmacyExpenses, getXRayOrders, getUltrasoundOrders } from '@/lib/store';
+import { getHospitalSettings, getVisits, getBills, getPatients, getAppointments, getAdmissions, getLabOrders, getPharmacyExpenses, getXRayOrders, getUltrasoundOrders, getPharmacySalesDB } from '@/lib/store';
 import { getLabExpenses, getLabOrders as getLisLabOrders } from '@/lib/lab-store';
 
 function dateInRange(dateStr: string, from: string, to: string): boolean {
@@ -61,12 +61,18 @@ export default function AdminStatementPage() {
   const filteredXray = xrayOrders.filter(o => dateInRange(o.date, startDate, endDate));
   const filteredUltrasound = ultrasoundOrders.filter(o => dateInRange(o.date, startDate, endDate));
 
-  // Pharmacy sales from localStorage
+  // Pharmacy sales from SQLite (via store.ts) — works for both Electron host and LAN
+  // This ensures ALL pharmacy sales (from all users, all machines) appear in main statement
   let pharmacySales: any[] = [];
   try {
-    const raw = localStorage.getItem('baga_pharmacy_sales');
-    if (raw) pharmacySales = JSON.parse(raw);
-  } catch {}
+    pharmacySales = getPharmacySalesDB() as any[];
+  } catch {
+    // Fallback to localStorage if SQLite read fails
+    try {
+      const raw = localStorage.getItem('baga_pharmacy_sales');
+      if (raw) pharmacySales = JSON.parse(raw);
+    } catch {}
+  }
   const filteredPharmacySales = pharmacySales.filter((s: any) => dateInRange(s.date, startDate, endDate));
 
   // ===== Section 2: Overview Stats =====

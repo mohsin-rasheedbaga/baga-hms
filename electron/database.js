@@ -646,6 +646,30 @@ function setCounter(key, value) {
 }
 
 /**
+ * Atomically increment a counter and return the new value.
+ * This prevents race conditions when multiple users create sales simultaneously.
+ * @param {string} key
+ * @returns {number} the new counter value
+ */
+function incrementCounter(key) {
+  try {
+    // Use a transaction to ensure atomicity
+    const tx = db.transaction(() => {
+      const row = db.prepare(`SELECT value FROM counters WHERE key = ?`).get(key);
+      const currentVal = row ? parseInt(row.value, 10) || 0 : 0;
+      const newVal = currentVal + 1;
+      db.prepare(`INSERT OR REPLACE INTO counters (key, value) VALUES (?, ?)`)
+        .run(key, String(newVal));
+      return newVal;
+    });
+    return tx();
+  } catch (err) {
+    console.error(`[DB] incrementCounter(${key}) error:`, err.message);
+    return 1; // fallback
+  }
+}
+
+/**
  * Get a key-value store value.
  * Returns the raw string, or null.
  * @param {string} key
@@ -756,6 +780,7 @@ module.exports = {
   // Key-value
   getCounter,
   setCounter,
+  incrementCounter,
   getKV,
   setKV,
   // Utility

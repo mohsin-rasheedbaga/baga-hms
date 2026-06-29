@@ -974,6 +974,22 @@ function handleLanApi(req, res, url, method) {
     });
   }
 
+  // POST /api/counter-increment/:key — ATOMIC increment, returns new value
+  // This prevents race conditions when multiple users create sales simultaneously.
+  // The counter is incremented atomically in SQLite and the new value is returned.
+  if (url.startsWith('/api/counter-increment/') && method === 'POST') {
+    const key = url.replace('/api/counter-increment/', '');
+    try {
+      if (!db) { sendJson(500, { success: false, error: 'DB not available' }); return; }
+      // Atomic increment: read current value, increment, save, return new value
+      // Using a transaction to ensure atomicity
+      const newVal = db.incrementCounter(key);
+      sendJson(200, { success: true, data: newVal });
+    }
+    catch (err) { sendJson(500, { success: false, error: err.message }); }
+    return;
+  }
+
   sendJson(404, { error: 'API endpoint not found' });
 }
 
@@ -2064,6 +2080,15 @@ ipcMain.on('db-set-all', (event, table, dataArray) => { event.returnValue = safe
 ipcMain.on('db-delete-by-id', (event, table, id) => { event.returnValue = safeDbDeleteById(table, id); });
 ipcMain.on('db-get-counter', (event, key) => { event.returnValue = safeDbGetCounter(key); });
 ipcMain.on('db-set-counter', (event, key, value) => { event.returnValue = safeDbSetCounter(key, value); });
+ipcMain.on('db-increment-counter', (event, key) => {
+  if (!db) { event.returnValue = { success: false, error: 'DB not available' }; return; }
+  try {
+    const newVal = db.incrementCounter(key);
+    event.returnValue = { success: true, data: newVal };
+  } catch (err) {
+    event.returnValue = { success: false, error: err.message };
+  }
+});
 ipcMain.on('db-get-kv', (event, key) => { event.returnValue = safeDbGetKV(key); });
 ipcMain.on('db-set-kv', (event, key, value) => { event.returnValue = safeDbSetKV(key, value); });
 ipcMain.on('db-backup', (event, filePath) => { event.returnValue = safeDbBackup(filePath); });

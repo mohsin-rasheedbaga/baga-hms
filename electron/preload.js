@@ -68,6 +68,7 @@ contextBridge.exposeInMainWorld('bagaAPI', {
   dbDeleteById: (table, id) => ipcRenderer.sendSync('db-delete-by-id', table, id),
   dbGetCounter: (key) => ipcRenderer.sendSync('db-get-counter', key),
   dbSetCounter: (key, value) => ipcRenderer.sendSync('db-set-counter', key, value),
+  dbIncrementCounter: (key) => ipcRenderer.sendSync('db-increment-counter', key),
   dbGetKV: (key) => ipcRenderer.sendSync('db-get-kv', key),
   dbSetKV: (key, value) => ipcRenderer.sendSync('db-set-kv', key, value),
   dbBackup: (filePath) => ipcRenderer.sendSync('db-backup', filePath),

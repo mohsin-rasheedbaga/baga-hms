@@ -1,6 +1,6 @@
 /* ========== DATA STORE - Offline / LocalStorage + Electron SQLite ========== */
 import type { Hospital, HospitalSettings, User, Patient, Visit, LabOrder, Prescription, DispenseRecord, Bill, XRayOrder, UltrasoundOrder, Appointment, Admission, MedicineItem, LabTestCatalog, RoomType, Employee, AttendanceRecord, SalaryRecord } from './types';
-import { isElectron, isLanMode, dbGetAll, dbSetAll, dbSetById, dbGetCounter, dbSetCounter } from './db-bridge';
+import { isElectron, isLanMode, dbGetAll, dbSetAll, dbSetById, dbGetCounter, dbSetCounter, dbIncrementCounter } from './db-bridge';
 
 const KEYS = {
   hospital: 'baga_hospital',
@@ -875,23 +875,25 @@ export function addPharmacyReturnDB(r: PharmacyReturnRecord): void {
  * all machines on the LAN — every sale (whether on the host or a LAN browser)
  * gets the next sequential number, preventing fraud.
  *
+ * Uses ATOMIC increment to prevent race conditions when multiple users
+ * create sales simultaneously.
+ *
  * Format: 000001, 000002, ... resets to 000001 at the start of each year.
  */
 export function nextPharmacyBillSerial(): string {
   if (typeof window === 'undefined') return '000001';
   const year = new Date().getFullYear();
   const counterKey = `pharmacy_sale_serial_${year}`;
-  let nextVal = 1;
 
-  // Try SQLite counter (works for both Electron host and LAN browsers)
+  // Try SQLite atomic increment (works for both Electron host and LAN browsers)
   if (isElectron() || isLanMode()) {
     try {
-      const current = dbGetCounter(counterKey);
-      nextVal = (typeof current === 'number' ? current : 0) + 1;
-      dbSetCounter(counterKey, nextVal);
-      return String(nextVal).padStart(6, '0');
+      const newVal = dbIncrementCounter(counterKey);
+      if (newVal !== null && typeof newVal === 'number') {
+        return String(newVal).padStart(6, '0');
+      }
     } catch (e) {
-      console.error('nextPharmacyBillSerial SQLite failed, falling back to localStorage:', e);
+      console.error('nextPharmacyBillSerial atomic increment failed:', e);
     }
   }
 
@@ -899,10 +901,11 @@ export function nextPharmacyBillSerial(): string {
   const lsKey = `baga_pharmacy_annual_sale_counter_${year}`;
   try {
     const cur = parseInt(localStorage.getItem(lsKey) || '0', 10);
-    nextVal = cur + 1;
+    const nextVal = cur + 1;
     localStorage.setItem(lsKey, String(nextVal));
+    return String(nextVal).padStart(6, '0');
   } catch {}
-  return String(nextVal).padStart(6, '0');
+  return '000001';
 }
 
 /**
@@ -959,21 +962,21 @@ export function generateUniqueReturnCode(): string {
 /**
  * Generates a 4-digit daily token that resets at midnight.
  * Stored in SQLite so the token sequence is shared across all LAN machines.
+ * Uses ATOMIC increment to prevent race conditions.
  */
 export function nextPharmacyDailyToken(): string {
   if (typeof window === 'undefined') return '0001';
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
   const counterKey = `pharmacy_daily_token_${today}`;
-  let nextVal = 1;
 
   if (isElectron() || isLanMode()) {
     try {
-      const current = dbGetCounter(counterKey);
-      nextVal = (typeof current === 'number' ? current : 0) + 1;
-      dbSetCounter(counterKey, nextVal);
-      return String(nextVal).padStart(4, '0');
+      const newVal = dbIncrementCounter(counterKey);
+      if (newVal !== null && typeof newVal === 'number') {
+        return String(newVal).padStart(4, '0');
+      }
     } catch (e) {
-      console.error('nextPharmacyDailyToken SQLite failed, falling back to localStorage:', e);
+      console.error('nextPharmacyDailyToken atomic increment failed:', e);
     }
   }
 
@@ -981,8 +984,9 @@ export function nextPharmacyDailyToken(): string {
   const lsKey = 'baga_pharmacy_daily_token';
   try {
     const stored = JSON.parse(localStorage.getItem(lsKey) || '{"date":"","token":0}');
-    nextVal = (stored.date === today ? stored.token : 0) + 1;
+    const nextVal = (stored.date === today ? stored.token : 0) + 1;
     localStorage.setItem(lsKey, JSON.stringify({ date: today, token: nextVal }));
+    return String(nextVal).padStart(4, '0');
   } catch {}
-  return String(nextVal).padStart(4, '0');
+  return '0001';
 }

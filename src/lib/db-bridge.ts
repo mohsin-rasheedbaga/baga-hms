@@ -90,6 +90,34 @@ export function dbSetCounter(key: string, value: number): boolean {
   return false;
 }
 
+/**
+ * ATOMIC counter increment — prevents race conditions.
+ * Atomically increments the counter and returns the new value.
+ * Works for both Electron (IPC) and LAN (HTTP) modes.
+ * @returns the new counter value, or null on failure
+ */
+export function dbIncrementCounter(key: string): number | null {
+  if (isElectron()) {
+    const result = (window as any).bagaAPI.dbIncrementCounter(key);
+    return result?.success ? result.data : null;
+  }
+  if (isLanMode()) {
+    // Use the atomic increment endpoint
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', getLanBase() + '/api/counter-increment/' + key, false);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.send('{}');
+      if (xhr.status === 200) {
+        const r = JSON.parse(xhr.responseText);
+        return r.success ? r.data : null;
+      }
+    } catch {}
+    return null;
+  }
+  return null;
+}
+
 export function dbGetKV(key: string): string | null {
   if (isElectron()) { const result = (window as any).bagaAPI.dbGetKV(key); return result?.success ? result.data : null; }
   if (isLanMode()) { const r = lanGet('/api/kv/' + key); return r; }
