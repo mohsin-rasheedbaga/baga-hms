@@ -1808,6 +1808,50 @@ ipcMain.handle('get-lan-info', () => {
     lanURL: `http://${getLocalIP()}:${SERVER_PORT}`,
   };
 });
+
+// Check if firewall rule exists for the port
+ipcMain.handle('check-firewall-status', async () => {
+  try {
+    if (process.platform !== 'win32') return { success: true, hasFirewall: true, platform: 'non-win' };
+    const { execSync } = require('child_process');
+    const output = execSync(`netsh advfirewall firewall show rule name="BAGA HMS Server"`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+    const hasRule = output.includes('BAGA HMS Server') && output.includes('Allow');
+    return { success: true, hasFirewall: hasRule, platform: 'win' };
+  } catch (e) {
+    // Rule doesn't exist or can't check
+    return { success: false, hasFirewall: false, error: e.message, platform: process.platform };
+  }
+});
+
+// Add firewall rule (may need admin — will prompt via PowerShell)
+ipcMain.handle('add-firewall-rule', async () => {
+  try {
+    if (process.platform !== 'win32') return { success: true, message: 'Not needed on this platform' };
+    const { execSync } = require('child_process');
+    let added = false;
+    // Try direct first
+    try {
+      execSync(`netsh advfirewall firewall add rule name="BAGA HMS Server" dir=in action=allow protocol=TCP localport=${SERVER_PORT}`, { stdio: 'ignore' });
+      added = true;
+    } catch (e) {
+      // Try PowerShell elevated
+      try {
+        execSync(`powershell -NoProfile -Command "Start-Process netsh -ArgumentList 'advfirewall firewall add rule name=\\"BAGA HMS Server\\" dir=in action=allow protocol=TCP localport=${SERVER_PORT}' -Verb RunAs -WindowStyle Hidden"`, { stdio: 'ignore', timeout: 30000 });
+        added = true;
+      } catch (e2) {
+        return { success: false, error: 'Could not add firewall rule. Please run the app as Administrator, or manually add the rule: netsh advfirewall firewall add rule name="BAGA HMS Server" dir=in action=allow protocol=TCP localport=18765' };
+      }
+    }
+    // Add profile-specific rules too
+    try {
+      execSync(`netsh advfirewall firewall add rule name="BAGA HMS Server (Private)" dir=in action=allow protocol=TCP localport=${SERVER_PORT} profile=private`, { stdio: 'ignore' });
+      execSync(`netsh advfirewall firewall add rule name="BAGA HMS Server (Public)" dir=in action=allow protocol=TCP localport=${SERVER_PORT} profile=public`, { stdio: 'ignore' });
+    } catch (e) {}
+    return { success: true, added: added };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
 ipcMain.handle('check-update', () => {
   updateLog('CHECK-UPDATE IPC INVOKED');
   checkForUpdates();
@@ -2707,16 +2751,43 @@ app.whenReady().then(async () => {
   try {
     serverInstance = await startServer();
     // Auto-configure Windows Firewall for LAN sharing
+    // This allows other computers on the same network to access the software
     try {
-      const { execSync } = require('child_process');
+      const { exec, execSync } = require('child_process');
       if (process.platform === 'win32') {
+        // Try multiple approaches to ensure firewall rule is added:
+        // 1. First try with execSync (needs admin)
+        // 2. If that fails, try with PowerShell (sometimes works without admin)
+        // 3. If both fail, the user needs to manually add the rule
+        let firewallOk = false;
         try {
           execSync(`netsh advfirewall firewall add rule name="BAGA HMS Server" dir=in action=allow protocol=TCP localport=${SERVER_PORT}`, { stdio: 'ignore' });
-          console.log('[Firewall] Rule added for LAN sharing on port', SERVER_PORT);
+          console.log('[Firewall] Rule added via netsh for LAN sharing on port', SERVER_PORT);
+          firewallOk = true;
         } catch (fe) {
-          // Rule may already exist - that's fine
-          console.log('[Firewall] Firewall rule setup:', fe.message?.substring(0, 80) || 'skipped');
+          console.log('[Firewall] netsh failed (needs admin?):', fe.message?.substring(0, 80) || 'skipped');
         }
+        if (!firewallOk) {
+          try {
+            // Try PowerShell with -Verb RunAs (will prompt for admin if needed)
+            execSync(`powershell -NoProfile -Command "Start-Process netsh -ArgumentList 'advfirewall firewall add rule name=\\"BAGA HMS Server\\" dir=in action=allow protocol=TCP localport=${SERVER_PORT}' -Verb RunAs -WindowStyle Hidden"`, { stdio: 'ignore', timeout: 10000 });
+            console.log('[Firewall] Rule added via PowerShell (elevated) for port', SERVER_PORT);
+            firewallOk = true;
+          } catch (pe) {
+            console.log('[Firewall] PowerShell elevated failed:', pe.message?.substring(0, 80) || 'skipped');
+          }
+        }
+        if (!firewallOk) {
+          console.log('[Firewall] ⚠️ Could not auto-add firewall rule. User must add manually:');
+          console.log(`[Firewall] Run as admin: netsh advfirewall firewall add rule name="BAGA HMS Server" dir=in action=allow protocol=TCP localport=${SERVER_PORT}`);
+        }
+        // Also try to ensure the port is open in Windows Defender Firewall
+        // for both private and public profiles
+        try {
+          execSync(`netsh advfirewall firewall add rule name="BAGA HMS Server (Private)" dir=in action=allow protocol=TCP localport=${SERVER_PORT} profile=private`, { stdio: 'ignore' });
+          execSync(`netsh advfirewall firewall add rule name="BAGA HMS Server (Public)" dir=in action=allow protocol=TCP localport=${SERVER_PORT} profile=public`, { stdio: 'ignore' });
+          console.log('[Firewall] Added profile-specific rules (private + public)');
+        } catch (e) {}
       }
     } catch (fwErr) {
       console.log('[Firewall] Could not auto-configure firewall:', fwErr.message);

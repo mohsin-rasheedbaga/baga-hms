@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('bagaAPI', {
   getMachineId: () => ipcRenderer.invoke('get-machine-id'),
   getApiBase: () => ipcRenderer.invoke('get-api-base'),
   getLanInfo: () => ipcRenderer.invoke('get-lan-info'),
+  checkFirewallStatus: () => ipcRenderer.invoke('check-firewall-status'),
+  addFirewallRule: () => ipcRenderer.invoke('add-firewall-rule'),
   
   // License Management
   getLicenseInfo: () => ipcRenderer.invoke('license-get-info'),

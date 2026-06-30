@@ -205,6 +205,9 @@ export default function SettingsPage() {
   const [pendingDelta, setPendingDelta] = useState<{ pending: boolean; version?: string; zipPath?: string; downloadedAt?: string } | null>(null);
   const [updateLogView, setUpdateLogView] = useState<string>('');
   const [showUpdateLog, setShowUpdateLog] = useState(false);
+  // LAN setup state
+  const [lanInfo, setLanInfo] = useState<{ port?: number; localIP?: string; lanURL?: string } | null>(null);
+  const [firewallStatus, setFirewallStatus] = useState<{ hasFirewall?: boolean; error?: string } | null>(null);
 
   // Room type modal
   const [roomModal, setRoomModal] = useState(false);
@@ -297,6 +300,9 @@ export default function SettingsPage() {
         }).catch(() => {});
         // Load pending delta status
         (window as any).bagaAPI.getPendingDelta().then((p: any) => setPendingDelta(p)).catch(() => {});
+        // Load LAN info and firewall status
+        (window as any).bagaAPI.getLanInfo().then((info: any) => setLanInfo(info)).catch(() => {});
+        (window as any).bagaAPI.checkFirewallStatus().then((fs: any) => setFirewallStatus(fs)).catch(() => {});
       } catch (e) {}
     }
   }, []);
@@ -1334,6 +1340,88 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ==================== SECTION: LAN Setup (Network Access) ==================== */}
+      {isElectron && visibility.showSystemInfo && (
+        <div className="bg-white rounded-xl border border-blue-200 p-6">
+          <h3 className="text-lg font-semibold text-slate-800 mb-2 flex items-center gap-2">
+            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" /></svg>
+            LAN Setup — Network Access
+          </h3>
+          <p className="text-sm text-slate-500 mb-4">
+            Configure network access so other computers on the same network can access this software via their browser.
+          </p>
+
+          {/* LAN Info */}
+          <div className="bg-slate-50 rounded-lg p-4 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+              <div>
+                <span className="text-slate-500">Port:</span>{' '}
+                <span className="font-mono font-semibold text-slate-800">{lanInfo?.port || '18765'}</span>
+              </div>
+              <div>
+                <span className="text-slate-500">This Computer IP:</span>{' '}
+                <span className="font-mono font-semibold text-slate-800">{lanInfo?.localIP || 'Detecting...'}</span>
+              </div>
+              <div>
+                <span className="text-slate-500">Access URL:</span>{' '}
+                <span className="font-mono font-semibold text-blue-600 text-xs">{lanInfo?.lanURL || `http://...:18765`}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Instructions */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+            <p className="text-sm text-blue-800 font-semibold mb-1">How to access from another computer:</p>
+            <ol className="text-sm text-blue-700 list-decimal list-inside space-y-1">
+              <li>Open a browser on the other computer (Chrome, Firefox, Edge)</li>
+              <li>Type this address: <span className="font-mono font-bold">{lanInfo?.lanURL || `http://<this-IP>:18765`}</span></li>
+              <li>Make sure both computers are on the same network (same WiFi/LAN)</li>
+              <li>Login with the same User ID and Password as the main app</li>
+            </ol>
+          </div>
+
+          {/* Firewall Status */}
+          <div className="mb-3">
+            <div className="flex items-center justify-between p-3 rounded-lg" style={{
+              background: firewallStatus?.hasFirewall ? '#ecfdf5' : '#fef2f2',
+              border: `1px solid ${firewallStatus?.hasFirewall ? '#a7f3d0' : '#fecaca'}`,
+            }}>
+              <div>
+                <div className="text-sm font-semibold" style={{ color: firewallStatus?.hasFirewall ? '#059669' : '#dc2626' }}>
+                  {firewallStatus?.hasFirewall ? '✅ Firewall rule exists — other computers can access' : '❌ Firewall blocking access — other computers cannot connect'}
+                </div>
+                {firewallStatus?.error && <div className="text-xs text-slate-500 mt-1">{firewallStatus.error}</div>}
+              </div>
+            </div>
+          </div>
+
+          {/* Add Firewall Button */}
+          {!firewallStatus?.hasFirewall && (
+            <button
+              onClick={async () => {
+                try {
+                  const result = await (window as any).bagaAPI.addFirewallRule();
+                  if (result.success) {
+                    alert('✅ Firewall rule added! Other computers can now access this software.');
+                    // Re-check firewall status
+                    const fs = await (window as any).bagaAPI.checkFirewallStatus();
+                    setFirewallStatus(fs);
+                  } else {
+                    alert('❌ Could not add firewall rule automatically.\n\nPlease run the app as Administrator, or manually run this command in Command Prompt (as Admin):\n\nnetsh advfirewall firewall add rule name="BAGA HMS Server" dir=in action=allow protocol=TCP localport=18765');
+                  }
+                } catch (e: any) {
+                  alert('Error: ' + e.message);
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium text-sm"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+              Add Firewall Rule (Allow Network Access)
+            </button>
           )}
         </div>
       )}
