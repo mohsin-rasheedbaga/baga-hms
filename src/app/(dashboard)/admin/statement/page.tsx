@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
-import { getHospitalSettings, getVisits, getBills, getPatients, getAppointments, getAdmissions, getLabOrders, getPharmacyExpenses, getXRayOrders, getUltrasoundOrders, getPharmacySalesDB } from '@/lib/store';
+import { getHospitalSettings, getVisits, getBills, getPatients, getAppointments, getAdmissions, getLabOrders, getPharmacyExpenses, getXRayOrders, getUltrasoundOrders, getPharmacySalesDB, getPharmacyReturnsDB } from '@/lib/store';
 import { getLabExpenses, getLabOrders as getLisLabOrders } from '@/lib/lab-store';
 
 function dateInRange(dateStr: string, from: string, to: string): boolean {
@@ -75,6 +75,20 @@ export default function AdminStatementPage() {
   }
   const filteredPharmacySales = pharmacySales.filter((s: any) => dateInRange(s.date, startDate, endDate));
 
+  // Pharmacy returns from SQLite (via store.ts) — these are refunds that should
+  // be subtracted from pharmacy revenue
+  let pharmacyReturns: any[] = [];
+  try {
+    pharmacyReturns = getPharmacyReturnsDB() as any[];
+  } catch {
+    try {
+      const raw = localStorage.getItem('baga_pharmacy_returns');
+      if (raw) pharmacyReturns = JSON.parse(raw);
+    } catch {}
+  }
+  const filteredPharmacyReturns = pharmacyReturns.filter((r: any) => dateInRange(r.date, startDate, endDate));
+  const totalPharmacyRefunds = filteredPharmacyReturns.reduce((s, r: any) => s + (r.totalRefund || 0), 0);
+
   // ===== Section 2: Overview Stats =====
   const uniquePatientsInPeriod = new Set(filteredVisits.map(v => v.patientId)).size;
   const totalVisits = filteredVisits.length;
@@ -111,19 +125,22 @@ export default function AdminStatementPage() {
   const usgCount = filteredUltrasound.length;
   const usgBilled = filteredUltrasound.reduce((s, o) => s + (o.price || 0), 0);
 
-  // Pharmacy
+  // Pharmacy (sales minus returns)
   const pharmacyCount = filteredPharmacySales.length;
+  const pharmacyReturnCount = filteredPharmacyReturns.length;
   const pharmacyBilled = filteredPharmacySales.reduce((s, sale: any) => s + sale.totalAmount, 0);
+  const pharmacyRefunds = totalPharmacyRefunds;
+  const pharmacyNet = pharmacyBilled - pharmacyRefunds; // net revenue after returns
   const pharmacyExp = filteredPharmacyExpenses.reduce((s, e: any) => s + e.amount, 0);
-  const pharmacyProfit = pharmacyBilled - pharmacyExp;
+  const pharmacyProfit = pharmacyNet - pharmacyExp;
 
-  // Totals
+  // Totals — pharmacy net (after returns) is used in grand totals
   const grandOrders = receptionCount + labOrdersCount + xrayCount + usgCount + pharmacyCount;
-  const grandBilled = receptionBilled + labBilled + xrayBilled + usgBilled + pharmacyBilled;
+  const grandBilled = receptionBilled + labBilled + xrayBilled + usgBilled + pharmacyNet;
   const grandCollected = receptionCollected + labCollected;
   const grandPending = receptionPending + labPending;
-  const grandExpenses = labExp + pharmacyExp;
-  const grandProfit = (labRevenue + pharmacyBilled) - grandExpenses;
+  const grandExpenses = labExp + pharmacyExp + pharmacyRefunds; // refunds count as expenses
+  const grandProfit = (labRevenue + pharmacyNet) - grandExpenses;
 
   // ===== Section 4: Doctor-wise Revenue =====
   const doctorMap: Record<string, { name: string; department: string; patients: Set<string>; visits: number; fees: number; billed: number; collected: number }> = {};
@@ -251,9 +268,9 @@ export default function AdminStatementPage() {
           <p className="text-xs text-cyan-400">completed orders</p>
         </div>
         <div className="stat-card card-hover border border-amber-200 bg-amber-50">
-          <p className="text-xs text-amber-600 font-medium">Total Pharmacy Revenue</p>
-          <p className="text-2xl font-bold text-amber-700">{currency} {totalPharmacyRevenue.toLocaleString()}</p>
-          <p className="text-xs text-amber-400">{filteredPharmacySales.length} sales</p>
+          <p className="text-xs text-amber-600 font-medium">Total Pharmacy Revenue (Net)</p>
+          <p className="text-2xl font-bold text-amber-700">{currency} {pharmacyNet.toLocaleString()}</p>
+          <p className="text-xs text-amber-400">{filteredPharmacySales.length} sales • {filteredPharmacyReturns.length} returns</p>
         </div>
       </div>
 
@@ -319,8 +336,8 @@ export default function AdminStatementPage() {
                 <td className="font-semibold text-slate-800">Pharmacy</td>
                 <td className="text-center"><span className="badge badge-amber">{pharmacyCount}</span></td>
                 <td className="text-right">{currency} {pharmacyBilled.toLocaleString()}</td>
-                <td className="text-right text-slate-400">-</td>
-                <td className="text-right text-slate-400">-</td>
+                <td className="text-right text-rose-600">- {currency} {pharmacyRefunds.toLocaleString()}</td>
+                <td className="text-right font-semibold text-amber-700">{currency} {pharmacyNet.toLocaleString()}</td>
                 <td className="text-right text-amber-600">{currency} {pharmacyExp.toLocaleString()}</td>
                 <td className={`text-right font-semibold ${pharmacyProfit >= 0 ? 'text-green-700' : 'text-rose-700'}`}>
                   {currency} {pharmacyProfit.toLocaleString()}

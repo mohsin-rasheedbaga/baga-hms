@@ -94,15 +94,11 @@ export default function LoginPage() {
               }
               // Sync data from server to localStorage
               await syncDataFromServer();
-              // Check for existing session after sync
+              // DISABLED: Auto-login on startup — always show login page
+              // Clear any existing session so user must log in fresh
               try {
-                const sess = JSON.parse(localStorage.getItem('baga_session') || '{}');
-                if (sess && sess.userId) {
-                  setRedirecting(true);
-                  router.push(getHomePath(sess.licenseType || info.licenseType || 'hospital'));
-                  return;
-                }
-              } catch {}
+                localStorage.removeItem('baga_session');
+              } catch (e) {}
               setInitLoading(false);
               return;
             }
@@ -179,31 +175,19 @@ export default function LoginPage() {
             return;
           }
           
-          // OFFLINE LOGIN: Check if there's a valid saved session — auto-redirect
-          if (info.mode === 'licensed') {
-            // Helper to check session from a source
-            const tryParseSession = (raw: string | null | undefined): any => {
-              if (!raw) return null;
-              try { const p = JSON.parse(raw); return (p && p.userId) ? p : null; } catch { return null; }
-            };
-            // Check Electron SQLite first
-            let session = null;
-            try {
-              const result = (window as any).bagaAPI.dbGetKV('baga_session');
-              if (result?.success && result.data) {
-                session = tryParseSession(result.data);
-              }
-            } catch (e) {}
-            // Fallback to localStorage
-            if (!session) {
-              try { session = tryParseSession(localStorage.getItem('baga_session')); } catch (e) {}
+          // DISABLED: Auto-login on startup.
+          // User wants the login page to ALWAYS show when the app starts,
+          // even if a previous session exists. The user must explicitly
+          // enter credentials each time the app launches.
+          // (Previous session is cleared on app exit/refresh — see below)
+
+          // Clear any existing session so user must log in fresh
+          try {
+            localStorage.removeItem('baga_session');
+            if (isElectron) {
+              try { (window as any).bagaAPI.dbSetKV('baga_session', ''); } catch (e) {}
             }
-            if (session) {
-              // Session exists — redirect directly (offline login)
-              router.push(getHomePath(session.licenseType || 'hospital'));
-              return;
-            }
-          }
+          } catch (e) {}
         } catch (e) {
           console.error('License info error:', e);
         }
