@@ -1600,12 +1600,12 @@ ipcMain.handle('license-get-full-info', async () => {
   const store = getStore();
   const license = store.license || null;
   const demo = store.demo || null;
-  
+
   // Determine mode
   let mode = 'none'; // 'licensed', 'demo', 'none'
   let licenseType = 'hospital';
   let features = [];
-  
+
   if (demo && demo.activated && !demo.blocked) {
     const now = new Date();
     const expiresAt = new Date(demo.expiresAt);
@@ -1615,26 +1615,79 @@ ipcMain.handle('license-get-full-info', async () => {
       features = ['all'];
     }
   }
-  
+
   if (license) {
     mode = 'licensed';
     licenseType = license.licenseType || 'hospital';
     features = license.features || [];
-    
+
     // Check license expiry
     if (license.expiryDate && license.licenseDuration !== 'lifetime') {
       const now = new Date();
       const expiry = new Date(license.expiryDate);
       if (now > expiry) {
-        return {
-          mode: 'expired',
-          licenseType,
-          features: [],
-          expired: true,
-          expiryDate: license.expiryDate,
-          hospitalName: license.hospitalName,
-          error: 'License has expired. Please contact support to renew.',
-        };
+        // License is expired locally — check remote API to see if it was renewed
+        try {
+          console.log('[License] Local license expired, checking remote API for renewal...');
+          const resp = await fetch(`${API_BASE}/api/license/check`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ license_key: license.key }),
+          });
+          const data = await resp.json();
+          if (data.valid) {
+            // License was renewed remotely! Update local store.
+            console.log('[License] License renewed remotely! Updating local store.');
+            store.license = {
+              ...store.license,
+              expiryDate: data.expiry_date,
+              licenseDuration: data.license_duration,
+            };
+            saveStore(store);
+            // Return as licensed (not expired)
+            return {
+              mode: 'licensed',
+              licenseType,
+              features,
+              expired: false,
+              hospitalName: license.hospitalName,
+              hospitalAddress: license.address,
+              hospitalPhone: license.phone,
+              hospitalEmail: license.email || '',
+              hospitalMobile: license.mobile || '',
+              logoUrl: license.logoUrl || '',
+              logoPath: license.logoPath || '',
+              licenseKey: license.key,
+              expiryDate: data.expiry_date,
+              licenseDuration: data.license_duration,
+              activatedAt: license.activatedAt,
+              demo: null,
+            };
+          } else {
+            // License is still expired
+            return {
+              mode: 'expired',
+              licenseType,
+              features: [],
+              expired: true,
+              expiryDate: license.expiryDate,
+              hospitalName: license.hospitalName,
+              error: 'License has expired. Please contact support to renew.',
+            };
+          }
+        } catch (err) {
+          console.log('[License] Remote check failed:', err.message);
+          // Return expired status (offline mode)
+          return {
+            mode: 'expired',
+            licenseType,
+            features: [],
+            expired: true,
+            expiryDate: license.expiryDate,
+            hospitalName: license.hospitalName,
+            error: 'License has expired. Please contact support to renew.',
+          };
+        }
       }
     }
   }
