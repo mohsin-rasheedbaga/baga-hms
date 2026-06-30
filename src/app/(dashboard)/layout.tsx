@@ -322,6 +322,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Try to get session — retry once in case of SQLite timing issue
+    // NOTE: Run this only ONCE on mount, not on every router change.
+    // Running on router change causes double login page issue when scrolling.
     let s = getSession();
     if (!s) {
       // Retry after a brief delay (SQLite sync can be slow on startup)
@@ -339,7 +341,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       const h = getHospital();
       setHospitalName(h.name);
     } catch {}
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array — run only once on mount
 
   useEffect(() => {
     async function loadLicense() {

@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
-  searchPatients, searchMedicines, getMedicines, setMedicines, addMedicine, updateMedicine, deleteMedicine,
+  searchPatients, searchMedicines, getMedicines, setMedicines as setMedicinesStore, addMedicine, updateMedicine, deleteMedicine,
   getMedicineCategories, getActivePrescriptions, updatePrescription, addDispense,
   getPatientCounter, setPatientCounter, addPatient, genId, todayStr, timeStr, getHospitalSettings,
   getExpiredMedicines, getLowStockMedicines,
@@ -245,6 +245,22 @@ async function getPrintHeader(): Promise<{ hospitalName: string; hospitalLogo: s
       const logoResult = await (window as any).bagaAPI.getLogoBase64();
       if (logoResult.success) hospitalLogo = logoResult.data;
     } catch (e) {}
+  } else if (typeof window !== 'undefined') {
+    // LAN browser mode — fetch license info from API
+    try {
+      const baseUrl = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
+      const resp = await fetch(baseUrl + '/api/license-info');
+      if (resp.ok) {
+        const info = await resp.json();
+        if (info.hospitalName) hospitalName = info.hospitalName;
+        if (info.hospitalAddress) hospitalAddress = info.hospitalAddress;
+        if (info.hospitalPhone || info.phone) hospitalPhone = info.hospitalPhone || info.phone;
+        // Logo: if logoUrl is a data URL or HTTP URL, use it directly
+        if (info.logoUrl) hospitalLogo = info.logoUrl;
+      }
+    } catch (e) {
+      console.error('getPrintHeader LAN fetch failed:', e);
+    }
   }
   return { hospitalName, hospitalLogo, hospitalAddress, hospitalPhone };
 }
@@ -562,7 +578,8 @@ export default function PharmacyPage() {
     }
     if (stockChanged) {
       // Write all medicines back at once (atomic update)
-      setMedicines(allMeds);
+      // Use setMedicinesStore (the store function, NOT the React state setter)
+      setMedicinesStore(allMeds);
       console.log('[Pharmacy] Stock deducted for', cart.length, 'items');
     }
     loadInventory();
