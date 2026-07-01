@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { getHospitalSettings, getPharmacyExpenses, addPharmacyExpense, genId, todayStr, getHospital } from '@/lib/store';
+import { getHospitalSettings, getPharmacyExpenses, addPharmacyExpense, genId, todayStr, getHospital, getPharmacySalesDB, getPharmacyReturnsDB } from '@/lib/store';
 import { triggerPrint } from '@/lib/print-utils';
 
 const PHARMACY_CATEGORIES = ['Medicine Purchase', 'Consumables', 'Equipment', 'Maintenance', 'Utilities', 'Salaries', 'Miscellaneous'];
@@ -183,18 +183,22 @@ export default function PharmacyStatementPage() {
     }
   };
 
-  const allSales: PharmacySale[] = lsGet<PharmacySale[]>(SALES_KEY, []);
+  const allSales: PharmacySale[] = getPharmacySalesDB() as PharmacySale[];
+  const allReturns: any[] = getPharmacyReturnsDB() as any[];
 
   const filterLabel = startDate && endDate ? `${startDate} to ${endDate}` : '';
 
   const stats = useMemo(() => {
     const filtered = allSales.filter(s => dateInRange(s.date, startDate, endDate));
     const filteredExp = pharmacyExpenses.filter((e: any) => dateInRange(e.date, startDate, endDate));
+    const filteredReturns = allReturns.filter((r: any) => dateInRange(r.date, startDate, endDate));
 
     const indoorSales = filtered.filter(s => s.type === 'Indoor');
     const outdoorSales = filtered.filter(s => s.type === 'Outdoor');
 
-    const totalAmount = filtered.reduce((sum, s) => sum + s.totalAmount, 0);
+    const grossSales = filtered.reduce((sum, s) => sum + s.totalAmount, 0);
+    const totalRefunds = filteredReturns.reduce((sum, r) => sum + (r.totalRefund || 0), 0);
+    const totalAmount = grossSales - totalRefunds; // NET revenue after returns
     const indoorAmount = indoorSales.reduce((sum, s) => sum + s.totalAmount, 0);
     const outdoorAmount = outdoorSales.reduce((sum, s) => sum + s.totalAmount, 0);
 
@@ -239,7 +243,11 @@ export default function PharmacyStatementPage() {
     return {
       filtered,
       filteredExp,
+      filteredReturns,
       totalSales: filtered.length,
+      totalReturns: filteredReturns.length,
+      grossSales,
+      totalRefunds,
       indoorCount: indoorSales.length,
       outdoorCount: outdoorSales.length,
       totalAmount,
@@ -251,7 +259,7 @@ export default function PharmacyStatementPage() {
       totalExpenses,
       profit,
     };
-  }, [allSales, pharmacyExpenses, startDate, endDate]);
+  }, [allSales, allReturns, pharmacyExpenses, startDate, endDate]);
 
   if (!session) return null;
 
@@ -376,21 +384,26 @@ export default function PharmacyStatementPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <div className="stat-card card-hover border border-emerald-200 bg-emerald-50">
-          <p className="text-xs text-emerald-600 font-medium">Total Revenue</p>
-          <p className="text-2xl font-bold text-emerald-700">{currency} {stats.totalAmount.toLocaleString()}</p>
+          <p className="text-xs text-emerald-600 font-medium">Gross Sales</p>
+          <p className="text-2xl font-bold text-emerald-700">{currency} {stats.grossSales.toLocaleString()}</p>
           <p className="text-xs text-emerald-400">{stats.totalSales} sales</p>
+        </div>
+        <div className="stat-card card-hover border border-rose-200 bg-rose-50">
+          <p className="text-xs text-rose-600 font-medium">Returns/Refunds</p>
+          <p className="text-2xl font-bold text-rose-700">- {currency} {stats.totalRefunds.toLocaleString()}</p>
+          <p className="text-xs text-rose-400">{stats.totalReturns} returns</p>
+        </div>
+        <div className="stat-card card-hover border border-teal-200 bg-teal-50">
+          <p className="text-xs text-teal-600 font-medium">Net Revenue</p>
+          <p className="text-2xl font-bold text-teal-700">{currency} {stats.totalAmount.toLocaleString()}</p>
+          <p className="text-xs text-teal-400">After returns</p>
         </div>
         <div className="stat-card card-hover border border-blue-200 bg-blue-50">
           <p className="text-xs text-blue-600 font-medium">Indoor Sales</p>
           <p className="text-2xl font-bold text-blue-700">{currency} {stats.indoorAmount.toLocaleString()}</p>
           <p className="text-xs text-blue-400">{stats.indoorCount} patients</p>
-        </div>
-        <div className="stat-card card-hover border border-purple-200 bg-purple-50">
-          <p className="text-xs text-purple-600 font-medium">Outdoor Sales</p>
-          <p className="text-2xl font-bold text-purple-700">{currency} {stats.outdoorAmount.toLocaleString()}</p>
-          <p className="text-xs text-purple-400">{stats.outdoorCount} patients</p>
         </div>
         <div className="stat-card card-hover border border-amber-200 bg-amber-50">
           <p className="text-xs text-amber-600 font-medium">Expenses</p>

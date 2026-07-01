@@ -349,6 +349,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       try {
         const info = await fetchLicenseInfo();
         setLicenseInfo(info);
+        // Update hospital name from license info
+        if (info.hospitalName) {
+          setHospitalName(info.hospitalName);
+        }
         // Load logo
         if (info.logoPath) {
           try {
@@ -360,6 +364,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           } catch (e) {}
         } else if (info.logoUrl) {
           setLogoSrc(info.logoUrl);
+        } else {
+          // LAN browser mode — try /api/logo endpoint
+          try {
+            const baseUrl = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
+            const logoResp = await fetch(baseUrl + '/api/logo');
+            if (logoResp.ok) {
+              const logoData = await logoResp.json();
+              if (logoData.success && logoData.logo) setLogoSrc(logoData.logo);
+            }
+          } catch (e) {}
         }
       } catch (e) {}
     }
