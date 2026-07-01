@@ -505,7 +505,12 @@ export default function PharmacyStatementPage() {
               </thead>
               <tbody>
                 {stats.filtered
-                  .sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time))
+                  .sort((a, b) => {
+                    // Sort by date descending, then time descending (newest first)
+                    const dateCmp = b.date.localeCompare(a.date);
+                    if (dateCmp !== 0) return dateCmp;
+                    return b.time.localeCompare(a.time);
+                  })
                   .map((sale, idx) => (
                     <tr key={sale.id} className="hover:bg-slate-50">
                       <td className="text-slate-400 text-sm">{idx + 1}</td>
@@ -514,7 +519,10 @@ export default function PharmacyStatementPage() {
                       <td>
                         <div>
                           <p className="font-semibold text-slate-800">{sale.patientName}</p>
-                          <p className="text-xs text-slate-400">{sale.patientNo} — {sale.patientMobile}</p>
+                          <p className="text-xs text-slate-400">
+                            {(sale as any).billSerial ? `Annual: ${(sale as any).billSerial}` : sale.patientNo}
+                            {sale.patientMobile ? ` — ${sale.patientMobile}` : ''}
+                          </p>
                         </div>
                       </td>
                       <td>

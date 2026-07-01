@@ -246,7 +246,7 @@ async function getPrintHeader(): Promise<{ hospitalName: string; hospitalLogo: s
       if (logoResult.success) hospitalLogo = logoResult.data;
     } catch (e) {}
   } else if (typeof window !== 'undefined') {
-    // LAN browser mode — fetch license info from API
+    // LAN browser mode — fetch license info and logo from API
     try {
       const baseUrl = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
       const resp = await fetch(baseUrl + '/api/license-info');
@@ -255,8 +255,26 @@ async function getPrintHeader(): Promise<{ hospitalName: string; hospitalLogo: s
         if (info.hospitalName) hospitalName = info.hospitalName;
         if (info.hospitalAddress) hospitalAddress = info.hospitalAddress;
         if (info.hospitalPhone || info.phone) hospitalPhone = info.hospitalPhone || info.phone;
-        // Logo: if logoUrl is a data URL or HTTP URL, use it directly
-        if (info.logoUrl) hospitalLogo = info.logoUrl;
+        // Logo: if logoUrl is a data URL, use it directly
+        if (info.logoUrl && info.logoUrl.startsWith('data:')) {
+          hospitalLogo = info.logoUrl;
+        } else if (info.logoUrl && info.logoUrl.startsWith('http')) {
+          hospitalLogo = info.logoUrl;
+        }
+      }
+      // Also fetch logo from /api/logo endpoint (returns base64 from file)
+      if (!hospitalLogo) {
+        try {
+          const logoResp = await fetch(baseUrl + '/api/logo');
+          if (logoResp.ok) {
+            const logoData = await logoResp.json();
+            if (logoData.success && logoData.logo) {
+              hospitalLogo = logoData.logo;
+            }
+          }
+        } catch (e) {
+          console.error('getPrintHeader logo fetch failed:', e);
+        }
       }
     } catch (e) {
       console.error('getPrintHeader LAN fetch failed:', e);

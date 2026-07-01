@@ -557,6 +557,46 @@ function handleLanApi(req, res, url, method) {
     req.on('end', () => { try { callback(JSON.parse(body)); } catch { callback({}); } });
   };
 
+  // GET /api/logo — returns hospital logo as base64 data URL
+  // Used by LAN browsers to display logo on receipts
+  if (url === '/api/logo' && method === 'GET') {
+    try {
+      // First try logoUrl from license (could be a data URL or HTTP URL)
+      const store = getStore();
+      const license = store.license || {};
+      if (license.logoUrl && license.logoUrl.startsWith('data:')) {
+        return sendJson(200, { success: true, logo: license.logoUrl });
+      }
+      // Try to read logo from file (logoPath)
+      if (license.logoPath && fs.existsSync(license.logoPath)) {
+        const buffer = fs.readFileSync(license.logoPath);
+        const base64 = buffer.toString('base64');
+        // Detect mime type from file extension
+        const ext = path.extname(license.logoPath).toLowerCase();
+        const mimeType = ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png';
+        return sendJson(200, { success: true, logo: `data:${mimeType};base64,${base64}` });
+      }
+      // Try custom logo path
+      const userDataDir = app.getPath('userData');
+      const customLogoPath = path.join(userDataDir, 'hospital-logo-custom.png');
+      if (fs.existsSync(customLogoPath)) {
+        const buffer = fs.readFileSync(customLogoPath);
+        const base64 = buffer.toString('base64');
+        return sendJson(200, { success: true, logo: `data:image/png;base64,${base64}` });
+      }
+      // Also try .jpg
+      const customLogoJpg = path.join(userDataDir, 'hospital-logo-custom.jpg');
+      if (fs.existsSync(customLogoJpg)) {
+        const buffer = fs.readFileSync(customLogoJpg);
+        const base64 = buffer.toString('base64');
+        return sendJson(200, { success: true, logo: `data:image/jpeg;base64,${base64}` });
+      }
+      return sendJson(200, { success: false, error: 'No logo found' });
+    } catch (err) {
+      return sendJson(500, { success: false, error: err.message });
+    }
+  }
+
   // GET /api/version
   if (url === '/api/version' && method === 'GET') {
     return sendJson(200, { success: true, version: APP_VERSION });
