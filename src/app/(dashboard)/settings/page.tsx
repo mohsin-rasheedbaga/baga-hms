@@ -761,6 +761,56 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* ==================== SECTION: Currency Settings ==================== */}
+      {visibility.showReceiptSettings && (
+        <div className="bg-white rounded-xl border-2 border-emerald-200 p-6">
+          <h3 className="text-lg font-semibold text-slate-800 mb-2 flex items-center gap-2">
+            <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            Currency Settings
+          </h3>
+          <p className="text-sm text-slate-500 mb-4">Select the currency for the entire software. All prices, totals, and statements will use this currency.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="form-label">Select Currency</label>
+              <select className="form-input" value={settings.currency} onChange={e => { updateSetting('currency', e.target.value); }}>
+                <option value="Rs.">PKR — Pakistani Rupee (Rs.)</option>
+                <option value="$">USD — US Dollar ($)</option>
+                <option value="€">EUR — Euro (€)</option>
+                <option value="£">GBP — British Pound (£)</option>
+                <option value="SAR">SAR — Saudi Riyal (SAR)</option>
+                <option value="AED">AED — UAE Dirham (AED)</option>
+                <option value="₹">INR — Indian Rupee (₹)</option>
+                <option value="R">ZAR — South African Rand (R)</option>
+                <option value="¥">JPY — Japanese Yen (¥)</option>
+                <option value="C$">CAD — Canadian Dollar (C$)</option>
+                <option value="A$">AUD — Australian Dollar (A$)</option>
+                <option value="CHF">CHF — Swiss Franc (CHF)</option>
+                <option value="CNY">CNY — Chinese Yuan (CNY)</option>
+                <option value="QR">QAR — Qatari Riyal (QR)</option>
+                <option value="BD">BHD — Bahraini Dinar (BD)</option>
+                <option value="KD">KWD — Kuwaiti Dinar (KD)</option>
+                <option value="OMR">OMR — Omani Rial (OMR)</option>
+                <option value="TL">TRY — Turkish Lira (TL)</option>
+                <option value="RM">MYR — Malaysian Ringgit (RM)</option>
+                <option value="Rp">IDR — Indonesian Rupiah (Rp)</option>
+              </select>
+              <p className="text-xs text-slate-400 mt-1">This currency will be used in all modules: POS, Lab, Pharmacy, Accounts, Statements</p>
+            </div>
+            <div>
+              <label className="form-label">Custom Currency (optional)</label>
+              <input className="form-input" value={settings.currency} onChange={e => updateSetting('currency', e.target.value)} placeholder="Or type custom symbol..." />
+              <p className="text-xs text-slate-400 mt-1">Type your own currency symbol if not in the list above</p>
+            </div>
+          </div>
+          <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+            <p className="text-sm text-emerald-700">
+              <span className="font-semibold">Preview:</span> Total Amount = <span className="font-bold">{settings.currency} 1,500</span>
+            </p>
+          </div>
+          <button onClick={handleSaveSettings} className="btn btn-primary mt-4">Save Currency Settings</button>
+        </div>
+      )}
+
       {/* ==================== SECTION: Receipt Settings ==================== */}
       {visibility.showReceiptSettings && (
         <div className="bg-white rounded-xl border border-slate-200 p-6">
@@ -772,6 +822,7 @@ export default function SettingsPage() {
             <div>
               <label className="form-label">Currency Symbol</label>
               <input className="form-input" value={settings.currency} onChange={e => updateSetting('currency', e.target.value)} placeholder="Rs." />
+              <p className="text-xs text-slate-400 mt-1">Also configurable in Currency Settings above</p>
             </div>
             <div>
               <label className="form-label">Receipt Footer Text</label>
