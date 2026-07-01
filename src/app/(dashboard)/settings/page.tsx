@@ -1401,27 +1401,49 @@ export default function SettingsPage() {
 
           {/* Add Firewall Button */}
           {!firewallStatus?.hasFirewall && (
-            <button
-              onClick={async () => {
-                try {
-                  const result = await (window as any).bagaAPI.addFirewallRule();
-                  if (result.success) {
-                    alert('✅ Firewall rule added! Other computers can now access this software.');
-                    // Re-check firewall status
+            <div className="space-y-3">
+              <button
+                onClick={async () => {
+                  try {
+                    const result = await (window as any).bagaAPI.addFirewallRule();
+                    if (result.success && result.added) {
+                      alert('✅ Firewall rule added successfully!\n\nOther computers can now access this software.');
+                      const fs = await (window as any).bagaAPI.checkFirewallStatus();
+                      setFirewallStatus(fs);
+                    } else if (result.success && !result.added) {
+                      // Batch file was launched but user needs to click "Yes" on UAC
+                      alert('📋 A command window has opened.\n\nPlease click "Yes" on the Windows permission prompt (UAC) to allow the firewall rule.\n\nAfter clicking "Yes", come back here and click the "Re-check Firewall" button below.');
+                    } else {
+                      alert('❌ Could not add firewall rule.\n\nPlease right-click on "Command Prompt" → "Run as Administrator", then paste this command:\n\nnetsh advfirewall firewall add rule name="BAGA HMS Server" dir=in action=allow protocol=TCP localport=18765');
+                    }
+                  } catch (e: any) {
+                    alert('Error: ' + e.message);
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium text-sm"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                Add Firewall Rule (Will Prompt for Admin)
+              </button>
+              <button
+                onClick={async () => {
+                  try {
                     const fs = await (window as any).bagaAPI.checkFirewallStatus();
                     setFirewallStatus(fs);
-                  } else {
-                    alert('❌ Could not add firewall rule automatically.\n\nPlease run the app as Administrator, or manually run this command in Command Prompt (as Admin):\n\nnetsh advfirewall firewall add rule name="BAGA HMS Server" dir=in action=allow protocol=TCP localport=18765');
+                    if (fs.hasFirewall) {
+                      alert('✅ Firewall rule confirmed! Other computers can now access.');
+                    } else {
+                      alert('❌ Firewall rule not found yet. Please click "Add Firewall Rule" first and approve the UAC prompt.');
+                    }
+                  } catch (e: any) {
+                    alert('Error checking: ' + e.message);
                   }
-                } catch (e: any) {
-                  alert('Error: ' + e.message);
-                }
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium text-sm"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-              Add Firewall Rule (Allow Network Access)
-            </button>
+                }}
+                className="ml-2 text-blue-600 hover:text-blue-800 text-sm underline"
+              >
+                Re-check Firewall Status
+              </button>
+            </div>
           )}
         </div>
       )}

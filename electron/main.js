@@ -1823,32 +1823,86 @@ ipcMain.handle('check-firewall-status', async () => {
   }
 });
 
-// Add firewall rule (may need admin — will prompt via PowerShell)
+// Add firewall rule — creates a self-elevating batch file and runs it
+// This is the most reliable way to add firewall rules on Windows without
+// requiring the app itself to run as admin.
 ipcMain.handle('add-firewall-rule', async () => {
   try {
     if (process.platform !== 'win32') return { success: true, message: 'Not needed on this platform' };
     const { execSync } = require('child_process');
-    let added = false;
-    // Try direct first
+
+    // Create a self-elevating batch file that:
+    // 1. Checks if it's running as admin
+    // 2. If not, re-launches itself with admin (UAC prompt)
+    // 3. Adds the firewall rule
+    // 4. Pauses so user can see the result
+    const batContent = `@echo off
+:: BAGA HMS Firewall Setup — Self-Elevating Script
+:: This script adds a Windows Firewall rule to allow other computers
+:: on the same network to access BAGA HMS on port ${SERVER_PORT}
+
+:: Check if we have admin rights
+net session >nul 2>&1
+if %errorLevel% neq 0 (
+    echo Requesting administrator privileges...
+    powershell -Command "Start-Process '%~f0' -Verb RunAs"
+    exit /b
+)
+
+:: We have admin rights — add firewall rules
+echo ========================================
+echo  BAGA HMS Firewall Setup
+echo ========================================
+echo.
+echo Adding firewall rule for port ${SERVER_PORT}...
+
+netsh advfirewall firewall delete rule name="BAGA HMS Server" >nul 2>&1
+netsh advfirewall firewall add rule name="BAGA HMS Server" dir=in action=allow protocol=TCP localport=${SERVER_PORT}
+
+netsh advfirewall firewall delete rule name="BAGA HMS Server (Private)" >nul 2>&1
+netsh advfirewall firewall add rule name="BAGA HMS Server (Private)" dir=in action=allow protocol=TCP localport=${SERVER_PORT} profile=private
+
+netsh advfirewall firewall delete rule name="BAGA HMS Server (Public)" >nul 2>&1
+netsh advfirewall firewall add rule name="BAGA HMS Server (Public)" dir=in action=allow protocol=TCP localport=${SERVER_PORT} profile=public
+
+echo.
+echo ========================================
+echo  Firewall rules added successfully!
+echo ========================================
+echo.
+echo Other computers on your network can now access BAGA HMS.
+echo.
+echo Press any key to close this window...
+pause >nul
+`;
+
+    // Write the batch file to temp directory
+    const batPath = path.join(app.getPath('temp'), 'baga-firewall-setup.bat');
+    fs.writeFileSync(batPath, batContent, 'utf8');
+    console.log('[Firewall] Created batch file:', batPath);
+
+    // Launch the batch file — it will self-elevate and show UAC prompt
+    const { shell } = require('electron');
+    await shell.openPath(batPath);
+    console.log('[Firewall] Launched batch file — UAC prompt should appear');
+
+    // Wait 5 seconds for the user to click "Yes" on the UAC prompt
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    // Check if the rule was added
     try {
-      execSync(`netsh advfirewall firewall add rule name="BAGA HMS Server" dir=in action=allow protocol=TCP localport=${SERVER_PORT}`, { stdio: 'ignore' });
-      added = true;
-    } catch (e) {
-      // Try PowerShell elevated
-      try {
-        execSync(`powershell -NoProfile -Command "Start-Process netsh -ArgumentList 'advfirewall firewall add rule name=\\"BAGA HMS Server\\" dir=in action=allow protocol=TCP localport=${SERVER_PORT}' -Verb RunAs -WindowStyle Hidden"`, { stdio: 'ignore', timeout: 30000 });
-        added = true;
-      } catch (e2) {
-        return { success: false, error: 'Could not add firewall rule. Please run the app as Administrator, or manually add the rule: netsh advfirewall firewall add rule name="BAGA HMS Server" dir=in action=allow protocol=TCP localport=18765' };
+      const output = execSync(`netsh advfirewall firewall show rule name="BAGA HMS Server"`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+      const hasRule = output.includes('BAGA HMS Server') && output.includes('Allow');
+      if (hasRule) {
+        console.log('[Firewall] Rule confirmed added!');
+        return { success: true, added: true };
       }
-    }
-    // Add profile-specific rules too
-    try {
-      execSync(`netsh advfirewall firewall add rule name="BAGA HMS Server (Private)" dir=in action=allow protocol=TCP localport=${SERVER_PORT} profile=private`, { stdio: 'ignore' });
-      execSync(`netsh advfirewall firewall add rule name="BAGA HMS Server (Public)" dir=in action=allow protocol=TCP localport=${SERVER_PORT} profile=public`, { stdio: 'ignore' });
     } catch (e) {}
-    return { success: true, added: added };
+
+    // Rule might not be added yet (user might still be clicking UAC)
+    return { success: true, added: false, message: 'Batch file launched. Please click "Yes" on the UAC prompt to allow firewall access.' };
   } catch (err) {
+    console.error('[Firewall] Error:', err.message);
     return { success: false, error: err.message };
   }
 });
