@@ -114,6 +114,17 @@ function get<T>(key: string, fallback: T): T {
     const tableName = TABLE_MAP[key];
     if (tableName) {
       const data = dbGetAll(tableName);
+      if (data !== null && Array.isArray(data) && data.length > 0) {
+        // Unwrap double-wrapped records if detected (migration from old bug)
+        const unwrapped = data.map((item: any) => {
+          if (item && typeof item.data === 'object' && item.data !== null && item.data.id) {
+            return item.data; // unwrap {id, data: {id, name, ...}} → {id, name, ...}
+          }
+          return item;
+        });
+        return unwrapped as T;
+      }
+      // If data is empty array, fall through to fallback
       if (data !== null) return data as T;
     }
   }
@@ -126,14 +137,14 @@ function set<T>(key: string, data: T): void {
   if (typeof window === 'undefined') return;
 
   // Try Electron SQLite first
+  // CRITICAL FIX: Do NOT wrap data — dbSetAll already handles the {id, data} format.
+  // The old code was double-wrapping: {id, data: {id, data: item}}
+  // which caused getLabTests() to return records without proper fields.
   if (isElectron()) {
     const tableName = TABLE_MAP[key];
     if (tableName && Array.isArray(data)) {
-      const rows = data.map(item => {
-        const id = (item as any).id || genId();
-        return { id, data: item };
-      });
-      if (dbSetAll(tableName, rows)) return;
+      // Pass the flat array directly — dbSetAll will handle the {id, data} wrapping
+      if (dbSetAll(tableName, data as any[])) return;
     }
   }
 
@@ -449,13 +460,18 @@ export function initLabData(): void {
     }
   } catch {}
 
-  // Only set static defaults (tests, inventory, expenses, doctors) once
-  if (!localStorage.getItem(KEYS.initialized)) {
+  // Check if tests already exist in SQLite or localStorage
+  // CRITICAL: Check SQLite directly, not just localStorage
+  const existingTests = getLabTests();
+  if (!existingTests || existingTests.length === 0) {
+    // No tests found — seed with defaults
+    console.log('[LabStore] No tests found, seeding default tests...');
     set(KEYS.tests, defaultTests);
     set(KEYS.inventory, defaultInventory);
     set(KEYS.expenses, defaultExpenses);
     set(KEYS.doctors, defaultLabDoctors);
     set(KEYS.initialized, 'true');
+    console.log(`[LabStore] Seeded ${defaultTests.length} tests, ${defaultInventory.length} inventory items`);
 
     // First-time: check if main store has orders, otherwise use defaults
     try {
