@@ -88,6 +88,19 @@ export default function LoginPage() {
                 });
               }
               if (info.logoUrl) setLogoSrc(info.logoUrl);
+              // Also try /api/logo for file-based logo
+              if (!info.logoUrl) {
+                try {
+                  const logoResp = await fetch(baseUrl + '/api/logo');
+                  if (logoResp.ok) {
+                    const logoData = await logoResp.json();
+                    if (logoData.success && logoData.logo) setLogoSrc(logoData.logo);
+                  }
+                } catch {}
+              }
+              if (info.hospitalMobile) {
+                setH(prev => ({ ...prev, phone: info.hospitalMobile || prev.phone }));
+              }
               if (info.mode === 'expired') {
                 setInitLoading(false);
                 return;
@@ -515,7 +528,8 @@ export default function LoginPage() {
     return () => clearInterval(interval);
   }, [licenseMode]);
 
-  if ((initLoading || redirecting) && (isElectron || isLanMode())) {
+  // Always show null while loading or redirecting — prevents double page render
+  if (initLoading || redirecting) {
     return null;
   }
 
@@ -605,8 +619,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="h-screen overflow-y-auto bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4">
+      <div className="w-full max-w-md my-auto">
         {/* Hospital Header Card */}
         <div className="bg-white/10 backdrop-blur-lg rounded-2xl border border-white/20 p-6 mb-4">
           <div className="text-center mb-4">

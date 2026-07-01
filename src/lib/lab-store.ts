@@ -283,6 +283,164 @@ const defaultTests: LabTestDefinition[] = [
       { name: 'Blood', unit: '', refRange: 'Negative', refMale: 'Negative', refFemale: 'Negative', criticalLow: 0, criticalHigh: 0, normalLow: 0, normalHigh: 0 },
     ]
   },
+  // Additional common Pakistani lab tests
+  {
+    id: 'lt_fbs', name: 'FBS (Fasting Blood Sugar)', category: 'Biochemistry', price: 250,
+    turnaroundTime: '2 hours', sampleType: 'Blood (Fasting)', active: true,
+    parameters: [
+      { name: 'Glucose (Fasting)', unit: 'mg/dL', refRange: '70-100', refMale: '70-100', refFemale: '70-100', criticalLow: 50, criticalHigh: 300, normalLow: 70, normalHigh: 100 },
+    ]
+  },
+  {
+    id: 'lt_rbs', name: 'RBS (Random Blood Sugar)', category: 'Biochemistry', price: 200,
+    turnaroundTime: '1 hour', sampleType: 'Blood', active: true,
+    parameters: [
+      { name: 'Glucose (Random)', unit: 'mg/dL', refRange: '70-140', refMale: '70-140', refFemale: '70-140', criticalLow: 50, criticalHigh: 400, normalLow: 70, normalHigh: 140 },
+    ]
+  },
+  {
+    id: 'lt_hba1c', name: 'HbA1c (Glycated Hemoglobin)', category: 'Biochemistry', price: 1500,
+    turnaroundTime: '4 hours', sampleType: 'Blood (EDTA)', active: true,
+    parameters: [
+      { name: 'HbA1c', unit: '%', refRange: '4-5.6', refMale: '4-5.6', refFemale: '4-5.6', criticalLow: 3, criticalHigh: 15, normalLow: 4, normalHigh: 5.6 },
+    ]
+  },
+  {
+    id: 'lt_esr', name: 'ESR (Erythrocyte Sedimentation Rate)', category: 'Hematology', price: 300,
+    turnaroundTime: '2 hours', sampleType: 'Blood', active: true,
+    parameters: [
+      { name: 'ESR (1st hour)', unit: 'mm/hr', refRange: '0-15', refMale: '0-15', refFemale: '0-20', criticalLow: 0, criticalHigh: 100, normalLow: 0, normalHigh: 15 },
+    ]
+  },
+  {
+    id: 'lt_pt', name: 'PT/INR (Prothrombin Time)', category: 'Coagulation', price: 600,
+    turnaroundTime: '2 hours', sampleType: 'Blood (Citrate)', active: true,
+    parameters: [
+      { name: 'PT', unit: 'seconds', refRange: '11-13.5', refMale: '11-13.5', refFemale: '11-13.5', criticalLow: 8, criticalHigh: 30, normalLow: 11, normalHigh: 13.5 },
+      { name: 'INR', unit: '', refRange: '0.8-1.2', refMale: '0.8-1.2', refFemale: '0.8-1.2', criticalLow: 0.5, criticalHigh: 5, normalLow: 0.8, normalHigh: 1.2 },
+    ]
+  },
+  {
+    id: 'lt_bilirubin', name: 'Bilirubin (Total & Direct)', category: 'Biochemistry', price: 400,
+    turnaroundTime: '2 hours', sampleType: 'Blood (Serum)', active: true,
+    parameters: [
+      { name: 'Total Bilirubin', unit: 'mg/dL', refRange: '0.3-1.2', refMale: '0.3-1.2', refFemale: '0.3-1.2', criticalLow: 0, criticalHigh: 10, normalLow: 0.3, normalHigh: 1.2 },
+      { name: 'Direct Bilirubin', unit: 'mg/dL', refRange: '0-0.3', refMale: '0-0.3', refFemale: '0-0.3', criticalLow: 0, criticalHigh: 5, normalLow: 0, normalHigh: 0.3 },
+    ]
+  },
+  {
+    id: 'lt_ionic', name: 'Electrolytes (Na, K, Cl)', category: 'Biochemistry', price: 800,
+    turnaroundTime: '2 hours', sampleType: 'Blood (Serum)', active: true,
+    parameters: [
+      { name: 'Sodium', unit: 'mEq/L', refRange: '135-145', refMale: '135-145', refFemale: '135-145', criticalLow: 120, criticalHigh: 160, normalLow: 135, normalHigh: 145 },
+      { name: 'Potassium', unit: 'mEq/L', refRange: '3.5-5', refMale: '3.5-5', refFemale: '3.5-5', criticalLow: 2.5, criticalHigh: 6.5, normalLow: 3.5, normalHigh: 5 },
+      { name: 'Chloride', unit: 'mEq/L', refRange: '96-106', refMale: '96-106', refFemale: '96-106', criticalLow: 80, criticalHigh: 120, normalLow: 96, normalHigh: 106 },
+    ]
+  },
+  {
+    id: 'lt calcium', name: 'Serum Calcium', category: 'Biochemistry', price: 500,
+    turnaroundTime: '2 hours', sampleType: 'Blood (Serum)', active: true,
+    parameters: [
+      { name: 'Calcium', unit: 'mg/dL', refRange: '8.6-10.3', refMale: '8.6-10.3', refFemale: '8.6-10.3', criticalLow: 6, criticalHigh: 13, normalLow: 8.6, normalHigh: 10.3 },
+    ]
+  },
+  {
+    id: 'lt_phosphorus', name: 'Serum Phosphorus', category: 'Biochemistry', price: 500,
+    turnaroundTime: '2 hours', sampleType: 'Blood (Serum)', active: true,
+    parameters: [
+      { name: 'Phosphorus', unit: 'mg/dL', refRange: '2.5-4.5', refMale: '2.5-4.5', refFemale: '2.5-4.5', criticalLow: 1, criticalHigh: 8, normalLow: 2.5, normalHigh: 4.5 },
+    ]
+  },
+  {
+    id: 'lt_iron', name: 'Serum Iron & TIBC', category: 'Biochemistry', price: 800,
+    turnaroundTime: '4 hours', sampleType: 'Blood (Serum)', active: true,
+    parameters: [
+      { name: 'Serum Iron', unit: 'µg/dL', refRange: '60-170', refMale: '65-175', refFemale: '50-170', criticalLow: 20, criticalHigh: 300, normalLow: 60, normalHigh: 170 },
+      { name: 'TIBC', unit: 'µg/dL', refRange: '240-450', refMale: '240-450', refFemale: '240-450', criticalLow: 100, criticalHigh: 600, normalLow: 240, normalHigh: 450 },
+    ]
+  },
+  {
+    id: 'lt_vitd', name: 'Vitamin D (25-OH)', category: 'Endocrinology', price: 2500,
+    turnaroundTime: '1 day', sampleType: 'Blood (Serum)', active: true,
+    parameters: [
+      { name: '25-OH Vitamin D', unit: 'ng/mL', refRange: '30-100', refMale: '30-100', refFemale: '30-100', criticalLow: 5, criticalHigh: 150, normalLow: 30, normalHigh: 100 },
+    ]
+  },
+  {
+    id: 'lt_vitb12', name: 'Vitamin B12', category: 'Endocrinology', price: 2000,
+    turnaroundTime: '1 day', sampleType: 'Blood (Serum)', active: true,
+    parameters: [
+      { name: 'Vitamin B12', unit: 'pg/mL', refRange: '200-900', refMale: '200-900', refFemale: '200-900', criticalLow: 100, criticalHigh: 2000, normalLow: 200, normalHigh: 900 },
+    ]
+  },
+  {
+    id: 'lt_dengue', name: 'Dengue NS1 Antigen', category: 'Serology', price: 1500,
+    turnaroundTime: '4 hours', sampleType: 'Blood (Serum)', active: true,
+    parameters: [
+      { name: 'NS1 Antigen', unit: '', refRange: 'Negative', refMale: 'Negative', refFemale: 'Negative', criticalLow: 0, criticalHigh: 0, normalLow: 0, normalHigh: 0 },
+    ]
+  },
+  {
+    id: 'lt_widal', name: 'Widal Test (Typhoid)', category: 'Serology', price: 500,
+    turnaroundTime: '2 hours', sampleType: 'Blood (Serum)', active: true,
+    parameters: [
+      { name: 'S. typhi O', unit: '', refRange: '< 1:80', refMale: '< 1:80', refFemale: '< 1:80', criticalLow: 0, criticalHigh: 0, normalLow: 0, normalHigh: 0 },
+      { name: 'S. typhi H', unit: '', refRange: '< 1:160', refMale: '< 1:160', refFemale: '< 1:160', criticalLow: 0, criticalHigh: 0, normalLow: 0, normalHigh: 0 },
+    ]
+  },
+  {
+    id: 'lt_pcr', name: 'PCR (Hepatitis C)', category: 'Molecular', price: 5000,
+    turnaroundTime: '3 days', sampleType: 'Blood (Plasma)', active: true,
+    parameters: [
+      { name: 'HCV RNA', unit: 'IU/mL', refRange: 'Not Detected', refMale: 'Not Detected', refFemale: 'Not Detected', criticalLow: 0, criticalHigh: 0, normalLow: 0, normalHigh: 0 },
+    ]
+  },
+  {
+    id: 'lt_hbsag', name: 'HBsAg (Hepatitis B)', category: 'Serology', price: 600,
+    turnaroundTime: '2 hours', sampleType: 'Blood (Serum)', active: true,
+    parameters: [
+      { name: 'HBsAg', unit: '', refRange: 'Negative', refMale: 'Negative', refFemale: 'Negative', criticalLow: 0, criticalHigh: 0, normalLow: 0, normalHigh: 0 },
+    ]
+  },
+  {
+    id: 'lt_antiHCV', name: 'Anti-HCV (Hepatitis C)', category: 'Serology', price: 600,
+    turnaroundTime: '2 hours', sampleType: 'Blood (Serum)', active: true,
+    parameters: [
+      { name: 'Anti-HCV', unit: '', refRange: 'Negative', refMale: 'Negative', refFemale: 'Negative', criticalLow: 0, criticalHigh: 0, normalLow: 0, normalHigh: 0 },
+    ]
+  },
+  {
+    id: 'lt_hiv', name: 'HIV (Screening)', category: 'Serology', price: 500,
+    turnaroundTime: '2 hours', sampleType: 'Blood (Serum)', active: true,
+    parameters: [
+      { name: 'HIV Antibody', unit: '', refRange: 'Negative', refMale: 'Negative', refFemale: 'Negative', criticalLow: 0, criticalHigh: 0, normalLow: 0, normalHigh: 0 },
+    ]
+  },
+  {
+    id: 'lt_pregnancy', name: 'Pregnancy Test (hCG)', category: 'Serology', price: 300,
+    turnaroundTime: '30 min', sampleType: 'Urine/Serum', active: true,
+    parameters: [
+      { name: 'hCG', unit: '', refRange: 'Negative', refMale: 'N/A', refFemale: 'Negative', criticalLow: 0, criticalHigh: 0, normalLow: 0, normalHigh: 0 },
+    ]
+  },
+  {
+    id: 'lt_stool', name: 'Stool Routine Examination', category: 'Microbiology', price: 400,
+    turnaroundTime: '2 hours', sampleType: 'Stool', active: true,
+    parameters: [
+      { name: 'Color', unit: '', refRange: 'Brown', refMale: 'Brown', refFemale: 'Brown', criticalLow: 0, criticalHigh: 0, normalLow: 0, normalHigh: 0 },
+      { name: 'Consistency', unit: '', refRange: 'Soft', refMale: 'Soft', refFemale: 'Soft', criticalLow: 0, criticalHigh: 0, normalLow: 0, normalHigh: 0 },
+      { name: 'Occult Blood', unit: '', refRange: 'Negative', refMale: 'Negative', refFemale: 'Negative', criticalLow: 0, criticalHigh: 0, normalLow: 0, normalHigh: 0 },
+      { name: 'Parasites', unit: '', refRange: 'Not Found', refMale: 'Not Found', refFemale: 'Not Found', criticalLow: 0, criticalHigh: 0, normalLow: 0, normalHigh: 0 },
+    ]
+  },
+  {
+    id: 'lt_ami', name: 'Cardiac Enzymes (CK-MB, Troponin)', category: 'Biochemistry', price: 2000,
+    turnaroundTime: '4 hours', sampleType: 'Blood (Serum)', active: true,
+    parameters: [
+      { name: 'CK-MB', unit: 'U/L', refRange: '0-25', refMale: '0-25', refFemale: '0-25', criticalLow: 0, criticalHigh: 100, normalLow: 0, normalHigh: 25 },
+      { name: 'Troponin I', unit: 'ng/mL', refRange: '< 0.4', refMale: '< 0.4', refFemale: '< 0.4', criticalLow: 0, criticalHigh: 10, normalLow: 0, normalHigh: 0.4 },
+    ]
+  },
 ];
 
 // ==================== DEFAULT ORDERS ====================
