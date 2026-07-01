@@ -307,7 +307,7 @@ export default function TestOrdersPage() {
         </div>
       )}
 
-      {/* Order Summary Modal */}
+      {/* Order Summary Modal — shows only the receipt, no duplicate summary */}
       {orderSummary && (
         <div className="modal-overlay" onClick={() => { setShowSlipPreview(false); setSlipHtml(''); setOrderSummary(null); }}>
           <div className="modal-content" style={{ maxWidth: '550px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
@@ -315,30 +315,8 @@ export default function TestOrdersPage() {
               <h3 className="text-lg font-bold text-slate-800">Order Created Successfully</h3>
               <button onClick={() => { setShowSlipPreview(false); setSlipHtml(''); setOrderSummary(null); }} className="btn btn-outline btn-sm">Close</button>
             </div>
-            <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 mb-4">
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div><span className="text-slate-500">Patient ID:</span> <span className="font-mono font-bold text-blue-600">{orderSummary.patientNo}</span></div>
-                <div><span className="text-slate-500">Name:</span> <span className="font-semibold">{orderSummary.patientName}</span></div>
-                <div><span className="text-slate-500">Age / Gender:</span> <span>{orderSummary.age} / {orderSummary.gender}</span></div>
-                <div><span className="text-slate-500">Sample:</span> <span>{orderSummary.sampleType}</span></div>
-                <div><span className="text-slate-500">Doctor:</span> <span>{orderSummary.orderedBy}</span></div>
-                <div><span className="text-slate-500">Urgency:</span> <span className={`badge ${orderSummary.urgency === 'stat' ? 'badge-rose' : orderSummary.urgency === 'urgent' ? 'badge-amber' : 'badge-slate'}`}>{orderSummary.urgency.toUpperCase()}</span></div>
-              </div>
-            </div>
-            <div className="border border-slate-200 rounded-lg overflow-hidden mb-4">
-              <table className="data-table">
-                <thead><tr><th>Test</th><th className="text-right">Price</th></tr></thead>
-                <tbody>
-                  {orderSummary.tests.map((t, i) => (
-                    <tr key={i}><td className="text-sm font-medium">{t.testName}</td><td className="text-right text-sm">{curr} {t.price.toLocaleString()}</td></tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-emerald-50"><td className="font-bold">Total</td><td className="text-right font-bold text-emerald-600 text-lg">{curr} {orderSummary.totalAmount.toLocaleString()}</td></tr>
-                </tfoot>
-              </table>
-            </div>
-            {showSlipPreview && <iframe srcDoc={slipHtml} style={{width:'100%',height:'400px',border:'1px solid #e2e8f0',borderRadius:'8px',marginBottom:'12px'}} />}
+            {/* Only show the receipt slip — no duplicate summary table */}
+            {showSlipPreview && <iframe srcDoc={slipHtml} style={{width:'100%',height:'500px',border:'1px solid #e2e8f0',borderRadius:'8px',marginBottom:'12px'}} />}
             <div className="flex gap-2">
               <button onClick={() => { triggerPrint(slipHtml); }} className="btn btn-primary flex-1">Print Slip</button>
               <button onClick={() => { setShowSlipPreview(false); setSlipHtml(''); setOrderSummary(null); }} className="btn btn-outline flex-1">Close</button>

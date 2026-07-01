@@ -489,7 +489,8 @@ export function generateOrderSlipHtml(params: OrderSlipParams): string {
     .hname{font-size:16px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;text-shadow:0 1px 2px rgba(0,0,0,0.3);}
     .hsub{font-size:8px;letter-spacing:1.2px;opacity:0.85;text-transform:uppercase;text-align:center;}
 
-    .contact{background:#eef2f7;padding:3px 16px;display:flex;justify-content:space-between;font-size:7.5px;color:#475569;border-bottom:1px solid #d1d9e6;}
+    .contact{background:#eef2f7;padding:5px 16px;display:flex;justify-content:space-between;font-size:11px;color:#475569;border-bottom:1px solid #d1d9e6;font-weight:600;}
+    .contact span{font-size:11px !important;}
 
     .title-bar{background:#fef3c7;border-bottom:2px solid #f59e0b;padding:6px 16px;text-align:center;}
     .title-bar h2{font-size:13px;font-weight:800;color:#0c2340;letter-spacing:1.5px;text-transform:uppercase;}

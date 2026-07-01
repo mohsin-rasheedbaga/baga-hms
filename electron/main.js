@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Notification, session } = require('electron');
 const path = require('path');
 const https = require('https');
 const http = require('http');
@@ -2735,6 +2735,24 @@ function cleanupOldUpdateFiles() {
 }
 
 app.whenReady().then(async () => {
+  // ============================================================
+  // PERMISSION HANDLER — auto-approve all permissions
+  // This prevents the app from asking for permission every time
+  // it starts (clipboard, notifications, media, etc.)
+  // ============================================================
+  try {
+    session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+      // Auto-approve all permissions — this is a desktop app, not a web browser
+      // Users don't need to be asked every time
+      callback(true);
+    });
+    // Also set the permission check handler (for Electron >= 20)
+    session.defaultSession.setPermissionCheckHandler(() => true);
+    console.log('[Permissions] Auto-approve handler set');
+  } catch (e) {
+    console.log('[Permissions] Handler setup failed:', e.message);
+  }
+
   // ============================================================
   // RESTART LOOP DETECTION (critical safety check)
   // ============================================================
