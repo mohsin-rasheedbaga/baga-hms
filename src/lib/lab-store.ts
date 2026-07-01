@@ -34,6 +34,7 @@ export interface LabOrderItem {
   patientId: string;
   patientNo: string;
   patientName: string;
+  mobile?: string;
   gender: string;
   age: string;
   tests: { testName: string; testId: string; price: number }[];

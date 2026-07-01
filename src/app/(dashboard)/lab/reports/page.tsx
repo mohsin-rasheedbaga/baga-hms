@@ -1,11 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { initLabData, getLabOrders, type LabOrderItem } from '@/lib/lab-store';
+import { useRouter } from 'next/navigation';
+import { initLabData, getLabOrders, updateLabOrder, type LabOrderItem } from '@/lib/lab-store';
 import { generateProfessionalLabReportHtml, getLabPrintDataAsync } from '@/lib/print-lab-report';
 import { triggerPrint } from '@/lib/print-utils';
 import { getHospitalSettings } from '@/lib/store';
 
 export default function CompletedReportsPage() {
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [orders, setOrders] = useState<LabOrderItem[]>([]);
@@ -163,6 +165,7 @@ export default function CompletedReportsPage() {
                       <div className="flex gap-1">
                         <button onClick={() => openViewReport(o)} className="btn btn-outline btn-sm">View</button>
                         <button onClick={() => printReport(o)} className="btn btn-primary btn-sm">Print</button>
+                        <button onClick={() => { updateLabOrder(o.id, { status: 'processing' }); router.push('/lab/processing'); }} className="btn btn-outline btn-sm" title="Edit results">✏️ Edit</button>
                       </div>
                     </td>
                   </tr>

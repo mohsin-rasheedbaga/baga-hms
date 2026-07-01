@@ -76,9 +76,20 @@ export default function SampleCollectionPage() {
     try {
       const templates = await generateStickerTemplates(order);
       if (templates.length === 0) return;
-      // Show preview of first sticker
+      // Show preview of ALL stickers combined
       setAllStickerTemplates(templates);
-      setStickerPreviewHtml(templates[0]);
+      // Combine all stickers for preview
+      const combinedPreview = templates.map((html, idx) => {
+        const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+        return `<div style="border:1px solid #333;padding:8px;margin-bottom:8px;border-radius:4px;width:80mm;height:50mm;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;">
+          <div style="font-size:8px;color:#94a3b8;margin-bottom:4px;">Sticker ${idx + 1} of ${templates.length}</div>
+          ${bodyMatch ? bodyMatch[1] : html}
+        </div>`;
+      }).join('');
+      setStickerPreviewHtml(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+        body{font-family:'Segoe UI',Arial,sans-serif;margin:0;padding:8px;background:#f8fafc;}
+        .sticker-item{page-break-after:always;}
+      </style></head><body>${combinedPreview}</body></html>`);
       setShowStickerPreview(true);
     } catch (err) {
       console.error('Failed to generate sticker preview:', err);
@@ -87,10 +98,33 @@ export default function SampleCollectionPage() {
 
   const printAllStickers = async () => {
     setShowStickerPreview(false);
-    for (let i = 0; i < allStickerTemplates.length; i++) {
-      if (i > 0) await new Promise(r => setTimeout(r, 2000));
-      openPrintWindow(allStickerTemplates[i]);
-    }
+    // Combine ALL stickers into a single HTML document for printing
+    // Each sticker is on its own page (page-break-after: always)
+    const combinedHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Lab Stickers</title><style>
+      @page{size:80mm 50mm;margin:0;}
+      *{margin:0;padding:0;box-sizing:border-box;}
+      body{font-family:'Segoe UI',Arial,sans-serif;}
+      .sticker-page{width:80mm;height:50mm;page-break-after:always;overflow:hidden;border:1px solid #000;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:3mm;text-align:center;}
+      .sticker-page:last-child{page-break-after:auto;}
+      .hname{font-size:10px;font-weight:800;color:#0c2340;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;}
+      .pid{font-size:9px;font-weight:700;color:#1e40af;font-family:monospace;margin-bottom:1px;}
+      .pname{font-size:9px;font-weight:600;color:#1e293b;margin-bottom:1px;}
+      .testname{font-size:10px;font-weight:700;color:#dc2626;margin-bottom:1px;}
+      .sample{font-size:8px;color:#475569;}
+      .date{font-size:7px;color:#64748b;}
+      .barcode{font-family:'Courier New',monospace;font-size:11px;font-weight:900;letter-spacing:2px;margin:2px 0;}
+      .urgency{font-size:7px;font-weight:700;padding:1px 4px;border-radius:2px;display:inline-block;margin-top:1px;}
+      .stat{background:#dc2626;color:#fff;} .urgent{background:#f59e0b;color:#fff;} .routine{background:#e2e8f0;color:#475569;}
+      .logo{width:20px;height:20px;object-fit:contain;margin-bottom:1px;}
+      @media print{body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+    </style></head><body>
+    ${allStickerTemplates.map(html => {
+      // Extract body content from each sticker HTML
+      const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+      return `<div class="sticker-page">${bodyMatch ? bodyMatch[1] : html}</div>`;
+    }).join('')}
+    </body></html>`;
+    openPrintWindow(combinedHtml);
     setAllStickerTemplates([]);
     setStickerPreviewHtml('');
   };
@@ -192,10 +226,10 @@ export default function SampleCollectionPage() {
         <div className="modal-overlay" onClick={() => { setShowStickerPreview(false); setStickerPreviewHtml(''); setAllStickerTemplates([]); }}>
           <div className="modal-content" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-slate-800">Sticker Preview (1 of {allStickerTemplates.length})</h3>
+              <h3 className="text-lg font-bold text-slate-800">Sticker Preview ({allStickerTemplates.length} stickers)</h3>
               <button onClick={() => { setShowStickerPreview(false); setStickerPreviewHtml(''); setAllStickerTemplates([]); }} className="btn btn-outline btn-sm">Close</button>
             </div>
-            <iframe srcDoc={stickerPreviewHtml} style={{width:'100%',height:'200px',border:'1px solid #e2e8f0',borderRadius:'8px',marginBottom:'12px'}} />\n            <div className="flex gap-2">
+            <iframe srcDoc={stickerPreviewHtml} style={{width:'100%',height:'400px',border:'1px solid #e2e8f0',borderRadius:'8px',marginBottom:'12px'}} />\n            <div className="flex gap-2">
               <button onClick={printAllStickers} className="btn btn-primary flex-1">Print All Stickers ({allStickerTemplates.length})</button>
               <button onClick={() => { setShowStickerPreview(false); setStickerPreviewHtml(''); setAllStickerTemplates([]); }} className="btn btn-outline flex-1">Close</button>
             </div>

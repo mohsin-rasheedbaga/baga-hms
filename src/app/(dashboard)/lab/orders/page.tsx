@@ -15,6 +15,12 @@ export default function TestOrdersPage() {
   const [search, setSearch] = useState('');
   const [orders, setOrders] = useState<LabOrderItem[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editOrder, setEditOrder] = useState<LabOrderItem | null>(null);
+  const [editPatientName, setEditPatientName] = useState('');
+  const [editMobile, setEditMobile] = useState('');
+  const [editAge, setEditAge] = useState('');
+  const [editGender, setEditGender] = useState('');
   const [orderSummary, setOrderSummary] = useState<LabOrderItem | null>(null);
   const [slipHtml, setSlipHtml] = useState('');
   const [showSlipPreview, setShowSlipPreview] = useState(false);
@@ -232,6 +238,7 @@ export default function TestOrdersPage() {
                     <div className="flex gap-1 flex-wrap">
                       {o.status === 'collected' && <button onClick={() => { updateLabOrder(o.id, { status: 'processing' }); loadData(); showToast('Sent to processing', 'success'); }} className="btn btn-primary btn-sm">Process</button>}
                       {o.status === 'completed' && <button onClick={() => router.push('/lab/reports')} className="btn btn-outline btn-sm">View</button>}
+                      <button onClick={() => { setEditOrder(o); setEditPatientName(o.patientName); setEditMobile(o.mobile || ''); setEditAge(o.age || ''); setEditGender(o.gender || ''); setShowEditModal(true); }} className="btn btn-outline btn-sm" title="Edit patient details">✏️ Edit</button>
                     </div>
                   </td>
                 </tr>
@@ -320,6 +327,53 @@ export default function TestOrdersPage() {
             <div className="flex gap-2">
               <button onClick={() => { triggerPrint(slipHtml); }} className="btn btn-primary flex-1">Print Slip</button>
               <button onClick={() => { setShowSlipPreview(false); setSlipHtml(''); setOrderSummary(null); }} className="btn btn-outline flex-1">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Order Modal */}
+      {showEditModal && editOrder && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal-content" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-slate-800">Edit Patient Details</h3>
+              <button onClick={() => setShowEditModal(false)} className="btn btn-outline btn-sm">Close</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="form-label">Patient Name</label>
+                <input className="form-input" value={editPatientName} onChange={e => setEditPatientName(e.target.value)} />
+              </div>
+              <div>
+                <label className="form-label">Mobile</label>
+                <input className="form-input" value={editMobile} onChange={e => setEditMobile(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="form-label">Age</label>
+                  <input className="form-input" value={editAge} onChange={e => setEditAge(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label">Gender</label>
+                  <select className="form-input" value={editGender} onChange={e => setEditGender(e.target.value)}>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+              <button onClick={() => {
+                updateLabOrder(editOrder.id, {
+                  patientName: editPatientName.trim(),
+                  mobile: editMobile.trim(),
+                  age: editAge.trim(),
+                  gender: editGender,
+                });
+                loadData();
+                setShowEditModal(false);
+                showToast('Order updated successfully', 'success');
+              }} className="btn btn-primary w-full">Save Changes</button>
             </div>
           </div>
         </div>

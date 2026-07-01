@@ -27,7 +27,7 @@ export const ALL_PERMISSIONS: string[] = [
   // Laboratory Module
   'view_lab_dashboard', 'view_lab_orders', 'collect_samples', 'enter_results',
   'print_report', 'view_reports', 'view_completed_reports', 'lab_statistics',
-  'lab_inventory', 'manage_test_catalog', 'lab_expenses', 'view_lab_reports',
+  'lab_inventory', 'manage_test_catalog', 'lab_expenses', 'view_lab_reports', 'edit_lab_order', 'edit_lab_report',
 
   // X-Ray Module
   'view_xray_dashboard', 'view_xray_orders', 'enter_xray_report',
@@ -83,6 +83,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   view_lab_orders: 'View Test Orders',
   collect_samples: 'Sample Collection',
   enter_results: 'Enter Results',
+  edit_lab_order: 'Edit Lab Order (Patient Details)',
+  edit_lab_report: 'Edit Lab Report (Results)',
   print_report: 'Print Report',
   view_reports: 'View Reports',
   view_completed_reports: 'View Completed Reports',
@@ -165,7 +167,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     perms: [
       'view_lab_dashboard', 'view_lab_orders', 'collect_samples', 'enter_results',
       'print_report', 'view_reports', 'view_completed_reports', 'lab_statistics',
-      'lab_inventory', 'manage_test_catalog', 'lab_expenses', 'view_lab_reports',
+      'lab_inventory', 'manage_test_catalog', 'lab_expenses', 'view_lab_reports', 'edit_lab_order', 'edit_lab_report',
     ],
   },
   {
@@ -233,10 +235,10 @@ export function getModulePermissions(licenseType: string): { groups: PermissionG
       // Common
       'dashboard', 'manage_employees', 'manage_users', 'manage_settings',
       // Old lab keys (backward compatible)
-      'view_reports', 'view_lab_orders', 'enter_results', 'print_report',
+      'view_reports', 'view_lab_orders', 'enter_results', 'edit_lab_report', 'print_report',
       // New lab keys
       'view_lab_dashboard', 'collect_samples', 'view_completed_reports', 'lab_statistics',
-      'lab_inventory', 'manage_test_catalog', 'lab_expenses', 'view_lab_reports',
+      'lab_inventory', 'manage_test_catalog', 'lab_expenses', 'view_lab_reports', 'edit_lab_order', 'edit_lab_report',
     ];
     return {
       groups: PERMISSION_GROUPS.filter(g => g.perms.some(p => perms.includes(p))),
@@ -254,10 +256,10 @@ export function getModulePermissions(licenseType: string): { groups: PermissionG
       'view_admitted_patients', 'discharge_patient', 'write_clinical_notes',
       'order_lab', 'prescribe', 'order_xray', 'order_ultrasound', 'write_notes', 'discharge',
       // Laboratory (old keys)
-      'view_reports', 'view_lab_orders', 'enter_results', 'print_report',
+      'view_reports', 'view_lab_orders', 'enter_results', 'edit_lab_report', 'print_report',
       // Laboratory (new keys)
       'view_lab_dashboard', 'collect_samples', 'view_completed_reports', 'lab_statistics',
-      'lab_inventory', 'manage_test_catalog', 'lab_expenses', 'view_lab_reports',
+      'lab_inventory', 'manage_test_catalog', 'lab_expenses', 'view_lab_reports', 'edit_lab_order', 'edit_lab_report',
       // X-Ray
       'view_xray_dashboard', 'view_xray_orders', 'enter_xray_report',
       // Ultrasound
