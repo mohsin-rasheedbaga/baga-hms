@@ -39,7 +39,7 @@ export interface User {
   email: string;
   password: string;
   name: string;
-  role: 'super_admin' | 'reception' | 'doctor' | 'lab' | 'pharmacy' | 'xray' | 'ultrasound' | 'accounts';
+  role: 'super_admin' | 'reception' | 'doctor' | 'lab' | 'lab_technologist' | 'pharmacy' | 'xray' | 'ultrasound' | 'accounts';
   department: string;
   active: boolean;
   permissions: string[];

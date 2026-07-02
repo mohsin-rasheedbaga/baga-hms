@@ -1,6 +1,6 @@
 {
   "name": "baga-hms",
-  "version": "3.8.23",
+  "version": "3.8.24",
   "private": true,
   "description": "BAGA Hospital Management System - Desktop Edition",
   "main": "electron/main.js",

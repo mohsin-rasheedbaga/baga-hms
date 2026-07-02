@@ -543,7 +543,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const isMasterAdmin = session?.userId === 'baga-master-admin' || session?.userId === 'demo-admin';
   const hasAllPermissions = userPermissions.includes('all') || isMasterAdmin;
 
-  if (!hasAllPermissions && userPermissions.length > 0) {
+  // CRITICAL: If user has NO permissions (not 'all', not master, empty array),
+  // they should see NOTHING except Dashboard and Settings.
+  // The old code skipped filtering when userPermissions.length === 0,
+  // which meant users with no permissions could see EVERYTHING.
+  if (!hasAllPermissions) {
     const filterItem = (item: MenuItem | SubMenuParent): boolean => {
       // Items without a permission field are always visible (Dashboard, Settings, User Management, Employees)
       if (!item.permission) return true;

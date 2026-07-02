@@ -9,6 +9,7 @@ const ROLES = [
   { value: 'reception', label: 'Reception', dept: 'Reception' },
   { value: 'doctor', label: 'Doctor', dept: 'Doctor' },
   { value: 'lab', label: 'Lab Technician', dept: 'Laboratory' },
+  { value: 'lab_technologist', label: 'Lab Technologist', dept: 'Laboratory' },
   { value: 'pharmacy', label: 'Pharmacist', dept: 'Pharmacy' },
   { value: 'xray', label: 'Radiologist', dept: 'X-Ray' },
   { value: 'ultrasound', label: 'USG Technician', dept: 'Ultrasound' },
@@ -229,7 +230,9 @@ export default function UsersPage() {
       role: selectedRole as User['role'],
       department: selectedDept,
       active: true,
-      permissions: selectedPermissions.length > 0 ? selectedPermissions : ['all'],
+      // CRITICAL: Only assign explicitly selected permissions.
+      // Do NOT default to ['all'] — that gives the user access to everything.
+      permissions: selectedPermissions,
     };
     addUser(newUser);
     loadData();
