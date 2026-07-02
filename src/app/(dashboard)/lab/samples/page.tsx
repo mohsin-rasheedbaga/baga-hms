@@ -44,31 +44,20 @@ export default function SampleCollectionPage() {
     const printData = await getLabPrintDataAsync();
     return order.tests.map((t, i) => {
       const barcode = `${order.patientNo}-${t.testName.replace(/\s+/g,'').substring(0,6).toUpperCase()}`;
-      return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sticker ${i+1}</title><style>
-        @page{size:50mm 25mm;margin:2mm;}
-        *{margin:0;padding:0;box-sizing:border-box;}
-        body{font-family:Arial,sans-serif;width:50mm;height:25mm;overflow:hidden;border:1px dashed #999;padding:2mm;position:relative;}
-        .logo{height:5mm;max-width:15mm;object-fit:contain;position:absolute;top:2mm;left:2mm;}
-        .hname{font-size:5pt;font-weight:800;color:#0c2340;position:absolute;top:2mm;left:18mm;max-width:30mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-        .pid{font-size:5.5pt;font-weight:700;color:#2563eb;font-family:monospace;position:absolute;top:7mm;left:2mm;}
-        .pname{font-size:5pt;font-weight:600;position:absolute;top:7mm;left:20mm;max-width:26mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-        .testname{font-size:8pt;font-weight:900;color:#0c2340;text-align:center;position:absolute;top:12mm;left:2mm;right:2mm;background:#f0f4ff;border-radius:1mm;padding:1mm 0;}
-        .sample{font-size:4.5pt;color:#64748b;position:absolute;top:17mm;left:2mm;}
-        .date{font-size:4.5pt;color:#64748b;position:absolute;top:17mm;right:2mm;}
-        .barcode{font-size:5pt;font-family:monospace;color:#334155;background:#f8fafc;border:0.3mm solid #e2e8f0;border-radius:0.5mm;padding:0.5mm 1mm;text-align:center;position:absolute;bottom:2mm;left:2mm;right:2mm;letter-spacing:1px;}
-        .urgency{position:absolute;top:2mm;right:2mm;font-size:4pt;font-weight:800;padding:0.3mm 1.5mm;border-radius:1mm;}
-        .stat{background:#dc2626;color:#fff;} .urgent{background:#f59e0b;color:#fff;} .routine{background:#e2e8f0;color:#475569;}
-      </style></head><body>
-        ${printData.hospitalLogo ? `<img class="logo" src="${printData.hospitalLogo}" alt="" />` : ''}
-        <div class="hname">${printData.hospitalName}</div>
-        <div class="pid">${order.patientNo}</div>
-        <div class="pname">${order.patientName} (${order.gender}/${order.age})</div>
-        <div class="testname">${t.testName}</div>
-        <div class="sample">${order.sampleType}</div>
-        <div class="date">${order.date} ${order.time}</div>
-        <div class="barcode">${barcode}</div>
-        <span class="urgency ${order.urgency}">${order.urgency.toUpperCase()}</span>
-      </body></html>`;
+      // Return just the inner HTML content (no full document)
+      // This makes it easy to combine multiple stickers in one page
+      return `
+        ${printData.hospitalLogo ? `<img style="height:5mm;max-width:15mm;object-fit:contain;display:block;margin:0 auto 1mm;" src="${printData.hospitalLogo}" alt="" />` : ''}
+        <div style="font-size:5pt;font-weight:800;color:#0c2340;text-align:center;margin-bottom:0.5mm;">${printData.hospitalName}</div>
+        <div style="font-size:5.5pt;font-weight:700;color:#2563eb;font-family:monospace;text-align:center;margin-bottom:0.5mm;">${order.patientNo}</div>
+        <div style="font-size:5pt;font-weight:600;text-align:center;margin-bottom:0.5mm;">${order.patientName} (${order.gender}/${order.age})</div>
+        <div style="font-size:8pt;font-weight:900;color:#0c2340;text-align:center;background:#f0f4ff;border-radius:1mm;padding:1mm 0;margin-bottom:0.5mm;">${t.testName}</div>
+        <div style="font-size:4.5pt;color:#64748b;text-align:center;margin-bottom:0.5mm;">Sample: ${order.sampleType} | ${order.date} ${order.time}</div>
+        <div style="font-size:5pt;font-family:monospace;color:#334155;background:#f8fafc;border:0.3mm solid #e2e8f0;border-radius:0.5mm;padding:0.5mm 1mm;text-align:center;letter-spacing:1px;">${barcode}</div>
+        <div style="text-align:center;margin-top:0.5mm;">
+          <span style="font-size:4pt;font-weight:800;padding:0.3mm 1.5mm;border-radius:1mm;background:${order.urgency === 'stat' ? '#dc2626' : order.urgency === 'urgent' ? '#f59e0b' : '#e2e8f0'};color:${order.urgency === 'routine' ? '#475569' : '#fff'};">${order.urgency.toUpperCase()}</span>
+        </div>
+      `;
     });
   };
 
@@ -76,20 +65,15 @@ export default function SampleCollectionPage() {
     try {
       const templates = await generateStickerTemplates(order);
       if (templates.length === 0) return;
-      // Show preview of ALL stickers combined
       setAllStickerTemplates(templates);
-      // Combine all stickers for preview
+      // Show preview of ALL stickers combined
       const combinedPreview = templates.map((html, idx) => {
-        const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-        return `<div style="border:1px solid #333;padding:8px;margin-bottom:8px;border-radius:4px;width:80mm;height:50mm;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;">
-          <div style="font-size:8px;color:#94a3b8;margin-bottom:4px;">Sticker ${idx + 1} of ${templates.length}</div>
-          ${bodyMatch ? bodyMatch[1] : html}
+        return `<div style="border:1px dashed #999;padding:3mm;margin-bottom:3mm;border-radius:2mm;width:50mm;height:25mm;overflow:hidden;position:relative;display:flex;flex-direction:column;justify-content:center;page-break-after:always;">
+          <div style="font-size:4pt;color:#94a3b8;text-align:center;margin-bottom:0.5mm;">Sticker ${idx + 1} of ${templates.length}</div>
+          ${html}
         </div>`;
       }).join('');
-      setStickerPreviewHtml(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-        body{font-family:'Segoe UI',Arial,sans-serif;margin:0;padding:8px;background:#f8fafc;}
-        .sticker-item{page-break-after:always;}
-      </style></head><body>${combinedPreview}</body></html>`);
+      setStickerPreviewHtml(combinedPreview);
       setShowStickerPreview(true);
     } catch (err) {
       console.error('Failed to generate sticker preview:', err);
@@ -101,27 +85,24 @@ export default function SampleCollectionPage() {
     // Combine ALL stickers into a single HTML document for printing
     // Each sticker is on its own page (page-break-after: always)
     const combinedHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Lab Stickers</title><style>
-      @page{size:80mm 50mm;margin:0;}
+      @page{size:50mm 25mm;margin:2mm;}
       *{margin:0;padding:0;box-sizing:border-box;}
-      body{font-family:'Segoe UI',Arial,sans-serif;}
-      .sticker-page{width:80mm;height:50mm;page-break-after:always;overflow:hidden;border:1px solid #000;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:3mm;text-align:center;}
+      body{font-family:Arial,sans-serif;}
+      .sticker-page{width:50mm;height:25mm;page-break-after:always;overflow:hidden;border:1px dashed #999;padding:2mm;position:relative;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;}
       .sticker-page:last-child{page-break-after:auto;}
-      .hname{font-size:10px;font-weight:800;color:#0c2340;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;}
-      .pid{font-size:9px;font-weight:700;color:#1e40af;font-family:monospace;margin-bottom:1px;}
-      .pname{font-size:9px;font-weight:600;color:#1e293b;margin-bottom:1px;}
-      .testname{font-size:10px;font-weight:700;color:#dc2626;margin-bottom:1px;}
-      .sample{font-size:8px;color:#475569;}
-      .date{font-size:7px;color:#64748b;}
-      .barcode{font-family:'Courier New',monospace;font-size:11px;font-weight:900;letter-spacing:2px;margin:2px 0;}
-      .urgency{font-size:7px;font-weight:700;padding:1px 4px;border-radius:2px;display:inline-block;margin-top:1px;}
+      .logo{height:5mm;max-width:15mm;object-fit:contain;margin:0 auto 1mm;}
+      .hname{font-size:5pt;font-weight:800;color:#0c2340;margin-bottom:0.5mm;}
+      .pid{font-size:5.5pt;font-weight:700;color:#2563eb;font-family:monospace;margin-bottom:0.5mm;}
+      .pname{font-size:5pt;font-weight:600;margin-bottom:0.5mm;}
+      .testname{font-size:8pt;font-weight:900;color:#0c2340;background:#f0f4ff;border-radius:1mm;padding:1mm 0;margin-bottom:0.5mm;width:100%;}
+      .sample-info{font-size:4.5pt;color:#64748b;margin-bottom:0.5mm;}
+      .barcode{font-size:5pt;font-family:monospace;color:#334155;background:#f8fafc;border:0.3mm solid #e2e8f0;border-radius:0.5mm;padding:0.5mm 1mm;letter-spacing:1px;width:100%;}
+      .urgency{font-size:4pt;font-weight:800;padding:0.3mm 1.5mm;border-radius:1mm;margin-top:0.5mm;display:inline-block;}
       .stat{background:#dc2626;color:#fff;} .urgent{background:#f59e0b;color:#fff;} .routine{background:#e2e8f0;color:#475569;}
-      .logo{width:20px;height:20px;object-fit:contain;margin-bottom:1px;}
       @media print{body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
     </style></head><body>
-    ${allStickerTemplates.map(html => {
-      // Extract body content from each sticker HTML
-      const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-      return `<div class="sticker-page">${bodyMatch ? bodyMatch[1] : html}</div>`;
+    ${allStickerTemplates.map((html, idx) => {
+      return `<div class="sticker-page">${html}</div>`;
     }).join('')}
     </body></html>`;
     openPrintWindow(combinedHtml);

@@ -876,7 +876,33 @@ export function updateLabOrder(id: string, data: Partial<LabOrderItem>): void {
   set(KEYS.orders, getLabOrders().map(o => o.id === id ? { ...o, ...data } : o));
 
   // Sync ALL status changes back to main store (store.ts) so Reception/Dashboard see them
+  // ALSO sync patient detail changes (name, mobile, age, gender) everywhere
   try {
+    // First: update patients table in SQLite/localStorage if patient exists
+    if (data.patientName || data.mobile || data.age || data.gender) {
+      try {
+        const patientsRaw = localStorage.getItem('baga_patients');
+        if (patientsRaw) {
+          const patients = JSON.parse(patientsRaw);
+          const updatedPatients = patients.map((p: any) => {
+            if (p.id === getLabOrderById(id)?.patientId || p.patientNo === getLabOrderById(id)?.patientNo) {
+              return {
+                ...p,
+                name: data.patientName || p.name,
+                mobile: data.mobile !== undefined ? data.mobile : p.mobile,
+                age: data.age || p.age,
+                gender: data.gender || p.gender,
+              };
+            }
+            return p;
+          });
+          localStorage.setItem('baga_patients', JSON.stringify(updatedPatients));
+          // Also sync to SQLite via dbSetAll
+          try { dbSetAll('patients', updatedPatients); } catch {}
+        }
+      } catch (e) { console.warn('Failed to sync patient details to patients table:', e); }
+    }
+
     const mainKey = KEYS.mainOrdersKey;
     const raw = localStorage.getItem(mainKey);
     if (raw) {
@@ -900,7 +926,14 @@ export function updateLabOrder(id: string, data: Partial<LabOrderItem>): void {
         const updated = mainOrders.map((o: any) => {
           if (o.id === id || (o.patientId === order.patientId && o.visitId === order.visitId)) {
             needsUpdate = true;
-            return { ...o, status: mainStatus, results };
+            return {
+              ...o,
+              status: mainStatus,
+              results,
+              // Also sync patient details if they were updated
+              patientName: order.patientName,
+              patientNo: order.patientNo,
+            };
           }
           return o;
         });
