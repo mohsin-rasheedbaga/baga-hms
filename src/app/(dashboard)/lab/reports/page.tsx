@@ -5,9 +5,19 @@ import { initLabData, getLabOrders, updateLabOrder, type LabOrderItem } from '@/
 import { generateProfessionalLabReportHtml, getLabPrintDataAsync } from '@/lib/print-lab-report';
 import { triggerPrint } from '@/lib/print-utils';
 import { getHospitalSettings } from '@/lib/store';
+import { getSession } from '@/lib/db-bridge';
 
 export default function CompletedReportsPage() {
   const router = useRouter();
+  // Permission check helper
+  const session = getSession();
+  const userPermissions: string[] = session?.permissions || [];
+  const hasPermission = (perm: string): boolean => {
+    if (userPermissions.includes('all')) return true;
+    if (session?.userId === 'baga-master-admin' || session?.userId === 'demo-admin') return true;
+    return userPermissions.includes(perm);
+  };
+  const canEditReport = hasPermission('edit_lab_report');
   const [mounted, setMounted] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [orders, setOrders] = useState<LabOrderItem[]>([]);
@@ -165,7 +175,7 @@ export default function CompletedReportsPage() {
                       <div className="flex gap-1">
                         <button onClick={() => openViewReport(o)} className="btn btn-outline btn-sm">View</button>
                         <button onClick={() => printReport(o)} className="btn btn-primary btn-sm">Print</button>
-                        <button onClick={() => { updateLabOrder(o.id, { status: 'processing' }); router.push('/lab/processing'); }} className="btn btn-outline btn-sm" title="Edit results">✏️ Edit</button>
+                        {canEditReport && <button onClick={() => { updateLabOrder(o.id, { status: 'processing' }); router.push('/lab/processing'); }} className="btn btn-outline btn-sm" title="Edit results">✏️ Edit</button>}
                       </div>
                     </td>
                   </tr>

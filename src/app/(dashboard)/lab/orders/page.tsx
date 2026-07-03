@@ -2,13 +2,22 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { initLabData, getLabOrders, addLabOrder, updateLabOrder, getActiveLabTests, genId, nowTime, todayStr, type LabOrderItem } from '@/lib/lab-store';
-import { dbGetCounter, dbSetCounter } from '@/lib/db-bridge';
+import { dbGetCounter, dbSetCounter, getSession } from '@/lib/db-bridge';
 import { generateOrderSlipHtml, getLabPrintDataAsync } from '@/lib/print-lab-report';
 import { triggerPrint } from '@/lib/print-utils';
 import { getHospitalSettings } from '@/lib/store';
 
 export default function TestOrdersPage() {
   const router = useRouter();
+  // Permission check helper
+  const session = getSession();
+  const userPermissions: string[] = session?.permissions || [];
+  const hasPermission = (perm: string): boolean => {
+    if (userPermissions.includes('all')) return true;
+    if (session?.userId === 'baga-master-admin' || session?.userId === 'demo-admin') return true;
+    return userPermissions.includes(perm);
+  };
+  const canEditOrder = hasPermission('edit_lab_order');
   const [mounted, setMounted] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [tab, setTab] = useState<string>('all');
@@ -238,7 +247,7 @@ export default function TestOrdersPage() {
                     <div className="flex gap-1 flex-wrap">
                       {o.status === 'collected' && <button onClick={() => { updateLabOrder(o.id, { status: 'processing' }); loadData(); showToast('Sent to processing', 'success'); }} className="btn btn-primary btn-sm">Process</button>}
                       {o.status === 'completed' && <button onClick={() => router.push('/lab/reports')} className="btn btn-outline btn-sm">View</button>}
-                      <button onClick={() => { setEditOrder(o); setEditPatientName(o.patientName); setEditMobile(o.mobile || ''); setEditAge(o.age || ''); setEditGender(o.gender || ''); setShowEditModal(true); }} className="btn btn-outline btn-sm" title="Edit patient details">✏️ Edit</button>
+                      {canEditOrder && <button onClick={() => { setEditOrder(o); setEditPatientName(o.patientName); setEditMobile(o.mobile || ''); setEditAge(o.age || ''); setEditGender(o.gender || ''); setShowEditModal(true); }} className="btn btn-outline btn-sm" title="Edit patient details">✏️ Edit</button>}
                     </div>
                   </td>
                 </tr>
