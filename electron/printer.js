@@ -262,22 +262,45 @@ function cmdInit() {
   return Buffer.from([ESC, 0x40]);
 }
 
-/** Set print density/darkness (0-8, higher = darker) */
+/**
+ * Set print density/darkness (0-8, higher = darker).
+ * ESC 7 n — Set print density.
+ * Supported by Scangle SGT-B58V and most Chinese ESC/POS thermal printers.
+ * n = 0 (lightest) to 8 (darkest). Default printer value is usually 2-4.
+ * Setting n=8 maximizes thermal head energy → darkest possible print.
+ */
 function cmdDensity(level) {
-  // ESC 7 n — Set print density
-  // n = 0 (lightest) to 8 (darkest)
-  // Some printers use ESC \x7B n, others use GS ! n
-  // The most common is ESC 7 n for thermal density
-  const density = Math.min(Math.max(level || 8, 0), 8);
+  const density = Math.min(Math.max(level === undefined ? 8 : level, 0), 8);
   return Buffer.from([ESC, 0x37, density]);
 }
 
-/** Set print speed (lower = slower = darker print) */
-function cmdPrintSpeed(speed) {
-  // GS ( K <parameters> — some printers support speed control
-  // Lower speed = darker print
-  // 0 = fastest (lightest), 1 = normal, 2 = slow (darkest)
-  return Buffer.from([GS, 0x21, speed || 0x01]);
+/**
+ * Set heating energy/time (alternate darkness command).
+ * ESC \x28 \x4B nL nH m t — GS ( K — Set energy.
+ * Some printers use this instead of ESC 7. We send a no-op safe variant
+ * that does NOT break printers that don't support it.
+ */
+function cmdHeatEnergy() {
+  // ESC 7 8 is the primary density command (sent separately in cmdDensity).
+  // This is a no-op placeholder kept for compatibility — actual density
+  // is handled by cmdDensity(8).
+  return Buffer.alloc(0);
+}
+
+/**
+ * Bundle ALL darkness commands together — call this before EVERY text line
+ * to guarantee maximum darkness regardless of printer state.
+ * Belt-and-suspenders approach: some printers reset density/bold after
+ * certain operations, so we re-apply before every line.
+ */
+function cmdMaxDarkness(mode) {
+  const printMode = (mode === undefined) ? EMPHASIZED : mode;
+  return Buffer.concat([
+    cmdDensity(8),                  // ESC 7 8 — max thermal density
+    cmdSetEmphasized(true),         // ESC E 1 — bold mode ON
+    cmdDoubleStrike(true),          // ESC G 1 — double-strike (double heat per pixel)
+    Buffer.from([ESC, 0x21, printMode]), // ESC ! mode — print mode register
+  ]);
 }
 
 /** Enable double-strike (darker text on impact printers, also works on some thermal) */
@@ -463,28 +486,26 @@ function createReceiptBuilder() {
     init() {
       commands.push(cmdInit());
       commands.push(cmdCharset(printerConfig.charset));
-      // Set MAXIMUM darkness — use ONLY correct ESC/POS commands
-      // DO NOT use ESC 7 (non-standard density) or GS ! (character size, NOT speed)
-      commands.push(cmdDoubleStrike(true));  // ESC G 1 — double-strike for darker
-      commands.push(cmdSetEmphasized(true)); // ESC E 1 — bold mode ON permanently
-      commands.push(cmdPrintMode(EMPHASIZED)); // ESC ! 0x08 — emphasized in print mode register
+      // MAXIMUM DARKNESS — apply ALL darkness commands at init:
+      //   ESC 7 8   — max thermal density (darker pixels)
+      //   ESC E 1   — emphasized/bold mode ON
+      //   ESC G 1   — double-strike (double heat per pixel)
+      //   ESC ! 0x08 — emphasized bit in print mode register
+      commands.push(cmdMaxDarkness(EMPHASIZED));
       commands.push(cmdLineSpacing(printerConfig.lineSpacing));
     },
 
     setText(text, align, mode) {
       if (align !== undefined) commands.push(cmdAlign(align));
-      // If a specific mode is given (e.g. DOUBLE_H for titles), use it
-      // Otherwise, default to EMPHASIZED (0x08) for full bold/black text
+      // Apply ALL darkness commands before EVERY line.
+      // Some printers reset density/bold after alignment changes or
+      // after certain text operations, so we re-apply every time.
       const effectiveMode = mode !== undefined ? mode : EMPHASIZED;
-      commands.push(cmdPrintMode(effectiveMode));
-      // Also ensure ESC E 1 is set (belt and suspenders — some printers need both)
-      commands.push(cmdSetEmphasized(true));
-      commands.push(cmdDoubleStrike(true));
+      commands.push(cmdMaxDarkness(effectiveMode));
       commands.push(Buffer.from(text + '\n', 'utf8'));
-      // After each line, reset to EMPHASIZED (NOT FONT_A=0x00 which clears bold!)
-      commands.push(cmdPrintMode(EMPHASIZED));
-      commands.push(cmdSetEmphasized(true));
-      commands.push(cmdDoubleStrike(true));
+      // After each line, re-apply max darkness so the NEXT line
+      // (even a feed/empty line) starts in full-dark state.
+      commands.push(cmdMaxDarkness(EMPHASIZED));
     },
 
     text(text) {
@@ -499,6 +520,7 @@ function createReceiptBuilder() {
     separator() {
       const chars = printerConfig.width === 58 ? 32 : 48;
       commands.push(cmdAlign(ALIGN_CENTER));
+      commands.push(cmdMaxDarkness(EMPHASIZED));
       commands.push(Buffer.from('-'.repeat(chars) + '\n', 'ascii'));
     },
 
@@ -506,6 +528,7 @@ function createReceiptBuilder() {
     doubleSeparator() {
       const chars = printerConfig.width === 58 ? 32 : 48;
       commands.push(cmdAlign(ALIGN_CENTER));
+      commands.push(cmdMaxDarkness(EMPHASIZED));
       commands.push(Buffer.from('='.repeat(chars) + '\n', 'ascii'));
     },
 
