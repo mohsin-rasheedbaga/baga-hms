@@ -4,6 +4,7 @@ const https = require('https');
 const http = require('http');
 const fs = require('fs');
 const crypto = require('crypto');
+const printer = require('./printer');
 // ============================================================
 // CONFIGURATION
 // ============================================================
@@ -2075,7 +2076,65 @@ ipcMain.handle('dismiss-pending-delta', async () => {
 // IPC HANDLERS - PRINT (Native Electron Print Dialog)
 // ============================================================
 
+// ============================================================
+// IPC HANDLERS — THERMAL PRINTER (ESC/POS)
+// ============================================================
+
+ipcMain.handle('printer-get-status', async () => {
+  return printer.getStatus();
+});
+
+ipcMain.handle('printer-get-config', async () => {
+  return printer.getConfig();
+});
+
+ipcMain.handle('printer-set-config', async (event, config) => {
+  return printer.setConfig(config || {});
+});
+
+ipcMain.handle('printer-detect', async () => {
+  return printer.detectPrinter();
+});
+
+ipcMain.handle('printer-list-ports', async () => {
+  return printer.listComPorts();
+});
+
+ipcMain.handle('printer-test', async () => {
+  return await printer.testPrint();
+});
+
+ipcMain.handle('printer-print-receipt', async (event, htmlContent, options) => {
+  return await printer.printReceipt(htmlContent, options);
+});
+
+ipcMain.handle('printer-print-raw', async (event, base64Data, options) => {
+  // Print raw ESC/POS data (base64 encoded)
+  try {
+    if (!printer.getConfig().enabled) {
+      return { success: false, error: 'Thermal printer not enabled' };
+    }
+    const data = Buffer.from(base64Data, 'base64');
+    await printer.enqueuePrint({ type: options?.type || 'raw', data });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.handle('print-html', async (event, htmlContent) => {
+  // Check if thermal printer is enabled — if so, route to ESC/POS
+  const printerConfig = printer.getConfig();
+  if (printerConfig.enabled) {
+    console.log('[Print] Routing to thermal printer (ESC/POS)');
+    const result = await printer.printReceipt(htmlContent);
+    if (result.success) {
+      return { success: true, reason: 'Sent to thermal printer' };
+    }
+    // Fall through to HTML printing if thermal fails
+    console.log('[Print] Thermal printer failed, falling back to HTML:', result.error);
+  }
+
   return new Promise((resolve) => {
     try {
       // Write HTML to temp file — data:text/html URLs have a ~2MB limit

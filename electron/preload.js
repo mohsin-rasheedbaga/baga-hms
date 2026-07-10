@@ -75,6 +75,16 @@ contextBridge.exposeInMainWorld('bagaAPI', {
   dbSetKV: (key, value) => ipcRenderer.sendSync('db-set-kv', key, value),
   dbBackup: (filePath) => ipcRenderer.sendSync('db-backup', filePath),
   dbGetPath: () => ipcRenderer.sendSync('db-get-path'),
+
+  // Thermal Printer (ESC/POS)
+  printerGetStatus: () => ipcRenderer.invoke('printer-get-status'),
+  printerGetConfig: () => ipcRenderer.invoke('printer-get-config'),
+  printerSetConfig: (config) => ipcRenderer.invoke('printer-set-config', config),
+  printerDetect: () => ipcRenderer.invoke('printer-detect'),
+  printerListPorts: () => ipcRenderer.invoke('printer-list-ports'),
+  printerTest: () => ipcRenderer.invoke('printer-test'),
+  printerPrintReceipt: (html, options) => ipcRenderer.invoke('printer-print-receipt', html, options),
+  printerPrintRaw: (base64, options) => ipcRenderer.invoke('printer-print-raw', base64, options),
 });
 
 // Also expose for license.html window

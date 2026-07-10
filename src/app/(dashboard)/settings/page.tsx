@@ -208,6 +208,10 @@ export default function SettingsPage() {
   // LAN setup state
   const [lanInfo, setLanInfo] = useState<{ port?: number; localIP?: string; lanURL?: string } | null>(null);
   const [firewallStatus, setFirewallStatus] = useState<{ hasFirewall?: boolean; error?: string } | null>(null);
+  // Thermal printer state
+  const [printerStatus, setPrinterStatus] = useState<any>(null);
+  const [printerPorts, setPrinterPorts] = useState<any[]>([]);
+  const [testingPrinter, setTestingPrinter] = useState(false);
 
   // Room type modal
   const [roomModal, setRoomModal] = useState(false);
@@ -303,6 +307,9 @@ export default function SettingsPage() {
         // Load LAN info and firewall status
         (window as any).bagaAPI.getLanInfo().then((info: any) => setLanInfo(info)).catch(() => {});
         (window as any).bagaAPI.checkFirewallStatus().then((fs: any) => setFirewallStatus(fs)).catch(() => {});
+        // Load printer status and ports
+        (window as any).bagaAPI.printerGetStatus().then((ps: any) => setPrinterStatus(ps)).catch(() => {});
+        (window as any).bagaAPI.printerListPorts().then((pr: any) => setPrinterPorts(pr.ports || [])).catch(() => {});
       } catch (e) {}
     }
   }, []);
@@ -1533,6 +1540,203 @@ export default function SettingsPage() {
             This runs automatically on startup and after license activation. Use this button to manually re-sync
             if you've added new users via the admin panel.
           </p>
+        </div>
+      )}
+
+      {/* ==================== SECTION: Thermal Printer (ESC/POS) ==================== */}
+      {isElectron && visibility.showPrintSettings && (
+        <div className="bg-white rounded-xl border-2 border-purple-200 p-6">
+          <h3 className="text-lg font-semibold text-slate-800 mb-2 flex items-center gap-2">
+            <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+            Thermal Printer (ESC/POS)
+          </h3>
+          <p className="text-sm text-slate-500 mb-4">
+            Connect a Bluetooth or USB thermal printer (58mm/80mm) for direct ESC/POS receipt printing.
+            No manufacturer driver required — uses Windows COM port directly.
+          </p>
+
+          {/* Enable/Disable */}
+          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg mb-4">
+            <div>
+              <div className="text-sm font-medium text-slate-700">Enable Thermal Printer</div>
+              <div className="text-xs text-slate-500">Route all receipts to thermal printer instead of HTML print dialog</div>
+            </div>
+            <input
+              type="checkbox"
+              checked={printerStatus?.enabled || false}
+              onChange={async (e) => {
+                const newConfig = { enabled: e.target.checked };
+                await (window as any).bagaAPI.printerSetConfig(newConfig);
+                const status = await (window as any).bagaAPI.printerGetStatus();
+                setPrinterStatus(status);
+              }}
+              className="w-5 h-5"
+            />
+          </div>
+
+          {/* COM Port Selection */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
+              <label className="form-label">COM Port</label>
+              <select
+                className="form-input"
+                value={printerStatus?.comPort || ''}
+                onChange={async (e) => {
+                  await (window as any).bagaAPI.printerSetConfig({ comPort: e.target.value });
+                  const status = await (window as any).bagaAPI.printerGetStatus();
+                  setPrinterStatus(status);
+                }}
+              >
+                <option value="">Auto-detect</option>
+                {printerPorts.map((p: any) => (
+                  <option key={p.port} value={p.port}>
+                    {p.port} {p.description ? `(${p.description})` : ''} {p.isPrinter ? '★' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="form-label">Paper Width</label>
+              <select
+                className="form-input"
+                value={printerStatus?.width || 58}
+                onChange={async (e) => {
+                  await (window as any).bagaAPI.printerSetConfig({ width: Number(e.target.value) });
+                  const status = await (window as any).bagaAPI.printerGetStatus();
+                  setPrinterStatus(status);
+                }}
+              >
+                <option value={58}>58mm (32 chars/line)</option>
+                <option value={80}>80mm (48 chars/line)</option>
+              </select>
+            </div>
+            <div>
+              <label className="form-label">Baud Rate</label>
+              <select
+                className="form-input"
+                value={printerStatus?.baudRate || 9600}
+                onChange={async (e) => {
+                  await (window as any).bagaAPI.printerSetConfig({ baudRate: Number(e.target.value) });
+                  const status = await (window as any).bagaAPI.printerGetStatus();
+                  setPrinterStatus(status);
+                }}
+              >
+                <option value={9600}>9600</option>
+                <option value={19200}>19200</option>
+                <option value={38400}>38400</option>
+                <option value={115200}>115200</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Options */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+            <label className="flex items-center justify-between p-3 bg-slate-50 rounded-lg cursor-pointer">
+              <div>
+                <div className="text-sm font-medium text-slate-700">Auto Cut</div>
+                <div className="text-xs text-slate-500">Automatically cut paper after each receipt</div>
+              </div>
+              <input
+                type="checkbox"
+                checked={printerStatus?.autoCut !== false}
+                onChange={async (e) => {
+                  await (window as any).bagaAPI.printerSetConfig({ autoCut: e.target.checked });
+                  const status = await (window as any).bagaAPI.printerGetStatus();
+                  setPrinterStatus(status);
+                }}
+                className="w-5 h-5"
+              />
+            </label>
+            <label className="flex items-center justify-between p-3 bg-slate-50 rounded-lg cursor-pointer">
+              <div>
+                <div className="text-sm font-medium text-slate-700">Cash Drawer Pulse</div>
+                <div className="text-xs text-slate-500">Send pulse to cash drawer before printing</div>
+              </div>
+              <input
+                type="checkbox"
+                checked={printerStatus?.cashDrawer || false}
+                onChange={async (e) => {
+                  await (window as any).bagaAPI.printerSetConfig({ cashDrawer: e.target.checked });
+                  const status = await (window as any).bagaAPI.printerGetStatus();
+                  setPrinterStatus(status);
+                }}
+                className="w-5 h-5"
+              />
+            </label>
+          </div>
+
+          {/* Status */}
+          <div className="p-3 rounded-lg mb-4" style={{
+            background: printerStatus?.enabled ? '#ecfdf5' : '#f8fafc',
+            border: `1px solid ${printerStatus?.enabled ? '#a7f3d0' : '#e2e8f0'}`,
+          }}>
+            <div className="text-sm">
+              <span className="font-semibold text-slate-700">Status: </span>
+              {printerStatus?.enabled ? (
+                <span className="text-green-600">✅ Enabled</span>
+              ) : (
+                <span className="text-slate-500">⚪ Disabled</span>
+              )}
+              {printerStatus?.detectedPort && (
+                <span className="text-slate-500 ml-3">Detected: {printerStatus.detectedPort}</span>
+              )}
+              {printerStatus?.isPrinting && (
+                <span className="text-blue-600 ml-3">⏳ Printing...</span>
+              )}
+              {printerStatus?.lastError && (
+                <span className="text-red-600 ml-3">❌ {printerStatus.lastError}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={async () => {
+                const result = await (window as any).bagaAPI.printerDetect();
+                if (result.detected) {
+                  alert(`✅ Printer detected!\nPort: ${result.detected.port}\nDescription: ${result.detected.description}`);
+                } else {
+                  alert('❌ No printer detected. Available ports:\n' +
+                    result.ports.map((p: any) => `${p.port} - ${p.description}`).join('\n'));
+                }
+                const status = await (window as any).bagaAPI.printerGetStatus();
+                setPrinterStatus(status);
+                setPrinterPorts(result.ports);
+              }}
+              className="btn btn-outline"
+            >
+              🔍 Detect Printer
+            </button>
+            <button
+              onClick={async () => {
+                setTestingPrinter(true);
+                const result = await (window as any).bagaAPI.printerTest();
+                if (result.success) {
+                  alert(`✅ ${result.message}\nPort: ${result.port}`);
+                } else {
+                  alert(`❌ Test print failed:\n${result.error}`);
+                }
+                setTestingPrinter(false);
+              }}
+              disabled={testingPrinter}
+              className="btn btn-primary"
+            >
+              {testingPrinter ? 'Printing...' : '🖨️ Test Print ("Hello BAGA HMS")'}
+            </button>
+            <button
+              onClick={async () => {
+                const result = await (window as any).bagaAPI.printerListPorts();
+                setPrinterPorts(result.ports || []);
+                alert('Available COM Ports:\n' + (result.ports || []).map((p: any) =>
+                  `${p.port} - ${p.description} ${p.isPrinter ? '★ (likely printer)' : ''}`
+                ).join('\n'));
+              }}
+              className="btn btn-outline"
+            >
+              📋 List All COM Ports
+            </button>
+          </div>
         </div>
       )}
 
