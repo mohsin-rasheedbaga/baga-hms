@@ -463,24 +463,28 @@ function createReceiptBuilder() {
     init() {
       commands.push(cmdInit());
       commands.push(cmdCharset(printerConfig.charset));
-      // Set MAXIMUM darkness for full black print
-      commands.push(cmdDensity(8));          // Maximum density (darkest)
-      commands.push(cmdPrintSpeed(2));       // Slowest speed (darkest print)
-      commands.push(cmdDoubleStrike(true));  // Double-strike for darker
-      commands.push(cmdSetEmphasized(true)); // Bold mode ON (stays on)
+      // Set MAXIMUM darkness — use ONLY correct ESC/POS commands
+      // DO NOT use ESC 7 (non-standard density) or GS ! (character size, NOT speed)
+      commands.push(cmdDoubleStrike(true));  // ESC G 1 — double-strike for darker
+      commands.push(cmdSetEmphasized(true)); // ESC E 1 — bold mode ON permanently
+      commands.push(cmdPrintMode(EMPHASIZED)); // ESC ! 0x08 — emphasized in print mode register
       commands.push(cmdLineSpacing(printerConfig.lineSpacing));
     },
 
     setText(text, align, mode) {
       if (align !== undefined) commands.push(cmdAlign(align));
-      if (mode !== undefined) commands.push(cmdPrintMode(mode));
+      // If a specific mode is given (e.g. DOUBLE_H for titles), use it
+      // Otherwise, default to EMPHASIZED (0x08) for full bold/black text
+      const effectiveMode = mode !== undefined ? mode : EMPHASIZED;
+      commands.push(cmdPrintMode(effectiveMode));
+      // Also ensure ESC E 1 is set (belt and suspenders — some printers need both)
+      commands.push(cmdSetEmphasized(true));
+      commands.push(cmdDoubleStrike(true));
       commands.push(Buffer.from(text + '\n', 'utf8'));
-      // After each line, reset print mode but KEEP bold (emphasized) on
-      // This ensures all text is full black/bold
-      if (mode !== undefined) {
-        commands.push(cmdPrintMode(FONT_A)); // Reset size
-        commands.push(cmdSetEmphasized(true)); // Keep bold ON
-      }
+      // After each line, reset to EMPHASIZED (NOT FONT_A=0x00 which clears bold!)
+      commands.push(cmdPrintMode(EMPHASIZED));
+      commands.push(cmdSetEmphasized(true));
+      commands.push(cmdDoubleStrike(true));
     },
 
     text(text) {
@@ -741,25 +745,25 @@ async function printReceipt(htmlContent, options) {
         rb.separator();
         continue;
       }
-      // Check if line looks like a title (all caps, short)
+      // Check if line looks like a title (all caps, short) → double-width bold
       if (trimmed === trimmed.toUpperCase() && trimmed.length < maxWidth && trimmed.length > 3) {
         rb.setText(trimmed, ALIGN_CENTER, EMPHASIZED | DOUBLE_H);
       } else if (trimmed.length > maxWidth) {
-        // Wrap long lines — ALL text is bold (emphasized stays on from init)
+        // Wrap long lines — setText defaults to EMPHASIZED now
         const words = trimmed.split(' ');
         let currentLine = '';
         for (const word of words) {
           if ((currentLine + ' ' + word).length > maxWidth) {
-            rb.setText(currentLine, ALIGN_LEFT, EMPHASIZED);
+            rb.setText(currentLine, ALIGN_LEFT);
             currentLine = word;
           } else {
             currentLine = currentLine ? currentLine + ' ' + word : word;
           }
         }
-        if (currentLine) rb.setText(currentLine, ALIGN_LEFT, EMPHASIZED);
+        if (currentLine) rb.setText(currentLine, ALIGN_LEFT);
       } else {
-        // ALL text is bold/EMPHASIZED for full black print
-        rb.setText(trimmed, ALIGN_LEFT, EMPHASIZED);
+        // Regular text — setText defaults to EMPHASIZED (bold) for full black
+        rb.setText(trimmed, ALIGN_LEFT);
       }
     }
 
