@@ -262,29 +262,29 @@ export default function ReceptionPage() {
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; padding: 20px; }
-        .receipt { border: 2px solid #333; border-radius: 8px; padding: 24px; max-width: 400px; margin: 0 auto; }
-        .header { text-align: center; border-bottom: 2px dashed #333; padding-bottom: 12px; margin-bottom: 12px; }
-        .header h1 { color: #1e293b; font-size: 20px; }
-        .header p { color: #64748b; font-size: 11px; margin-top: 2px; }
-        .receipt-title { text-align: center; font-size: 16px; font-weight: 700; color: #1e293b; margin-bottom: 8px; }
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 12px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
-        .info-grid .label { color: #64748b; }
-        .info-grid .value { color: #1e293b; font-weight: 500; }
+        .receipt { border: 2px solid #000; border-radius: 8px; padding: 24px; max-width: 400px; margin: 0 auto; }
+        .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 12px; margin-bottom: 12px; }
+        .header h1 { color: #000; font-size: 20px; }
+        .header p { color: #000; font-size: 11px; margin-top: 2px; }
+        .receipt-title { text-align: center; font-size: 16px; font-weight: 700; color: #000; margin-bottom: 8px; }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 12px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #000; }
+        .info-grid .label { color: #000; }
+        .info-grid .value { color: #000; font-weight:700; }
         .items-table { width: 100%; font-size: 11px; border-collapse: collapse; margin-bottom: 12px; }
-        .items-table th { background: #f1f5f9; padding: 6px 8px; text-align: left; font-weight: 600; color: #475569; border-bottom: 1px solid #cbd5e1; }
-        .items-table td { padding: 5px 8px; border-bottom: 1px solid #f1f5f9; }
-        .items-table td:last-child { text-align: right; font-weight: 600; }
-        .type-badge { font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: 600; }
-        .type-lab { background: #d1fae5; color: #065f46; }
-        .type-xray { background: #fee2e2; color: #991b1b; }
-        .type-ultrasound { background: #ede9fe; color: #5b21b6; }
-        .type-pharmacy { background: #fef3c7; color: #92400e; }
-        .total-section { border-top: 2px solid #333; padding-top: 10px; margin-top: 8px; }
+        .items-table th { background: #fff; padding: 6px 8px; text-align: left; font-weight:700; color: #000; border-bottom: 1px solid #000; }
+        .items-table td { padding: 5px 8px; border-bottom: 1px solid #000; }
+        .items-table td:last-child { text-align: right; font-weight:700; }
+        .type-badge { font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight:700; }
+        .type-lab { background: #fff; color: #000; }
+        .type-xray { background: #fff; color: #000; }
+        .type-ultrasound { background: #fff; color: #000; }
+        .type-pharmacy { background: #fff; color: #000; }
+        .total-section { border-top: 2px solid #000; padding-top: 10px; margin-top: 8px; }
         .total-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
-        .total-row.grand { font-size: 18px; font-weight: 700; color: #1e293b; }
-        .footer { text-align: center; margin-top: 16px; padding-top: 12px; border-top: 2px dashed #333; }
-        .footer p { font-size: 10px; color: #64748b; }
-        .footer .thank { font-size: 12px; color: #1e293b; font-weight: 600; margin-top: 4px; }
+        .total-row.grand { font-size: 18px; font-weight: 700; color: #000; }
+        .footer { text-align: center; margin-top: 16px; padding-top: 12px; border-top: 2px dashed #000; }
+        .footer p { font-size: 10px; color: #000; }
+        .footer .thank { font-size: 12px; color: #000; font-weight:700; margin-top: 4px; }
         @media print { body { padding: 0; } }
       </style></head>
       <body>
@@ -438,41 +438,41 @@ export default function ReceptionPage() {
 
         /* Card Circle - Patient Info */
         .card {
-          border: 3px solid #2563eb;
+          border: 3px solid #000;
           border-radius: 20px;
           padding: 24px 20px;
           position: relative;
         }
         .card .header {
           text-align: center;
-          border-bottom: 2px solid #2563eb;
+          border-bottom: 2px solid #000;
           padding-bottom: 10px;
           margin-bottom: 14px;
         }
-        .card .header h1 { color: #2563eb; font-size: 20px; }
-        .card .header p { color: #64748b; font-size: 11px; }
-        .row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
+        .card .header h1 { color: #000; font-size: 20px; }
+        .card .header p { color: #000; font-size: 11px; }
+        .row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #000; font-size: 13px; }
         .row:last-child { border-bottom: none; }
-        .row .label { color: #64748b; font-weight: 600; }
-        .row .value { color: #1e293b; font-weight: 500; text-align: right; }
+        .row .label { color: #000; font-weight:700; }
+        .row .value { color: #000; font-weight:700; text-align: right; }
 
         /* Visit Info - Below Card */
         .visit-slip {
           margin-top: 12px;
-          border: 2px dashed #1e293b;
+          border: 2px dashed #000;
           border-radius: 10px;
           padding: 14px 18px;
-          background: #f8fafc;
+          background: #fff;
         }
         .visit-slip .visit-header {
           text-align: center;
           font-size: 11px;
-          color: #64748b;
+          color: #000;
           text-transform: uppercase;
           letter-spacing: 1px;
           margin-bottom: 8px;
           padding-bottom: 6px;
-          border-bottom: 1px solid #cbd5e1;
+          border-bottom: 1px solid #000;
         }
         .visit-grid {
           display: grid;
@@ -480,13 +480,13 @@ export default function ReceptionPage() {
           gap: 4px 16px;
           font-size: 12px;
         }
-        .visit-grid .vl { color: #64748b; }
-        .visit-grid .vv { color: #1e293b; font-weight: 600; }
+        .visit-grid .vl { color: #000; }
+        .visit-grid .vv { color: #000; font-weight:700; }
         .visit-grid .token-row {
           grid-column: 1 / -1;
           text-align: center;
-          background: #2563eb;
-          color: white;
+          background: #fff;
+          color:#000;
           padding: 6px;
           border-radius: 6px;
           font-size: 16px;
@@ -494,7 +494,7 @@ export default function ReceptionPage() {
           margin-top: 6px;
         }
 
-        .footer { text-align: center; margin-top: 10px; font-size: 9px; color: #94a3b8; }
+        .footer { text-align: center; margin-top: 10px; font-size: 9px; color: #000; }
         @media print { body { padding: 0; } }
       </style></head>
       <body>

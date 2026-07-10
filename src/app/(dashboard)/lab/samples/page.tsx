@@ -48,14 +48,14 @@ export default function SampleCollectionPage() {
       // This makes it easy to combine multiple stickers in one page
       return `
         ${printData.hospitalLogo ? `<img style="height:5mm;max-width:15mm;object-fit:contain;display:block;margin:0 auto 1mm;" src="${printData.hospitalLogo}" alt="" />` : ''}
-        <div style="font-size:5pt;font-weight:800;color:#0c2340;text-align:center;margin-bottom:0.5mm;">${printData.hospitalName}</div>
-        <div style="font-size:5.5pt;font-weight:700;color:#2563eb;font-family:monospace;text-align:center;margin-bottom:0.5mm;">${order.patientNo}</div>
-        <div style="font-size:5pt;font-weight:600;text-align:center;margin-bottom:0.5mm;">${order.patientName} (${order.gender}/${order.age})</div>
-        <div style="font-size:8pt;font-weight:900;color:#0c2340;text-align:center;background:#f0f4ff;border-radius:1mm;padding:1mm 0;margin-bottom:0.5mm;">${t.testName}</div>
-        <div style="font-size:4.5pt;color:#64748b;text-align:center;margin-bottom:0.5mm;">Sample: ${order.sampleType} | ${order.date} ${order.time}</div>
-        <div style="font-size:5pt;font-family:monospace;color:#334155;background:#f8fafc;border:0.3mm solid #e2e8f0;border-radius:0.5mm;padding:0.5mm 1mm;text-align:center;letter-spacing:1px;">${barcode}</div>
+        <div style="font-size:5pt;font-weight:800;color:#000;text-align:center;margin-bottom:0.5mm;">${printData.hospitalName}</div>
+        <div style="font-size:5.5pt;font-weight:700;color:#000;font-family:monospace;text-align:center;margin-bottom:0.5mm;">${order.patientNo}</div>
+        <div style="font-size:5pt;font-weight:700;text-align:center;margin-bottom:0.5mm;">${order.patientName} (${order.gender}/${order.age})</div>
+        <div style="font-size:8pt;font-weight:900;color:#000;text-align:center;background:#fff;border-radius:1mm;padding:1mm 0;margin-bottom:0.5mm;">${t.testName}</div>
+        <div style="font-size:4.5pt;color:#000;text-align:center;margin-bottom:0.5mm;">Sample: ${order.sampleType} | ${order.date} ${order.time}</div>
+        <div style="font-size:5pt;font-family:monospace;color:#000;background:#fff;border:0.3mm solid #000;border-radius:0.5mm;padding:0.5mm 1mm;text-align:center;letter-spacing:1px;">${barcode}</div>
         <div style="text-align:center;margin-top:0.5mm;">
-          <span style="font-size:4pt;font-weight:800;padding:0.3mm 1.5mm;border-radius:1mm;background:${order.urgency === 'stat' ? '#dc2626' : order.urgency === 'urgent' ? '#f59e0b' : '#e2e8f0'};color:${order.urgency === 'routine' ? '#475569' : '#fff'};">${order.urgency.toUpperCase()}</span>
+          <span style="font-size:4pt;font-weight:800;padding:0.3mm 1.5mm;border-radius:1mm;background:#fff;color:#000;border:0.3mm solid #000;">${order.urgency.toUpperCase()}</span>
         </div>
       `;
     });
@@ -68,8 +68,8 @@ export default function SampleCollectionPage() {
       setAllStickerTemplates(templates);
       // Show preview of ALL stickers combined
       const combinedPreview = templates.map((html, idx) => {
-        return `<div style="border:1px dashed #999;padding:3mm;margin-bottom:3mm;border-radius:2mm;width:50mm;height:25mm;overflow:hidden;position:relative;display:flex;flex-direction:column;justify-content:center;page-break-after:always;">
-          <div style="font-size:4pt;color:#94a3b8;text-align:center;margin-bottom:0.5mm;">Sticker ${idx + 1} of ${templates.length}</div>
+        return `<div style="border:1px dashed #000;padding:3mm;margin-bottom:3mm;border-radius:2mm;width:50mm;height:25mm;overflow:hidden;position:relative;display:flex;flex-direction:column;justify-content:center;page-break-after:always;">
+          <div style="font-size:4pt;color:#000;text-align:center;margin-bottom:0.5mm;">Sticker ${idx + 1} of ${templates.length}</div>
           ${html}
         </div>`;
       }).join('');
@@ -88,17 +88,17 @@ export default function SampleCollectionPage() {
       @page{size:50mm 25mm;margin:2mm;}
       *{margin:0;padding:0;box-sizing:border-box;}
       body{font-family:Arial,sans-serif;}
-      .sticker-page{width:50mm;height:25mm;page-break-after:always;overflow:hidden;border:1px dashed #999;padding:2mm;position:relative;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;}
+      .sticker-page{width:50mm;height:25mm;page-break-after:always;overflow:hidden;border:1px dashed #000;padding:2mm;position:relative;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;}
       .sticker-page:last-child{page-break-after:auto;}
       .logo{height:5mm;max-width:15mm;object-fit:contain;margin:0 auto 1mm;}
-      .hname{font-size:5pt;font-weight:800;color:#0c2340;margin-bottom:0.5mm;}
-      .pid{font-size:5.5pt;font-weight:700;color:#2563eb;font-family:monospace;margin-bottom:0.5mm;}
-      .pname{font-size:5pt;font-weight:600;margin-bottom:0.5mm;}
-      .testname{font-size:8pt;font-weight:900;color:#0c2340;background:#f0f4ff;border-radius:1mm;padding:1mm 0;margin-bottom:0.5mm;width:100%;}
-      .sample-info{font-size:4.5pt;color:#64748b;margin-bottom:0.5mm;}
-      .barcode{font-size:5pt;font-family:monospace;color:#334155;background:#f8fafc;border:0.3mm solid #e2e8f0;border-radius:0.5mm;padding:0.5mm 1mm;letter-spacing:1px;width:100%;}
+      .hname{font-size:5pt;font-weight:800;color:#000;margin-bottom:0.5mm;}
+      .pid{font-size:5.5pt;font-weight:700;color:#000;font-family:monospace;margin-bottom:0.5mm;}
+      .pname{font-size:5pt;font-weight:700;margin-bottom:0.5mm;}
+      .testname{font-size:8pt;font-weight:900;color:#000;background:#fff;border-radius:1mm;padding:1mm 0;margin-bottom:0.5mm;width:100%;}
+      .sample-info{font-size:4.5pt;color:#000;margin-bottom:0.5mm;}
+      .barcode{font-size:5pt;font-family:monospace;color:#000;background:#fff;border:0.3mm solid #000;border-radius:0.5mm;padding:0.5mm 1mm;letter-spacing:1px;width:100%;}
       .urgency{font-size:4pt;font-weight:800;padding:0.3mm 1.5mm;border-radius:1mm;margin-top:0.5mm;display:inline-block;}
-      .stat{background:#dc2626;color:#fff;} .urgent{background:#f59e0b;color:#fff;} .routine{background:#e2e8f0;color:#475569;}
+      .stat{background:#fff;color:#000;} .urgent{background:#fff;color:#000;} .routine{background:#fff;color:#000;}
       @media print{body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
     </style></head><body>
     ${allStickerTemplates.map((html, idx) => {

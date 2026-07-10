@@ -48,8 +48,8 @@ export function generateProfessionalLabReportHtml(params: PrintLabReportParams):
     const rows = testResults.map((r, ri) => {
       const flagClass = r.flag === 'Critical' ? 'fc' : r.flag === 'High' ? 'fh' : r.flag === 'Low' ? 'fl' : 'fn';
       const altClass = ri % 2 === 0 ? 'row-even' : 'row-odd';
-      const flagColor = r.flag === 'Critical' ? '#fff' : r.flag === 'High' ? '#b91c1c' : r.flag === 'Low' ? '#b45309' : '#15803d';
-      const flagBg = r.flag === 'Critical' ? '#dc2626' : r.flag === 'High' ? '#fee2e2' : r.flag === 'Low' ? '#fef3c7' : '#dcfce7';
+      const flagColor = '#000';
+      const flagBg = '#fff';
       return `<tr class="${altClass} ${flagClass}">
         <td class="param-name">${r.parameter}</td>
         <td class="param-value">${r.value}</td>
@@ -84,20 +84,20 @@ export function generateProfessionalLabReportHtml(params: PrintLabReportParams):
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Lab Report - ${patientName}</title><style>
     @page{size:A4;margin:8mm 12mm;}
     *{margin:0;padding:0;box-sizing:border-box;}
-    body{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#1e293b;background:#fff;font-size:10.5px;line-height:1.4;}
+    body{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#000;background:#fff;font-size:10.5px;line-height:1.4;}
     
     /* ===== REPORT WRAPPER ===== */
-    .report{width:100%;max-width:210mm;margin:0 auto;border:1.5px solid #c8d6e5;border-radius:6px;overflow:hidden;}
+    .report{width:100%;max-width:210mm;margin:0 auto;border:1.5px solid #000;border-radius:6px;overflow:hidden;}
     
     /* ===== HEADER BANNER ===== */
     .header-banner{
-      background:linear-gradient(135deg,#0c2340 0%,#1a3a5c 40%,#1e4d7b 100%);
-      color:#fff;padding:14px 22px;display:flex;justify-content:space-between;align-items:center;
+      background:#fff;
+      color:#000;padding:14px 22px;display:flex;justify-content:space-between;align-items:center;
       position:relative;overflow:hidden;
     }
     .header-banner::after{
       content:'';position:absolute;bottom:0;left:0;right:0;height:3px;
-      background:linear-gradient(90deg,#f59e0b,#ef4444,#3b82f6,#10b981,#f59e0b);
+      background:#fff;
     }
     .header-left{display:flex;align-items:center;gap:14px;}
     .hospital-logo{width:48px;height:48px;border-radius:6px;object-fit:contain;background:#fff;padding:2px;}
@@ -109,103 +109,103 @@ export function generateProfessionalLabReportHtml(params: PrintLabReportParams):
     
     /* ===== CONTACT STRIP ===== */
     .contact-strip{
-      background:#eef2f7;padding:5px 22px;display:flex;justify-content:space-between;
-      font-size:8px;color:#475569;letter-spacing:0.3px;border-bottom:1px solid #d1d9e6;
+      background:#fff;padding:5px 22px;display:flex;justify-content:space-between;
+      font-size:8px;color:#000;letter-spacing:0.3px;border-bottom:1px solid #000;
     }
     
     /* ===== PATIENT INFO BAR ===== */
-    .patient-section{padding:10px 22px 8px;border-bottom:1px solid #e2e8f0;}
+    .patient-section{padding:10px 22px 8px;border-bottom:1px solid #000;}
     .section-label{
       font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;
-      color:#0c2340;margin-bottom:5px;display:flex;align-items:center;gap:6px;
+      color:#000;margin-bottom:5px;display:flex;align-items:center;gap:6px;
     }
-    .section-label::before{content:'';width:3px;height:12px;background:#0c2340;border-radius:2px;}
+    .section-label::before{content:'';width:3px;height:12px;background:#fff;border-radius:2px;}
     .patient-grid{
       display:grid;grid-template-columns:repeat(3,1fr);gap:4px 16px;
-      background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:8px 12px;
+      background:#fff;border:1px solid #000;border-radius:4px;padding:8px 12px;
     }
     .patient-item{display:flex;gap:4px;font-size:10px;}
-    .patient-item .label{color:#64748b;font-weight:600;min-width:55px;}
-    .patient-item .value{color:#1e293b;font-weight:500;}
+    .patient-item .label{color:#000;font-weight:700;min-width:55px;}
+    .patient-item .value{color:#000;font-weight:700;}
     
     /* ===== TEST SECTIONS ===== */
     .tests-area{padding:8px 22px;}
     .test-section{margin-bottom:8px;page-break-inside:avoid;}
     .test-header{
-      background:linear-gradient(90deg,#0c2340,#1a3a5c);
-      color:#fff;padding:5px 12px;display:flex;align-items:center;gap:8px;
+      background:#fff;
+      color:#000;padding:5px 12px;display:flex;align-items:center;gap:8px;
       border-radius:4px 4px 0 0;font-size:11px;font-weight:700;
     }
     .test-num{
-      background:rgba(255,255,255,0.2);width:22px;height:22px;display:flex;align-items:center;
+      background:#fff;width:22px;height:22px;display:flex;align-items:center;
       justify-content:center;border-radius:50%;font-size:10px;font-weight:800;
     }
     .test-name{flex:1;letter-spacing:0.3px;}
-    .test-count{font-size:8px;opacity:0.7;background:rgba(255,255,255,0.15);padding:2px 8px;border-radius:10px;}
+    .test-count{font-size:8px;opacity:0.7;background:#fff;padding:2px 8px;border-radius:10px;}
     
     /* ===== DATA TABLE ===== */
     table{width:100%;border-collapse:collapse;font-size:10px;}
-    thead tr{background:#eef2f7;}
+    thead tr{background:#fff;}
     th{
       padding:5px 8px;text-align:left;font-size:8.5px;font-weight:700;
-      text-transform:uppercase;letter-spacing:0.8px;color:#0c2340;
-      border-bottom:2px solid #0c2340;
+      text-transform:uppercase;letter-spacing:0.8px;color:#000;
+      border-bottom:2px solid #000;
     }
-    td{padding:4px 8px;border-bottom:1px solid #f1f5f9;vertical-align:middle;}
+    td{padding:4px 8px;border-bottom:1px solid #000;vertical-align:middle;}
     .row-even{background:#fff;}
-    .row-odd{background:#f8fafc;}
-    .param-name{font-weight:600;color:#334155;}
-    .param-value{font-weight:800;font-size:11px;color:#0f172a;letter-spacing:0.3px;}
-    .param-unit{color:#64748b;font-size:9px;}
-    .param-ref{color:#475569;font-size:9.5px;font-style:italic;}
+    .row-odd{background:#fff;}
+    .param-name{font-weight:700;color:#000;}
+    .param-value{font-weight:800;font-size:11px;color:#000;letter-spacing:0.3px;}
+    .param-unit{color:#000;font-size:9px;}
+    .param-ref{color:#000;font-size:9.5px;font-style:italic;}
     .param-flag{
       text-align:center;font-weight:800;font-size:8.5px;border-radius:3px;
       padding:2px 6px;text-transform:uppercase;letter-spacing:0.5px;
     }
     
     /* Flag row backgrounds */
-    .fn{background:#fff;} .fl{background:#fffbeb;} .fh{background:#fef2f2;} .fc{background:#fee2e2;}
+    .fn{background:#fff;} .fl{background:#fff;} .fh{background:#fff;} .fc{background:#fff;}
     
     /* ===== SUMMARY ===== */
     .summary-section{
       margin:6px 22px;padding:8px 14px;
-      background:linear-gradient(135deg,#f0fdf4,#ecfdf5);
-      border:1px solid #bbf7d0;border-radius:6px;
+      background:#fff;
+      border:1px solid #000;border-radius:6px;
       display:flex;justify-content:space-between;align-items:center;
     }
     .summary-section.has-abnormal{
-      background:linear-gradient(135deg,#fef2f2,#fee2e2);
-      border-color:#fecaca;
+      background:#fff;
+      border-color:#000;
     }
-    .summary-left{font-size:10px;font-weight:600;}
-    .summary-left b{color:#0c2340;}
-    .summary-right{font-size:9px;color:#475569;font-weight:500;}
-    .abnormal-list{color:#dc2626;font-weight:700;font-size:9px;}
+    .summary-left{font-size:10px;font-weight:700;}
+    .summary-left b{color:#000;}
+    .summary-right{font-size:9px;color:#000;font-weight:700;}
+    .abnormal-list{color:#000;font-weight:700;font-size:9px;}
     
     /* ===== SIGNATURES ===== */
     .sig-section{padding:14px 22px 8px;}
     .sig-grid{display:flex;justify-content:space-around;flex-wrap:wrap;gap:12px;}
     .sig-box{text-align:center;min-width:120px;flex:1;max-width:200px;}
     .sig-space{height:42px;margin-bottom:2px;}
-    .sig-line{border-top:2px solid #334155;padding-top:4px;}
-    .sig-name{font-size:10px;font-weight:800;color:#0c2340;letter-spacing:0.3px;}
-    .sig-title{font-size:8px;color:#64748b;margin-top:1px;}
-    .sig-qual{font-size:7px;color:#94a3b8;margin-top:1px;letter-spacing:0.3px;}
+    .sig-line{border-top:2px solid #000;padding-top:4px;}
+    .sig-name{font-size:10px;font-weight:800;color:#000;letter-spacing:0.3px;}
+    .sig-title{font-size:8px;color:#000;margin-top:1px;}
+    .sig-qual{font-size:7px;color:#000;margin-top:1px;letter-spacing:0.3px;}
     
     /* ===== FOOTER ===== */
     .footer{
-      background:#f1f5f9;border-top:2px solid #0c2340;
+      background:#fff;border-top:2px solid #000;
       padding:6px 22px;display:flex;justify-content:space-between;align-items:center;
-      font-size:7.5px;color:#64748b;
+      font-size:7.5px;color:#000;
     }
-    .footer-hospital{font-weight:700;color:#0c2340;letter-spacing:0.5px;}
+    .footer-hospital{font-weight:700;color:#000;letter-spacing:0.5px;}
     .footer-note{font-style:italic;opacity:0.7;}
     
     /* ===== PRINT BUTTON ===== */
     .print-btn{
       position:fixed;top:12px;right:12px;padding:10px 24px;
-      background:linear-gradient(135deg,#0c2340,#1e4d7b);
-      color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;
+      background:#fff;
+      color:#000;border:none;border-radius:6px;font-size:13px;font-weight:700;
       cursor:pointer;box-shadow:0 4px 12px rgba(12,35,64,0.4);z-index:999;
       letter-spacing:0.5px;transition:all 0.2s;
     }
@@ -267,7 +267,7 @@ export function generateProfessionalLabReportHtml(params: PrintLabReportParams):
         <div class="summary-right">
           ${abnormal.length > 0
             ? `<span class="abnormal-list">Abnormal: ${abnormal.map(a => `${a.parameter} (${a.flag})`).join(', ')}</span>`
-            : '<span style="color:#15803d;">All results are within normal limits.</span>'}
+            : '<span style="color:#000;">All results are within normal limits.</span>'}
         </div>
       </div>
       
@@ -463,58 +463,58 @@ export function generateOrderSlipHtml(params: OrderSlipParams): string {
 
   const isUrgent = urgency !== 'routine';
   const urgencyBadge = urgency === 'stat'
-    ? '<span style="background:#dc2626;color:#fff;padding:2px 10px;border-radius:3px;font-weight:800;font-size:10px;letter-spacing:1px;">STAT</span>'
+    ? '<span style="background:#fff;color:#000;padding:2px 10px;border-radius:3px;font-weight:800;font-size:10px;letter-spacing:1px;">STAT</span>'
     : urgency === 'urgent'
-    ? '<span style="background:#f59e0b;color:#fff;padding:2px 10px;border-radius:3px;font-weight:800;font-size:10px;letter-spacing:1px;">URGENT</span>'
+    ? '<span style="background:#fff;color:#000;padding:2px 10px;border-radius:3px;font-weight:800;font-size:10px;letter-spacing:1px;">URGENT</span>'
     : '';
 
   const testRows = tests.map((t, i) => {
-    const alt = i % 2 === 0 ? '#fff' : '#f8fafc';
+    const alt = i % 2 === 0 ? '#fff' : '#fff';
     return `<tr style="background:${alt};">
-      <td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #e2e8f0;">${i + 1}</td>
-      <td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #e2e8f0;font-weight:600;">${t.testName}</td>
-      <td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:right;">Rs. ${t.price.toLocaleString()}</td>
+      <td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #000;">${i + 1}</td>
+      <td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #000;font-weight:700;">${t.testName}</td>
+      <td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #000;text-align:right;">Rs. ${t.price.toLocaleString()}</td>
     </tr>`;
   }).join('');
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Lab Order Slip - ${patientName}</title><style>
     @page{size:A5;margin:6mm 8mm;}
     *{margin:0;padding:0;box-sizing:border-box;}
-    body{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#1e293b;background:#fff;font-size:10px;line-height:1.35;}
-    .slip{width:100%;max-width:148mm;margin:0 auto;border:1.5px solid #c8d6e5;border-radius:5px;overflow:hidden;}
+    body{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#000;background:#fff;font-size:10px;line-height:1.35;}
+    .slip{width:100%;max-width:148mm;margin:0 auto;border:1.5px solid #000;border-radius:5px;overflow:hidden;}
 
-    .header{background:linear-gradient(135deg,#0c2340 0%,#1a3a5c 60%,#1e4d7b 100%);color:#fff;padding:10px 16px;display:flex;justify-content:center;align-items:center;gap:12px;position:relative;}
-    .header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#f59e0b,#ef4444,#3b82f6,#10b981,#f59e0b);}
+    .header{background:#fff;color:#000;padding:10px 16px;display:flex;justify-content:center;align-items:center;gap:12px;position:relative;}
+    .header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:#fff;}
     .logo{width:40px;height:40px;border-radius:5px;object-fit:contain;background:#fff;padding:2px;}
     .hname{font-size:16px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;text-shadow:0 1px 2px rgba(0,0,0,0.3);}
     .hsub{font-size:8px;letter-spacing:1.2px;opacity:0.85;text-transform:uppercase;text-align:center;}
 
-    .contact{background:#eef2f7;padding:5px 16px;display:flex;justify-content:space-between;font-size:11px;color:#475569;border-bottom:1px solid #d1d9e6;font-weight:600;}
+    .contact{background:#fff;padding:5px 16px;display:flex;justify-content:space-between;font-size:11px;color:#000;border-bottom:1px solid #000;font-weight:700;}
     .contact span{font-size:11px !important;}
 
-    .title-bar{background:#fef3c7;border-bottom:2px solid #f59e0b;padding:6px 16px;text-align:center;}
-    .title-bar h2{font-size:13px;font-weight:800;color:#0c2340;letter-spacing:1.5px;text-transform:uppercase;}
+    .title-bar{background:#fff;border-bottom:2px solid #000;padding:6px 16px;text-align:center;}
+    .title-bar h2{font-size:13px;font-weight:800;color:#000;letter-spacing:1.5px;text-transform:uppercase;}
 
-    .patient-info{padding:6px 16px;display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;background:#f8fafc;border-bottom:1px solid #e2e8f0;}
+    .patient-info{padding:6px 16px;display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;background:#fff;border-bottom:1px solid #000;}
     .prow{display:flex;gap:4px;font-size:10px;}
-    .prow .l{color:#64748b;font-weight:600;min-width:60px;}
-    .prow .v{color:#1e293b;font-weight:500;}
+    .prow .l{color:#000;font-weight:700;min-width:60px;}
+    .prow .v{color:#000;font-weight:700;}
 
-    .urgency-strip{${isUrgent ? 'background:#fef2f2;border-bottom:2px solid #dc2626;' : 'display:none;'}padding:4px 16px;text-align:center;}
+    .urgency-strip{${isUrgent ? 'background:#fff;border-bottom:2px solid #000;' : 'display:none;'}padding:4px 16px;text-align:center;}
 
     .tests-section{padding:6px 16px;}
-    .tests-section h3{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#0c2340;margin-bottom:4px;}
+    .tests-section h3{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#000;margin-bottom:4px;}
     table{width:100%;border-collapse:collapse;}
-    th{padding:4px 8px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#0c2340;background:#eef2f7;border-bottom:2px solid #0c2340;text-align:left;}
-    td{padding:4px 8px;font-size:10px;border-bottom:1px solid #f1f5f9;}
+    th{padding:4px 8px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#000;background:#fff;border-bottom:2px solid #000;text-align:left;}
+    td{padding:4px 8px;font-size:10px;border-bottom:1px solid #000;}
 
-    .total-row{padding:6px 16px;display:flex;justify-content:space-between;align-items:center;border-top:2px solid #0c2340;background:#f0fdf4;}
-    .total-row .tl{font-size:11px;font-weight:700;color:#0c2340;}
-    .total-row .tv{font-size:14px;font-weight:900;color:#0c2340;}
+    .total-row{padding:6px 16px;display:flex;justify-content:space-between;align-items:center;border-top:2px solid #000;background:#fff;}
+    .total-row .tl{font-size:11px;font-weight:700;color:#000;}
+    .total-row .tv{font-size:14px;font-weight:900;color:#000;}
 
-    .footer{padding:8px 16px;text-align:center;background:#f1f5f9;border-top:1px solid #d1d9e6;}
-    .footer .ty{font-size:9px;color:#64748b;font-style:italic;}
-    .footer .info{font-size:7px;color:#94a3b8;margin-top:2px;}
+    .footer{padding:8px 16px;text-align:center;background:#fff;border-top:1px solid #000;}
+    .footer .ty{font-size:9px;color:#000;font-style:italic;}
+    .footer .info{font-size:7px;color:#000;margin-top:2px;}
 
     @media print{
       body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
@@ -539,7 +539,7 @@ export function generateOrderSlipHtml(params: OrderSlipParams): string {
       </div>
 
       <div class="patient-info">
-        <div class="prow"><span class="l">Patient No:</span><span class="v" style="font-weight:800;color:#1e4d7b;">${patientNo}</span></div>
+        <div class="prow"><span class="l">Patient No:</span><span class="v" style="font-weight:800;color:#000;">${patientNo}</span></div>
         <div class="prow"><span class="l">Patient:</span><span class="v">${patientName}</span></div>
         <div class="prow"><span class="l">Age / Gender:</span><span class="v">${age} / ${gender}</span></div>
         <div class="prow"><span class="l">Mobile:</span><span class="v">${mobile || '-'}</span></div>

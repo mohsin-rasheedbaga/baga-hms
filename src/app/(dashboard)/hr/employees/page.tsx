@@ -179,12 +179,12 @@ export default function EmployeesPage() {
     if (!printContent) return;
     const html = `<!DOCTYPE html><html><head><title>Joining Letter - ${joiningLetter!.name}</title>
     <style>
-      body { font-family: 'Times New Roman', serif; padding: 40px; color: #1a1a1a; }
-      .header { text-align: center; border-bottom: 3px double #1a1a1a; padding-bottom: 15px; margin-bottom: 20px; }
-      .hospital-name { font-size: 24px; font-weight: bold; color: #1a1a1a; }
-      .hospital-info { font-size: 12px; color: #555; margin-top: 5px; }
+      body { font-family: 'Times New Roman', serif; padding: 40px; color: #000; }
+      .header { text-align: center; border-bottom: 3px double #000; padding-bottom: 15px; margin-bottom: 20px; }
+      .hospital-name { font-size: 24px; font-weight: bold; color: #000; }
+      .hospital-info { font-size: 12px; color: #000; margin-top: 5px; }
       .letter-title { text-align: center; font-size: 20px; font-weight: bold; margin: 20px 0; text-decoration: underline; }
-      .ref { font-size: 12px; color: #555; }
+      .ref { font-size: 12px; color: #000; }
       .body { font-size: 14px; line-height: 1.8; }
       .details-table { width: 100%; margin: 15px 0; }
       .details-table td { padding: 4px 0; font-size: 13px; }
@@ -192,8 +192,8 @@ export default function EmployeesPage() {
       .terms ol { margin-left: 20px; }
       .terms li { margin-bottom: 5px; font-size: 13px; }
       .signature { margin-top: 40px; text-align: right; }
-      .signature-line { border-top: 1px solid #1a1a1a; width: 250px; margin-left: auto; padding-top: 5px; font-size: 13px; }
-      hr.double { border: none; border-top: 3px double #1a1a1a; margin: 15px 0; }
+      .signature-line { border-top: 1px solid #000; width: 250px; margin-left: auto; padding-top: 5px; font-size: 13px; }
+      hr.double { border: none; border-top: 3px double #000; margin: 15px 0; }
     </style></head><body>
     ${printContent.innerHTML}
     </body></html>`;

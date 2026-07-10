@@ -204,20 +204,20 @@ export default function AdmissionPage() {
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; padding: 20px; }
-        .file { border: 3px double #1e293b; border-radius: 8px; padding: 24px; max-width: 550px; margin: 0 auto; }
-        .header { text-align: center; border-bottom: 2px solid #1e293b; padding-bottom: 12px; margin-bottom: 16px; }
-        .header h1 { color: #1e293b; font-size: 22px; }
-        .header p { color: #64748b; font-size: 11px; margin-top: 2px; }
-        .file-title { text-align: center; font-size: 16px; font-weight: 700; color: #dc2626; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 2px; }
-        .section { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 12px; }
-        .section h3 { font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #cbd5e1; }
+        .file { border: 3px double #000; border-radius: 8px; padding: 24px; max-width: 550px; margin: 0 auto; }
+        .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 16px; }
+        .header h1 { color: #000; font-size: 22px; }
+        .header p { color: #000; font-size: 11px; margin-top: 2px; }
+        .file-title { text-align: center; font-size: 16px; font-weight: 700; color: #000; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 2px; }
+        .section { background: #fff; border: 1px solid #000; border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+        .section h3 { font-size: 11px; color: #000; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #000; }
         .row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
-        .row .label { color: #64748b; }
-        .row .value { color: #1e293b; font-weight: 600; }
-        .total-row { background: #ecfdf5; padding: 8px 12px; border-radius: 6px; margin-top: 8px; }
+        .row .label { color: #000; }
+        .row .value { color: #000; font-weight:700; }
+        .total-row { background: #fff; padding: 8px 12px; border-radius: 6px; margin-top: 8px; }
         .total-row .row { font-size: 14px; }
-        .footer { text-align: center; margin-top: 16px; padding-top: 12px; border-top: 2px solid #1e293b; }
-        .footer p { font-size: 10px; color: #94a3b8; }
+        .footer { text-align: center; margin-top: 16px; padding-top: 12px; border-top: 2px solid #000; }
+        .footer p { font-size: 10px; color: #000; }
         @media print { body { padding: 0; } }
       </style></head>
       <body>
@@ -266,7 +266,7 @@ export default function AdmissionPage() {
           ${admission.notes ? `
           <div class="section">
             <h3>Doctor Notes</h3>
-            <p style="font-size:12px;color:#475569;">${admission.notes}</p>
+            <p style="font-size:12px;color:#000;">${admission.notes}</p>
           </div>` : ''}
 
           <div class="footer">

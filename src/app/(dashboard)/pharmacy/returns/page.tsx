@@ -398,11 +398,11 @@ export default function PharmacyReturnsPage() {
           const alt = i % 2 === 0 ? '#fff' : '#f8fafc';
           const lineTotal = it.price * it.quantity;
           return `<tr style="background:${alt};">
-            <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;">${i + 1}</td>
-            <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;font-weight:600;">${it.name}</td>
-            <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:center;">${it.quantity}</td>
-            <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:right;">${cur} ${it.price.toLocaleString()}</td>
-            <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:700;">${cur} ${lineTotal.toLocaleString()}</td>
+            <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #000;">${i + 1}</td>
+            <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #000;font-weight:700;">${it.name}</td>
+            <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #000;text-align:center;">${it.quantity}</td>
+            <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #000;text-align:right;">${cur} ${it.price.toLocaleString()}</td>
+            <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #000;text-align:right;font-weight:700;">${cur} ${lineTotal.toLocaleString()}</td>
           </tr>`;
         })
         .join('');
@@ -410,27 +410,27 @@ export default function PharmacyReturnsPage() {
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Return Slip</title><style>
         @page{size:80mm auto;margin:3mm;}
         *{margin:0;padding:0;box-sizing:border-box;}
-        body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;background:#fff;font-size:11px;width:80mm;margin:0 auto;}
-        .header{text-align:center;padding:6px 0;border-bottom:2px dashed #cbd5e1;}
+        body{font-family:'Segoe UI',Arial,sans-serif;color:#000;background:#fff;font-size:11px;width:80mm;margin:0 auto;}
+        .header{text-align:center;padding:6px 0;border-bottom:2px dashed #000;}
         .logo{width:48px;height:48px;object-fit:contain;}
-        .hname{font-size:14px;font-weight:800;color:#0c2340;letter-spacing:1px;}
-        .hsub{font-size:8px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;}
-        .haddr{font-size:8px;color:#64748b;margin-top:1px;}
-        .hphone{font-size:8px;color:#64748b;}
-        .title-bar{text-align:center;padding:5px 0;border-bottom:1px dashed #e2e8f0;border-top:1px dashed #e2e8f0;background:#fef2f2;}
-        .title-bar h3{font-size:13px;font-weight:800;color:#991b1b;letter-spacing:1px;}
-        .info{padding:4px 0;border-bottom:1px dashed #e2e8f0;}
+        .hname{font-size:14px;font-weight:800;color:#000;letter-spacing:1px;}
+        .hsub{font-size:8px;color:#000;text-transform:uppercase;letter-spacing:0.5px;}
+        .haddr{font-size:8px;color:#000;margin-top:1px;}
+        .hphone{font-size:8px;color:#000;}
+        .title-bar{text-align:center;padding:5px 0;border-bottom:1px dashed #000;border-top:1px dashed #000;background:#fff;}
+        .title-bar h3{font-size:13px;font-weight:800;color:#000;letter-spacing:1px;}
+        .info{padding:4px 0;border-bottom:1px dashed #000;}
         .info-row{display:flex;justify-content:space-between;font-size:10px;padding:1px 0;}
-        .info-row .label{color:#64748b;font-weight:600;}
-        .info-row .value{color:#1e293b;font-weight:500;}
+        .info-row .label{color:#000;font-weight:700;}
+        .info-row .value{color:#000;font-weight:700;}
         table{width:100%;border-collapse:collapse;margin-top:4px;}
-        th{padding:3px 6px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#0c2340;background:#f1f5f9;border-bottom:2px solid #0c2340;text-align:left;}
-        td{padding:3px 6px;font-size:10px;border-bottom:1px solid #f1f5f9;}
+        th{padding:3px 6px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#000;background:#fff;border-bottom:2px solid #000;text-align:left;}
+        td{padding:3px 6px;font-size:10px;border-bottom:1px solid #000;}
         .totals{padding:4px 0;}
-        .grand-total{display:flex;justify-content:space-between;font-size:14px;font-weight:900;color:#991b1b;padding:6px 0;border-top:2px solid #991b1b;border-bottom:2px solid #991b1b;margin-top:4px;}
-        .footer{text-align:center;padding:6px 0;margin-top:4px;border-top:2px dashed #cbd5e1;}
-        .footer .ty{font-size:9px;color:#64748b;font-style:italic;}
-        .footer .info{font-size:7px;color:#94a3b8;}
+        .grand-total{display:flex;justify-content:space-between;font-size:14px;font-weight:900;color:#000;padding:6px 0;border-top:2px solid #000;border-bottom:2px solid #000;margin-top:4px;}
+        .footer{text-align:center;padding:6px 0;margin-top:4px;border-top:2px dashed #000;}
+        .footer .ty{font-size:9px;color:#000;font-style:italic;}
+        .footer .info{font-size:7px;color:#000;}
         @media print{body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
       </style></head><body>
         <div class="header">

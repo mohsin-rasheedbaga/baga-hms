@@ -289,22 +289,22 @@ export default function DoctorPage() {
     if (!selectedPatient) return;
     const html = `<!DOCTYPE html><html><head><title>X-Ray Report - ${selectedPatient.name}</title><style>
       *{margin:0;padding:0;box-sizing:border-box;}
-      body{font-family:Arial,Helvetica,sans-serif;color:#222;background:#fff;}
+      body{font-family:Arial,Helvetica,sans-serif;color:#000;background:#fff;}
       @page{size:A4;margin:15mm;}
       .report{width:100%;max-width:700px;margin:0 auto;padding:2px;}
-      .header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px double #333;padding-bottom:6px;margin-bottom:8px;}
-      .header h1{font-size:16px;letter-spacing:1px;margin:0;color:#111;}
-      .header .sub{font-size:9px;color:#555;}
-      .header .rid{font-size:9px;color:#888;text-align:right;}
-      .patient-bar{display:flex;justify-content:space-between;background:#f0f0f0;padding:5px 8px;border:1px solid #ccc;border-radius:3px;margin-bottom:10px;font-size:11px;flex-wrap:wrap;gap:2px;}
-      .patient-bar span{white-space:nowrap;} .patient-bar b{color:#111;}
-      .report-text{background:#fafafa;border:1px solid #ddd;border-radius:4px;padding:12px 15px;margin:10px 0;white-space:pre-wrap;line-height:1.8;font-size:12px;min-height:120px;}
-      .footer{margin-top:20px;padding-top:6px;border-top:1px solid #999;display:flex;justify-content:space-between;font-size:9px;color:#666;}
+      .header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px double #000;padding-bottom:6px;margin-bottom:8px;}
+      .header h1{font-size:16px;letter-spacing:1px;margin:0;color:#000;}
+      .header .sub{font-size:9px;color:#000;}
+      .header .rid{font-size:9px;color:#000;text-align:right;}
+      .patient-bar{display:flex;justify-content:space-between;background:#fff;padding:5px 8px;border:1px solid #000;border-radius:3px;margin-bottom:10px;font-size:11px;flex-wrap:wrap;gap:2px;}
+      .patient-bar span{white-space:nowrap;} .patient-bar b{color:#000;}
+      .report-text{background:#fff;border:1px solid #000;border-radius:4px;padding:12px 15px;margin:10px 0;white-space:pre-wrap;line-height:1.8;font-size:12px;min-height:120px;}
+      .footer{margin-top:20px;padding-top:6px;border-top:1px solid #000;display:flex;justify-content:space-between;font-size:9px;color:#000;}
       .sig-area{margin-top:25px;display:flex;justify-content:space-between;}
       .sig-box{text-align:center;width:180px;}
-      .sig-line{border-top:1px solid #333;margin-top:50px;padding-top:3px;font-size:10px;}
-      .print-btn{position:fixed;top:10px;right:10px;padding:8px 20px;background:#1a73e8;color:#fff;border:none;border-radius:4px;font-size:13px;font-weight:bold;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.3);z-index:999;}
-      .print-btn:hover{background:#1557b0;}
+      .sig-line{border-top:1px solid #000;margin-top:50px;padding-top:3px;font-size:10px;}
+      .print-btn{position:fixed;top:10px;right:10px;padding:8px 20px;background:#fff;color:#000;border:none;border-radius:4px;font-size:13px;font-weight:bold;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.3);z-index:999;}
+      .print-btn:hover{background:#fff;}
       @media print{.print-btn{display:none!important;}body{background:#fff;}@page{margin:10mm;}}
     </style></head><body>
       <button class="print-btn" onclick="window.print()">Print Report</button>
@@ -340,22 +340,22 @@ export default function DoctorPage() {
     if (!selectedPatient) return;
     const html = `<!DOCTYPE html><html><head><title>Ultrasound Report - ${selectedPatient.name}</title><style>
       *{margin:0;padding:0;box-sizing:border-box;}
-      body{font-family:Arial,Helvetica,sans-serif;color:#222;background:#fff;}
+      body{font-family:Arial,Helvetica,sans-serif;color:#000;background:#fff;}
       @page{size:A4;margin:15mm;}
       .report{width:100%;max-width:700px;margin:0 auto;padding:2px;}
-      .header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px double #333;padding-bottom:6px;margin-bottom:8px;}
-      .header h1{font-size:16px;letter-spacing:1px;margin:0;color:#111;}
-      .header .sub{font-size:9px;color:#555;}
-      .header .rid{font-size:9px;color:#888;text-align:right;}
-      .patient-bar{display:flex;justify-content:space-between;background:#f0f0f0;padding:5px 8px;border:1px solid #ccc;border-radius:3px;margin-bottom:10px;font-size:11px;flex-wrap:wrap;gap:2px;}
-      .patient-bar span{white-space:nowrap;} .patient-bar b{color:#111;}
-      .report-text{background:#fafafa;border:1px solid #ddd;border-radius:4px;padding:12px 15px;margin:10px 0;white-space:pre-wrap;line-height:1.8;font-size:12px;min-height:120px;}
-      .footer{margin-top:20px;padding-top:6px;border-top:1px solid #999;display:flex;justify-content:space-between;font-size:9px;color:#666;}
+      .header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px double #000;padding-bottom:6px;margin-bottom:8px;}
+      .header h1{font-size:16px;letter-spacing:1px;margin:0;color:#000;}
+      .header .sub{font-size:9px;color:#000;}
+      .header .rid{font-size:9px;color:#000;text-align:right;}
+      .patient-bar{display:flex;justify-content:space-between;background:#fff;padding:5px 8px;border:1px solid #000;border-radius:3px;margin-bottom:10px;font-size:11px;flex-wrap:wrap;gap:2px;}
+      .patient-bar span{white-space:nowrap;} .patient-bar b{color:#000;}
+      .report-text{background:#fff;border:1px solid #000;border-radius:4px;padding:12px 15px;margin:10px 0;white-space:pre-wrap;line-height:1.8;font-size:12px;min-height:120px;}
+      .footer{margin-top:20px;padding-top:6px;border-top:1px solid #000;display:flex;justify-content:space-between;font-size:9px;color:#000;}
       .sig-area{margin-top:25px;display:flex;justify-content:space-between;}
       .sig-box{text-align:center;width:180px;}
-      .sig-line{border-top:1px solid #333;margin-top:50px;padding-top:3px;font-size:10px;}
-      .print-btn{position:fixed;top:10px;right:10px;padding:8px 20px;background:#1a73e8;color:#fff;border:none;border-radius:4px;font-size:13px;font-weight:bold;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.3);z-index:999;}
-      .print-btn:hover{background:#1557b0;}
+      .sig-line{border-top:1px solid #000;margin-top:50px;padding-top:3px;font-size:10px;}
+      .print-btn{position:fixed;top:10px;right:10px;padding:8px 20px;background:#fff;color:#000;border:none;border-radius:4px;font-size:13px;font-weight:bold;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.3);z-index:999;}
+      .print-btn:hover{background:#fff;}
       @media print{.print-btn{display:none!important;}body{background:#fff;}@page{margin:10mm;}}
     </style></head><body>
       <button class="print-btn" onclick="window.print()">Print Report</button>

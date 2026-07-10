@@ -56,16 +56,16 @@ export default function InventoryPage() {
     const time = new Date().toLocaleTimeString();
     let html = `<!DOCTYPE html><html><head><title>${title}</title>
 <style>
-  body { font-family: Arial, sans-serif; padding: 20px; color: #1a1a1a; font-size: 11px; }
-  .header { text-align: center; border-bottom: 2px solid #1a1a1a; padding-bottom: 10px; margin-bottom: 15px; }
+  body { font-family: Arial, sans-serif; padding: 20px; color: #000; font-size: 11px; }
+  .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px; }
   .header h1 { font-size: 16px; margin: 0 0 4px; }
-  .header p { margin: 2px 0; font-size: 10px; color: #555; }
+  .header p { margin: 2px 0; font-size: 10px; color: #000; }
   .title { font-size: 14px; font-weight: bold; text-align: center; margin: 15px 0 10px; color: ${accentColor}; }
   table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-  th { background: #f0f0f0; border: 1px solid #ccc; padding: 6px 8px; text-align: left; font-size: 10px; }
-  td { border: 1px solid #ddd; padding: 5px 8px; font-size: 10px; }
-  tr:nth-child(even) { background: #f9f9f9; }
-  .footer { margin-top: 15px; font-size: 9px; color: #888; text-align: right; }
+  th { background: #fff; border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 10px; }
+  td { border: 1px solid #000; padding: 5px 8px; font-size: 10px; }
+  tr:nth-child(even) { background: #fff; }
+  .footer { margin-top: 15px; font-size: 9px; color: #000; text-align: right; }
   @media print { body { padding: 10px; } }
 </style></head><body>
 <div class="header">
@@ -75,12 +75,12 @@ export default function InventoryPage() {
   ${hosp.email ? `<p>Email: ${hosp.email}</p>` : ''}
 </div>
 <div class="title">${title}</div>
-<p style="text-align:center; font-size:10px; color:#666;">Generated: ${date} at ${time} | Total Items: ${items.length}</p>
+<p style="text-align:center; font-size:10px; color:#000;">Generated: ${date} at ${time} | Total Items: ${items.length}</p>
 <table>
   <thead><tr><th>#</th><th>Medicine Name</th><th>Form</th><th>Strength</th><th>Packing</th><th>Stock</th><th>${title.includes('Expired') ? 'Expiry Date' : 'Min Stock'}</th></tr></thead>
   <tbody>`;
     items.forEach((m, i) => {
-      html += `<tr><td>${i + 1}</td><td><strong>${m.name}</strong><br><span style="color:#888">${m.genericName || '-'}</span></td><td>${m.form}</td><td>${m.strength}</td><td>${m.packing}</td><td style="font-weight:bold; color:${m.stock <= 0 ? 'red' : '#333'}">${m.stock}</td><td>${title.includes('Expired') ? (m.expiryDate || '-') : (m.minStock || '-')}</td></tr>`;
+      html += `<tr><td>${i + 1}</td><td><strong>${m.name}</strong><br><span style="color:#000">${m.genericName || '-'}</span></td><td>${m.form}</td><td>${m.strength}</td><td>${m.packing}</td><td style="font-weight:bold; color:'#000'">${m.stock}</td><td>${title.includes('Expired') ? (m.expiryDate || '-') : (m.minStock || '-')}</td></tr>`;
     });
     html += `</tbody></table>
 <div class="footer">BAGA HMS - Pharmacy Management System</div>
@@ -321,7 +321,7 @@ export default function InventoryPage() {
               <h3 className="font-bold text-red-800">Expired Medicines ({expiredMeds.length})</h3>
             </div>
             {expiredMeds.length > 0 && (
-              <button onClick={() => printMedicineReport('Expired Medicines Report', expiredMeds, '#dc2626')} className="btn btn-outline btn-sm text-[10px] flex items-center gap-1">
+              <button onClick={() => printMedicineReport('Expired Medicines Report', expiredMeds, '#000')} className="btn btn-outline btn-sm text-[10px] flex items-center gap-1">
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                 Print
               </button>
@@ -355,7 +355,7 @@ export default function InventoryPage() {
               <h3 className="font-bold text-amber-800">Low Stock ({lowStockMeds.length})</h3>
             </div>
             {lowStockMeds.length > 0 && (
-              <button onClick={() => printMedicineReport('Low Stock Medicines Report', lowStockMeds.filter(m => !expiredMeds.find(em => em.id === m.id)), '#d97706')} className="btn btn-outline btn-sm text-[10px] flex items-center gap-1">
+              <button onClick={() => printMedicineReport('Low Stock Medicines Report', lowStockMeds.filter(m => !expiredMeds.find(em => em.id === m.id)), '#000')} className="btn btn-outline btn-sm text-[10px] flex items-center gap-1">
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                 Print
               </button>

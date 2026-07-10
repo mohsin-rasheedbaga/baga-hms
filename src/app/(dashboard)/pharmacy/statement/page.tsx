@@ -270,21 +270,21 @@ export default function PharmacyStatementPage() {
     const expRows = s.filteredExp.slice(0, 20).map((e: any, i: number) => `<tr><td>${i+1}</td><td>${e.description || '-'}</td><td>${e.category || '-'}</td><td>${e.date || '-'}</td><td>${currency} ${(e.amount || 0).toLocaleString()}</td></tr>`).join('');
     const salesRows = s.filtered.slice(0, 30).map((sl, i) => `<tr><td>${i+1}</td><td>${sl.date} ${sl.time}</td><td>${sl.patientName}</td><td>${sl.type}</td><td>${sl.items.length} items</td><td>${currency} ${sl.totalAmount.toLocaleString()}</td></tr>`).join('');
     return `<!DOCTYPE html><html><head><title>Pharmacy Statement</title><style>
-      body{font-family:Arial,sans-serif;padding:20px;color:#1a1a1a;font-size:11px;}
-      .header{text-align:center;border-bottom:2px solid #1a1a1a;padding-bottom:10px;margin-bottom:15px;}
+      body{font-family:Arial,sans-serif;padding:20px;color:#000;font-size:11px;}
+      .header{text-align:center;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:15px;}
       .header h1{font-size:16px;margin:0;}
-      .header p{margin:2px 0;font-size:10px;color:#555;}
-      .title{text-align:center;font-size:13px;font-weight:bold;margin:10px 0;color:#0c2340;}
-      .subtitle{text-align:center;font-size:10px;color:#666;margin-bottom:15px;}
+      .header p{margin:2px 0;font-size:10px;color:#000;}
+      .title{text-align:center;font-size:13px;font-weight:bold;margin:10px 0;color:#000;}
+      .subtitle{text-align:center;font-size:10px;color:#000;margin-bottom:15px;}
       table{width:100%;border-collapse:collapse;margin:10px 0;}
-      th{background:#f0f0f0;border:1px solid #ccc;padding:5px;font-size:9px;text-align:left;}
-      td{border:1px solid #ddd;padding:4px;font-size:10px;}
+      th{background:#fff;border:1px solid #000;padding:5px;font-size:9px;text-align:left;}
+      td{border:1px solid #000;padding:4px;font-size:10px;}
       .summary{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:15px 0;}
-      .summary-box{border:1px solid #ddd;padding:8px;border-radius:4px;}
+      .summary-box{border:1px solid #000;padding:8px;border-radius:4px;}
       .summary-box p{margin:2px 0;}
       .summary-box .val{font-size:14px;font-weight:bold;}
-      .footer{text-align:center;margin-top:15px;font-size:9px;color:#888;border-top:1px solid #ddd;padding-top:8px;}
-      .section-title{font-size:12px;font-weight:bold;margin:15px 0 5px;color:#0c2340;border-bottom:1px solid #ddd;padding-bottom:3px;}
+      .footer{text-align:center;margin-top:15px;font-size:9px;color:#000;border-top:1px solid #000;padding-top:8px;}
+      .section-title{font-size:12px;font-weight:bold;margin:15px 0 5px;color:#000;border-bottom:1px solid #000;padding-bottom:3px;}
       @media print{body{padding:10px;}}
     </style></head><body>
     <div class="header">
@@ -296,10 +296,10 @@ export default function PharmacyStatementPage() {
     <div class="title">Pharmacy Statement Report</div>
     <div class="subtitle">Period: ${startDate} to ${endDate} | Generated: ${new Date().toLocaleString()}</div>
     <div class="summary">
-      <div class="summary-box"><p>Total Revenue</p><p class="val" style="color:#059669">${currency} ${s.totalAmount.toLocaleString()}</p><p style="font-size:9px;color:#888">${s.totalSales} sales</p></div>
-      <div class="summary-box"><p>Total Expenses</p><p class="val" style="color:#d97706">${currency} ${s.totalExpenses.toLocaleString()}</p><p style="font-size:9px;color:#888">${s.filteredExp.length} entries</p></div>
-      <div class="summary-box"><p>Indoor Sales</p><p class="val" style="color:#2563eb">${currency} ${s.indoorAmount.toLocaleString()}</p><p style="font-size:9px;color:#888">${s.indoorCount} patients</p></div>
-      <div class="summary-box"><p>Outdoor Sales</p><p class="val" style="color:#7c3aed">${currency} ${s.outdoorAmount.toLocaleString()}</p><p style="font-size:9px;color:#888">${s.outdoorCount} patients</p></div>
+      <div class="summary-box"><p>Total Revenue</p><p class="val" style="color:#000">${currency} ${s.totalAmount.toLocaleString()}</p><p style="font-size:9px;color:#000">${s.totalSales} sales</p></div>
+      <div class="summary-box"><p>Total Expenses</p><p class="val" style="color:#000">${currency} ${s.totalExpenses.toLocaleString()}</p><p style="font-size:9px;color:#000">${s.filteredExp.length} entries</p></div>
+      <div class="summary-box"><p>Indoor Sales</p><p class="val" style="color:#000">${currency} ${s.indoorAmount.toLocaleString()}</p><p style="font-size:9px;color:#000">${s.indoorCount} patients</p></div>
+      <div class="summary-box"><p>Outdoor Sales</p><p class="val" style="color:#000">${currency} ${s.outdoorAmount.toLocaleString()}</p><p style="font-size:9px;color:#000">${s.outdoorCount} patients</p></div>
     </div>
     <div class="section-title">Sales Details (${s.filtered.length} transactions)</div>
     <table><thead><tr><th>#</th><th>Date/Time</th><th>Patient</th><th>Type</th><th>Items</th><th>Amount</th></tr></thead><tbody>${salesRows}</tbody></table>

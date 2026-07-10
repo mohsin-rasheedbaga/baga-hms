@@ -631,49 +631,49 @@ export default function PharmacyPage() {
       const itemRows = saleBill.items.map((it, i) => {
         const alt = i % 2 === 0 ? '#fff' : '#f8fafc';
         return `<tr style="background:${alt};">
-          <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;">${i + 1}</td>
-          <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;font-weight:600;">${it.name}</td>
-          <td style="padding:3px 6px;font-size:9px;border-bottom:1px solid #e2e8f0;">${it.form}</td>
-          <td style="padding:3px 6px;font-size:9px;border-bottom:1px solid #e2e8f0;">${it.strength}</td>
-          <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:right;">${cur} ${it.price.toLocaleString()}</td>
-          <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:center;">${it.quantity}</td>
-          <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:700;">${cur} ${it.total.toLocaleString()}</td>
+          <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #000;">${i + 1}</td>
+          <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #000;font-weight:700;">${it.name}</td>
+          <td style="padding:3px 6px;font-size:9px;border-bottom:1px solid #000;">${it.form}</td>
+          <td style="padding:3px 6px;font-size:9px;border-bottom:1px solid #000;">${it.strength}</td>
+          <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #000;text-align:right;">${cur} ${it.price.toLocaleString()}</td>
+          <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #000;text-align:center;">${it.quantity}</td>
+          <td style="padding:3px 6px;font-size:10px;border-bottom:1px solid #000;text-align:right;font-weight:700;">${cur} ${it.total.toLocaleString()}</td>
         </tr>`;
       }).join('');
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pharmacy Bill</title><style>
         @page{size:80mm auto;margin:3mm;}
         *{margin:0;padding:0;box-sizing:border-box;}
-        body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;background:#fff;font-size:11px;width:80mm;margin:0 auto;}
-        .header{text-align:center;padding:6px 0;border-bottom:2px dashed #cbd5e1;}
+        body{font-family:'Segoe UI',Arial,sans-serif;color:#000;background:#fff;font-size:11px;width:80mm;margin:0 auto;}
+        .header{text-align:center;padding:6px 0;border-bottom:2px dashed #000;}
         .logo{width:48px;height:48px;object-fit:contain;}
-        .hname{font-size:14px;font-weight:800;color:#0c2340;letter-spacing:1px;}
-        .hsub{font-size:8px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;}
-        .haddr{font-size:8px;color:#64748b;margin-top:1px;}
-        .hphone{font-size:8px;color:#64748b;}
-        .info{padding:4px 0;border-bottom:1px dashed #e2e8f0;}
+        .hname{font-size:14px;font-weight:800;color:#000;letter-spacing:1px;}
+        .hsub{font-size:8px;color:#000;text-transform:uppercase;letter-spacing:0.5px;}
+        .haddr{font-size:8px;color:#000;margin-top:1px;}
+        .hphone{font-size:8px;color:#000;}
+        .info{padding:4px 0;border-bottom:1px dashed #000;}
         .info-row{display:flex;justify-content:space-between;font-size:10px;padding:1px 0;}
-        .info-row .label{color:#64748b;font-weight:600;}
-        .info-row .value{color:#1e293b;font-weight:500;}
-        .serial-box{text-align:center;padding:6px 4px 4px;border:1.5px solid #0c2340;border-radius:6px;margin:6px 0;background:#f8fafc;}
-        .serial-box .serial-label{font-size:8px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:1px;}
-        .serial-box .serial-no{font-size:18px;font-weight:900;color:#0c2340;font-family:'Courier New',monospace;letter-spacing:3px;margin:2px 0;}
+        .info-row .label{color:#000;font-weight:700;}
+        .info-row .value{color:#000;font-weight:700;}
+        .serial-box{text-align:center;padding:6px 4px 4px;border:1.5px solid #000;border-radius:6px;margin:6px 0;background:#fff;}
+        .serial-box .serial-label{font-size:8px;color:#000;font-weight:700;text-transform:uppercase;letter-spacing:1px;}
+        .serial-box .serial-no{font-size:18px;font-weight:900;color:#000;font-family:'Courier New',monospace;letter-spacing:3px;margin:2px 0;}
         .serial-box svg{display:block;margin:2px auto 0;}
-        .serial-box .serial-footer{font-size:9px;font-family:'Courier New',monospace;color:#0c2340;font-weight:700;margin-top:2px;}
-        .return-code-box{text-align:center;padding:8px 4px;margin:6px 0;border:2px dashed #dc2626;border-radius:6px;background:#fef2f2;}
-        .return-code-box .return-code-label{font-size:7px;color:#dc2626;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;}
-        .return-code-box .return-code-no{font-size:20px;font-weight:900;color:#dc2626;font-family:'Courier New',monospace;letter-spacing:4px;margin:3px 0;}
-        .title-bar{text-align:center;padding:4px 0;border-bottom:1px dashed #e2e8f0;border-top:1px dashed #e2e8f0;}
-        .title-bar h3{font-size:12px;font-weight:800;color:#0c2340;letter-spacing:1px;}
+        .serial-box .serial-footer{font-size:9px;font-family:'Courier New',monospace;color:#000;font-weight:700;margin-top:2px;}
+        .return-code-box{text-align:center;padding:8px 4px;margin:6px 0;border:2px dashed #000;border-radius:6px;background:#fff;}
+        .return-code-box .return-code-label{font-size:7px;color:#000;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;}
+        .return-code-box .return-code-no{font-size:20px;font-weight:900;color:#000;font-family:'Courier New',monospace;letter-spacing:4px;margin:3px 0;}
+        .title-bar{text-align:center;padding:4px 0;border-bottom:1px dashed #000;border-top:1px dashed #000;}
+        .title-bar h3{font-size:12px;font-weight:800;color:#000;letter-spacing:1px;}
         table{width:100%;border-collapse:collapse;}
-        th{padding:3px 6px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#0c2340;background:#f1f5f9;border-bottom:2px solid #0c2340;text-align:left;}
-        td{padding:3px 6px;font-size:10px;border-bottom:1px solid #f1f5f9;}
+        th{padding:3px 6px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#000;background:#fff;border-bottom:2px solid #000;text-align:left;}
+        td{padding:3px 6px;font-size:10px;border-bottom:1px solid #000;}
         .totals{padding:4px 0;}
         .total-row{display:flex;justify-content:space-between;font-size:11px;padding:2px 0;}
-        .total-row.discount{color:#dc2626;}
-        .grand-total{display:flex;justify-content:space-between;font-size:14px;font-weight:900;color:#0c2340;padding:4px 0;border-top:2px solid #0c2340;border-bottom:2px solid #0c2340;margin-top:4px;}
-        .footer{text-align:center;padding:6px 0;margin-top:4px;border-top:2px dashed #cbd5e1;}
-        .footer .ty{font-size:9px;color:#64748b;font-style:italic;}
-        .footer .info{font-size:7px;color:#94a3b8;}
+        .total-row.discount{color:#000;}
+        .grand-total{display:flex;justify-content:space-between;font-size:14px;font-weight:900;color:#000;padding:4px 0;border-top:2px solid #000;border-bottom:2px solid #000;margin-top:4px;}
+        .footer{text-align:center;padding:6px 0;margin-top:4px;border-top:2px dashed #000;}
+        .footer .ty{font-size:9px;color:#000;font-style:italic;}
+        .footer .info{font-size:7px;color:#000;}
         @media print{body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
       </style></head><body>
         <div class="header">
@@ -686,7 +686,7 @@ export default function PharmacyPage() {
         <div class="serial-box">
           <div class="serial-label">Barcode No (Annual)</div>
           ${(() => { const svg = generateBarcodeSVG(saleBill.billSerial || saleBill.id, { width: 250, height: 42, showText: false }); return svg ? svg : ''; })()}
-          <div style="font-size:9px;font-family:'Courier New',monospace;color:#0c2340;font-weight:700;margin-top:2px;">${(saleBill.billSerial || saleBill.id).toUpperCase()}</div>
+          <div style="font-size:9px;font-family:'Courier New',monospace;color:#000;font-weight:700;margin-top:2px;">${(saleBill.billSerial || saleBill.id).toUpperCase()}</div>
         </div>
         <div class="return-code-box">
           <div class="return-code-label">Serial No</div>
@@ -898,27 +898,27 @@ export default function PharmacyPage() {
             <div onClick={e => e.stopPropagation()} style={{
               maxWidth: 320, width: '100%', maxHeight: '90vh', overflowY: 'auto',
               background: '#fff', borderRadius: 8, boxShadow: '0 8px 40px rgba(0,0,0,0.25)',
-              padding: '16px 12px', fontFamily: "'Segoe UI', Arial, sans-serif", fontSize: 11, color: '#1e293b',
+              padding: '16px 12px', fontFamily: "'Segoe UI', Arial, sans-serif", fontSize: 11, color: '#000',
             }}>
               {/* Header */}
               <div style={{ textAlign: 'center', paddingBottom: 8, borderBottom: '2px dashed #cbd5e1' }}>
                 {hdr?.hospitalLogo && <img src={hdr.hospitalLogo} alt="" style={{ width: 40, height: 40, objectFit: 'contain', display: 'block', margin: '0 auto 4px' }} />}
-                <div style={{ fontSize: 14, fontWeight: 800, color: '#0c2340', letterSpacing: 1 }}>{hdr?.hospitalName || 'BAGA HOSPITAL'}</div>
-                {hdr?.hospitalAddress && <div style={{ fontSize: 8, color: '#64748b', marginTop: 1 }}>{hdr.hospitalAddress}</div>}
-                {hdr?.hospitalPhone && <div style={{ fontSize: 8, color: '#64748b' }}>{hdr.hospitalPhone}</div>}
-                <div style={{ fontSize: 8, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>Pharmacy Department</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#000', letterSpacing: 1 }}>{hdr?.hospitalName || 'BAGA HOSPITAL'}</div>
+                {hdr?.hospitalAddress && <div style={{ fontSize: 8, color: '#000', marginTop: 1 }}>{hdr.hospitalAddress}</div>}
+                {hdr?.hospitalPhone && <div style={{ fontSize: 8, color: '#000' }}>{hdr.hospitalPhone}</div>}
+                <div style={{ fontSize: 8, color: '#000', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>Pharmacy Department</div>
               </div>
 
               {/* Barcode Box — barcode + annual number (renamed from "Serial No") */}
               <div style={{
                 textAlign: 'center', padding: '8px 4px 6px', margin: '6px 0',
-                border: '1.5px solid #0c2340', borderRadius: 6, background: '#f8fafc',
+                border: '1.5px solid #000', borderRadius: 6, background: '#fff',
               }}>
-                <div style={{ fontSize: 8, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Barcode No (Annual)</div>
+                <div style={{ fontSize: 8, color: '#000', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Barcode No (Annual)</div>
                 {barcodeSvg && (
                   <div style={{ display: 'flex', justifyContent: 'center', marginTop: 2 }} dangerouslySetInnerHTML={{ __html: barcodeSvg }} />
                 )}
-                <div style={{ fontSize: 9, fontFamily: "'Courier New', monospace", color: '#0c2340', fontWeight: 700, marginTop: 2 }}>
+                <div style={{ fontSize: 9, fontFamily: "'Courier New', monospace", color: '#000', fontWeight: 700, marginTop: 2 }}>
                   {(saleBill.billSerial || saleBill.id).toUpperCase()}
                 </div>
               </div>
@@ -926,10 +926,10 @@ export default function PharmacyPage() {
               {/* Serial No Box — random alphanumeric code for medicine returns */}
               <div style={{
                 textAlign: 'center', padding: '8px 4px', margin: '6px 0',
-                border: '2px dashed #dc2626', borderRadius: 6, background: '#fef2f2',
+                border: '2px dashed #000', borderRadius: 6, background: '#fff',
               }}>
-                <div style={{ fontSize: 7, color: '#dc2626', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Serial No</div>
-                <div style={{ fontSize: 20, fontWeight: 900, color: '#dc2626', fontFamily: "'Courier New', monospace", letterSpacing: 4, margin: '3px 0' }}>
+                <div style={{ fontSize: 7, color: '#000', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Serial No</div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: '#000', fontFamily: "'Courier New', monospace", letterSpacing: 4, margin: '3px 0' }}>
                   {saleBill.returnCode || '---------'}
                 </div>
               </div>
@@ -946,15 +946,15 @@ export default function PharmacyPage() {
                   ['Payment', saleBill.paymentMethod],
                 ].map(([label, value]) => (
                   <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, padding: '1px 0' }}>
-                    <span style={{ color: '#64748b', fontWeight: 600 }}>{label}:</span>
-                    <span style={{ color: '#1e293b', fontWeight: 500 }}>{value}</span>
+                    <span style={{ color: '#000', fontWeight: 700 }}>{label}:</span>
+                    <span style={{ color: '#000', fontWeight: 700 }}>{value}</span>
                   </div>
                 ))}
               </div>
 
               {/* Title */}
               <div style={{ textAlign: 'center', padding: '4px 0', borderBottom: '1px dashed #e2e8f0', borderTop: '1px dashed #e2e8f0' }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: '#0c2340', letterSpacing: 1 }}>Medicine Bill / Slip</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#000', letterSpacing: 1 }}>Medicine Bill / Slip</span>
               </div>
 
               {/* Items Table — compact */}
@@ -964,8 +964,8 @@ export default function PharmacyPage() {
                     {['#', 'Name', 'Qty', 'Total'].map(h => (
                       <th key={h} style={{
                         padding: '2px 4px', fontSize: 8, fontWeight: 700, textTransform: 'uppercase',
-                        letterSpacing: 0.5, color: '#0c2340', background: '#f1f5f9',
-                        borderBottom: '2px solid #0c2340', textAlign: h === 'Total' ? 'right' : h === 'Qty' ? 'center' : 'left',
+                        letterSpacing: 0.5, color: '#000', background: '#fff',
+                        borderBottom: '2px solid #000', textAlign: h === 'Total' ? 'right' : h === 'Qty' ? 'center' : 'left',
                       }}>{h}</th>
                     ))}
                   </tr>
@@ -974,7 +974,7 @@ export default function PharmacyPage() {
                   {saleBill.items.map((it, i) => (
                     <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
                       <td style={{ padding: '2px 4px', fontSize: 10, borderBottom: '1px solid #f1f5f9' }}>{i + 1}</td>
-                      <td style={{ padding: '2px 4px', fontSize: 10, borderBottom: '1px solid #f1f5f9', fontWeight: 600 }}>{it.name}</td>
+                      <td style={{ padding: '2px 4px', fontSize: 10, borderBottom: '1px solid #f1f5f9', fontWeight: 700 }}>{it.name}</td>
                       <td style={{ padding: '2px 4px', fontSize: 10, borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>{it.quantity}</td>
                       <td style={{ padding: '2px 4px', fontSize: 10, borderBottom: '1px solid #f1f5f9', textAlign: 'right', fontWeight: 700 }}>{currency} {it.total.toLocaleString()}</td>
                     </tr>
@@ -989,12 +989,12 @@ export default function PharmacyPage() {
                   <span>{currency} {subtotal.toLocaleString()}</span>
                 </div>
                 {discPct > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '2px 0', color: '#dc2626' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '2px 0', color: '#000' }}>
                     <span>Discount ({discPct}% - {discTypeLabel})</span>
                     <span>-{currency} {discAmt.toLocaleString()}</span>
                   </div>
                 )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 900, color: '#0c2340', padding: '4px 0', borderTop: '2px solid #0c2340', borderBottom: '2px solid #0c2340', marginTop: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 900, color: '#000', padding: '4px 0', borderTop: '2px solid #000', borderBottom: '2px solid #000', marginTop: 4 }}>
                   <span>GRAND TOTAL</span>
                   <span>{currency} {saleBill.totalAmount.toLocaleString()}</span>
                 </div>
@@ -1002,23 +1002,23 @@ export default function PharmacyPage() {
 
               {/* Footer */}
               <div style={{ textAlign: 'center', padding: '6px 0', marginTop: 4, borderTop: '2px dashed #cbd5e1' }}>
-                <div style={{ fontSize: 9, color: '#64748b', fontStyle: 'italic' }}>Thank you for visiting {hdr?.hospitalName || 'BAGA HOSPITAL'}!</div>
-                <div style={{ fontSize: 7, color: '#94a3b8' }}>Computer Generated Bill | {saleBill.date} {saleBill.time}</div>
+                <div style={{ fontSize: 9, color: '#000', fontStyle: 'italic' }}>Thank you for visiting {hdr?.hospitalName || 'BAGA HOSPITAL'}!</div>
+                <div style={{ fontSize: 7, color: '#000' }}>Computer Generated Bill | {saleBill.date} {saleBill.time}</div>
               </div>
 
               {/* Action Buttons */}
               <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                 <button onClick={printBillSlip} style={{
                   flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                  padding: '8px 0', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6,
-                  fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  padding: '8px 0', background: '#2563eb', color: '#000', border: 'none', borderRadius: 6,
+                  fontSize: 12, fontWeight: 700, cursor: 'pointer',
                 }}>
                   <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                   Re-Print
                 </button>
                 <button onClick={closeBill} style={{
-                  flex: 1, padding: '8px 0', background: '#fff', color: '#475569', border: '1px solid #cbd5e1',
-                  borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  flex: 1, padding: '8px 0', background: '#fff', color: '#000', border: '1px solid #cbd5e1',
+                  borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer',
                 }}>
                   Close
                 </button>
@@ -2189,8 +2189,8 @@ export default function PharmacyPage() {
                 {expiredMeds.length > 0 && (
                   <button onClick={async () => {
                     const { hospitalName, hospitalLogo, hospitalAddress, hospitalPhone } = await getPrintHeader();
-                    const rows = expiredMeds.map((m, i) => `<tr style="background:${i%2===0?'#fff':'#fef2f2'}"><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #fecaca;">${i+1}</td><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #fecaca;font-weight:600;">${m.name}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fecaca;">${m.genericName}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fecaca;">${m.form}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fecaca;">${m.strength}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fecaca;">${m.packing||'-'}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fecaca;">${m.expiryDate}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fecaca;">${m.stock}</td></tr>`).join('');
-                    triggerPrint(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Expired Medicines</title><style>@page{size:A4;margin:10mm;}*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;font-size:11px;}.header{text-align:center;padding:10px 0;border-bottom:2px solid #dc2626;}.logo{width:48px;height:48px;object-fit:contain;}.hname{font-size:18px;font-weight:800;color:#991b1b;}.haddr,.hphone{font-size:10px;color:#64748b;}.title{text-align:center;padding:8px;font-size:14px;font-weight:700;color:#991b1b;}table{width:100%;border-collapse:collapse;margin-top:8px;}th{padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;color:#fff;background:#dc2626;border-bottom:2px solid #991b1b;text-align:left;}td{padding:4px 8px;font-size:10px;border-bottom:1px solid #fecaca;}.footer{text-align:center;padding:10px;font-size:9px;color:#94a3b8;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body><div class="header">${hospitalLogo?`<img class="logo" src="${hospitalLogo}" />`:''}<div class="hname">${hospitalName}</div>${hospitalAddress?`<div class="haddr">${hospitalAddress}</div>`:''}${hospitalPhone?`<div class="hphone">${hospitalPhone}</div>`:''}</div><div class="title">Expired Medicines Report — ${todayStr()}</div><table><thead><tr><th>#</th><th>Medicine Name</th><th>Generic</th><th>Form</th><th>Strength</th><th>Batch/Packing</th><th>Expiry Date</th><th>Stock</th></tr></thead><tbody>${rows}</tbody></table><div class="footer">Total Expired: ${expiredMeds.length} | Generated: ${todayStr()} ${timeStr()}</div></body></html>`);
+                    const rows = expiredMeds.map((m, i) => `<tr style="background:${i%2===0?'#fff':'#fef2f2'}"><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #000;">${i+1}</td><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #000;font-weight:700;">${m.name}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #000;">${m.genericName}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #000;">${m.form}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #000;">${m.strength}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #000;">${m.packing||'-'}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #000;">${m.expiryDate}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #000;">${m.stock}</td></tr>`).join('');
+                    triggerPrint(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Expired Medicines</title><style>@page{size:A4;margin:10mm;}*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Segoe UI',Arial,sans-serif;color:#000;font-size:11px;}.header{text-align:center;padding:10px 0;border-bottom:2px solid #000;}.logo{width:48px;height:48px;object-fit:contain;}.hname{font-size:18px;font-weight:800;color:#000;}.haddr,.hphone{font-size:10px;color:#000;}.title{text-align:center;padding:8px;font-size:14px;font-weight:700;color:#000;}table{width:100%;border-collapse:collapse;margin-top:8px;}th{padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;color:#000;background:#fff;border-bottom:2px solid #000;text-align:left;}td{padding:4px 8px;font-size:10px;border-bottom:1px solid #000;}.footer{text-align:center;padding:10px;font-size:9px;color:#000;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body><div class="header">${hospitalLogo?`<img class="logo" src="${hospitalLogo}" />`:''}<div class="hname">${hospitalName}</div>${hospitalAddress?`<div class="haddr">${hospitalAddress}</div>`:''}${hospitalPhone?`<div class="hphone">${hospitalPhone}</div>`:''}</div><div class="title">Expired Medicines Report — ${todayStr()}</div><table><thead><tr><th>#</th><th>Medicine Name</th><th>Generic</th><th>Form</th><th>Strength</th><th>Batch/Packing</th><th>Expiry Date</th><th>Stock</th></tr></thead><tbody>${rows}</tbody></table><div class="footer">Total Expired: ${expiredMeds.length} | Generated: ${todayStr()} ${timeStr()}</div></body></html>`);
                   }} className="btn btn-outline btn-sm border-red-300 text-red-700 hover:bg-red-50">
                     <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                     Print
@@ -2229,8 +2229,8 @@ export default function PharmacyPage() {
                     <button onClick={async () => {
                       const { hospitalName, hospitalLogo, hospitalAddress, hospitalPhone } = await getPrintHeader();
                       const filtered = lowStockMeds.filter(m => !expiredMeds.find(em => em.id === m.id));
-                      const rows = filtered.map((m, i) => `<tr style="background:${i%2===0?'#fff':'#fffbeb'}"><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #fde68a;">${i+1}</td><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #fde68a;font-weight:600;">${m.name}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fde68a;">${m.category}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fde68a;">${m.stock}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fde68a;">${m.minStock}</td></tr>`).join('');
-                      triggerPrint(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Low Stock</title><style>@page{size:A4;margin:10mm;}*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;font-size:11px;}.header{text-align:center;padding:10px 0;border-bottom:2px solid #d97706;}.logo{width:48px;height:48px;object-fit:contain;}.hname{font-size:18px;font-weight:800;color:#92400e;}.haddr,.hphone{font-size:10px;color:#64748b;}.title{text-align:center;padding:8px;font-size:14px;font-weight:700;color:#92400e;}table{width:100%;border-collapse:collapse;margin-top:8px;}th{padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;color:#fff;background:#d97706;border-bottom:2px solid #92400e;text-align:left;}td{padding:4px 8px;font-size:10px;border-bottom:1px solid #fde68a;}.footer{text-align:center;padding:10px;font-size:9px;color:#94a3b8;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body><div class="header">${hospitalLogo?`<img class="logo" src="${hospitalLogo}" />`:''}<div class="hname">${hospitalName}</div>${hospitalAddress?`<div class="haddr">${hospitalAddress}</div>`:''}${hospitalPhone?`<div class="hphone">${hospitalPhone}</div>`:''}</div><div class="title">Low Stock Report — ${todayStr()}</div><table><thead><tr><th>#</th><th>Medicine Name</th><th>Category</th><th>Current Stock</th><th>Min Stock</th></tr></thead><tbody>${rows}</tbody></table><div class="footer">Total Low Stock: ${filtered.length} | Generated: ${todayStr()} ${timeStr()}</div></body></html>`);
+                      const rows = filtered.map((m, i) => `<tr style="background:${i%2===0?'#fff':'#fffbeb'}"><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #000;">${i+1}</td><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #000;font-weight:700;">${m.name}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #000;">${m.category}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #000;">${m.stock}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #000;">${m.minStock}</td></tr>`).join('');
+                      triggerPrint(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Low Stock</title><style>@page{size:A4;margin:10mm;}*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Segoe UI',Arial,sans-serif;color:#000;font-size:11px;}.header{text-align:center;padding:10px 0;border-bottom:2px solid #000;}.logo{width:48px;height:48px;object-fit:contain;}.hname{font-size:18px;font-weight:800;color:#000;}.haddr,.hphone{font-size:10px;color:#000;}.title{text-align:center;padding:8px;font-size:14px;font-weight:700;color:#000;}table{width:100%;border-collapse:collapse;margin-top:8px;}th{padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;color:#000;background:#fff;border-bottom:2px solid #000;text-align:left;}td{padding:4px 8px;font-size:10px;border-bottom:1px solid #000;}.footer{text-align:center;padding:10px;font-size:9px;color:#000;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body><div class="header">${hospitalLogo?`<img class="logo" src="${hospitalLogo}" />`:''}<div class="hname">${hospitalName}</div>${hospitalAddress?`<div class="haddr">${hospitalAddress}</div>`:''}${hospitalPhone?`<div class="hphone">${hospitalPhone}</div>`:''}</div><div class="title">Low Stock Report — ${todayStr()}</div><table><thead><tr><th>#</th><th>Medicine Name</th><th>Category</th><th>Current Stock</th><th>Min Stock</th></tr></thead><tbody>${rows}</tbody></table><div class="footer">Total Low Stock: ${filtered.length} | Generated: ${todayStr()} ${timeStr()}</div></body></html>`);
                     }} className="btn btn-outline btn-sm border-amber-300 text-amber-700 hover:bg-amber-50">
                       <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                       Print
@@ -2238,8 +2238,8 @@ export default function PharmacyPage() {
                     <button onClick={async () => {
                       const { hospitalName, hospitalLogo, hospitalAddress, hospitalPhone } = await getPrintHeader();
                       const filtered = lowStockMeds.filter(m => !expiredMeds.find(em => em.id === m.id));
-                      const rows = filtered.map((m, i) => `<tr style="background:${i%2===0?'#fff':'#fffbeb'}"><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #fde68a;">${i+1}</td><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #fde68a;font-weight:600;">${m.name}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fde68a;">${m.category}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fde68a;">${m.stock}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #fde68a;">${m.minStock}</td></tr>`).join('');
-                      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Low Stock</title><style>@page{size:A4;margin:10mm;}*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;font-size:11px;}.header{text-align:center;padding:10px 0;border-bottom:2px solid #d97706;}.logo{width:48px;height:48px;object-fit:contain;}.hname{font-size:18px;font-weight:800;color:#92400e;}.haddr,.hphone{font-size:10px;color:#64748b;}.title{text-align:center;padding:8px;font-size:14px;font-weight:700;color:#92400e;}table{width:100%;border-collapse:collapse;margin-top:8px;}th{padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;color:#fff;background:#d97706;border-bottom:2px solid #92400e;text-align:left;}td{padding:4px 8px;font-size:10px;border-bottom:1px solid #fde68a;}.footer{text-align:center;padding:10px;font-size:9px;color:#94a3b8;}</style></head><body><div class="header">${hospitalLogo?`<img class="logo" src="${hospitalLogo}" />`:''}<div class="hname">${hospitalName}</div>${hospitalAddress?`<div class="haddr">${hospitalAddress}</div>`:''}${hospitalPhone?`<div class="hphone">${hospitalPhone}</div>`:''}</div><div class="title">Low Stock Report — ${todayStr()}</div><table><thead><tr><th>#</th><th>Medicine Name</th><th>Category</th><th>Current Stock</th><th>Min Stock</th></tr></thead><tbody>${rows}</tbody></table><div class="footer">Total Low Stock: ${filtered.length} | Generated: ${todayStr()} ${timeStr()}</div></body></html>`;
+                      const rows = filtered.map((m, i) => `<tr style="background:${i%2===0?'#fff':'#fffbeb'}"><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #000;">${i+1}</td><td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #000;font-weight:700;">${m.name}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #000;">${m.category}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #000;">${m.stock}</td><td style="padding:4px 8px;font-size:9px;border-bottom:1px solid #000;">${m.minStock}</td></tr>`).join('');
+                      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Low Stock</title><style>@page{size:A4;margin:10mm;}*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Segoe UI',Arial,sans-serif;color:#000;font-size:11px;}.header{text-align:center;padding:10px 0;border-bottom:2px solid #000;}.logo{width:48px;height:48px;object-fit:contain;}.hname{font-size:18px;font-weight:800;color:#000;}.haddr,.hphone{font-size:10px;color:#000;}.title{text-align:center;padding:8px;font-size:14px;font-weight:700;color:#000;}table{width:100%;border-collapse:collapse;margin-top:8px;}th{padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;color:#000;background:#fff;border-bottom:2px solid #000;text-align:left;}td{padding:4px 8px;font-size:10px;border-bottom:1px solid #000;}.footer{text-align:center;padding:10px;font-size:9px;color:#000;}</style></head><body><div class="header">${hospitalLogo?`<img class="logo" src="${hospitalLogo}" />`:''}<div class="hname">${hospitalName}</div>${hospitalAddress?`<div class="haddr">${hospitalAddress}</div>`:''}${hospitalPhone?`<div class="hphone">${hospitalPhone}</div>`:''}</div><div class="title">Low Stock Report — ${todayStr()}</div><table><thead><tr><th>#</th><th>Medicine Name</th><th>Category</th><th>Current Stock</th><th>Min Stock</th></tr></thead><tbody>${rows}</tbody></table><div class="footer">Total Low Stock: ${filtered.length} | Generated: ${todayStr()} ${timeStr()}</div></body></html>`;
                       const blob = new Blob([html], { type: 'text/html' });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');

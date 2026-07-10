@@ -404,7 +404,7 @@ export default function AccountsPage() {
       `<tr><td>${item.type}</td><td>${item.description}${item.quantity > 1 ? ' x' + item.quantity : ''}</td><td style="text-align:right">${cur} ${item.amount.toLocaleString()}</td></tr>`
     ).join('');
     const balance = receiptModal.totalAmount - receiptModal.paidAmount;
-    const html = `<!DOCTYPE html><html><head><title>Receipt - ${receiptModal.id}</title><style>body{font-family:Arial,sans-serif;padding:30px;max-width:500px;margin:0 auto;color:#333}table{width:100%;border-collapse:collapse;margin:10px 0}th,td{padding:6px 8px;text-align:left;font-size:13px;border-bottom:1px solid #e2e8f0}th{background:#f8fafc;font-size:11px;text-transform:uppercase;color:#64748b}.total{font-weight:bold;font-size:15px;border-top:2px solid #1e293b;padding-top:8px}.paid{color:#059669}.balance{color:#dc2626}.header{text-align:center;border-bottom:2px solid #1e293b;padding-bottom:12px;margin-bottom:16px}.header h1{font-size:20px;color:#1e293b}.header p{font-size:11px;color:#64748b}</style></head><body><div class="header"><h1>Bill Receipt</h1><p>${receiptModal.date} ${receiptModal.time}</p></div><table><tr><th colspan="2">Bill ID</th><td style="text-align:right">${receiptModal.id}</td></tr><tr><th colspan="2">Patient</th><td style="text-align:right">${receiptModal.patientName} (${receiptModal.patientNo})</td></tr></table><table><thead><tr><th>Type</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead><tbody>${itemsHtml}</tbody></table><table><tr class="total"><td colspan="2">Total</td><td style="text-align:right">${cur} ${receiptModal.totalAmount.toLocaleString()}</td></tr><tr class="paid"><td colspan="2">Paid</td><td style="text-align:right">${cur} ${receiptModal.paidAmount.toLocaleString()}</td></tr>${balance > 0 ? `<tr class="balance"><td colspan="2">Balance</td><td style="text-align:right">${cur} ${balance.toLocaleString()}</td></tr>` : ''}<tr><td>Status</td><td>${receiptModal.status}</td><td style="text-align:right">${receiptModal.paymentMethod}</td></tr></table><p style="text-align:center;font-size:11px;color:#94a3b8;margin-top:20px">Received By: ${receiptModal.receivedBy}</p></body></html>`;
+    const html = `<!DOCTYPE html><html><head><title>Receipt - ${receiptModal.id}</title><style>body{font-family:Arial,sans-serif;padding:30px;max-width:500px;margin:0 auto;color:#000}table{width:100%;border-collapse:collapse;margin:10px 0}th,td{padding:6px 8px;text-align:left;font-size:13px;border-bottom:1px solid #000}th{background:#fff;font-size:11px;text-transform:uppercase;color:#000}.total{font-weight:bold;font-size:15px;border-top:2px solid #000;padding-top:8px}.paid{color:#000}.balance{color:#000}.header{text-align:center;border-bottom:2px solid #000;padding-bottom:12px;margin-bottom:16px}.header h1{font-size:20px;color:#000}.header p{font-size:11px;color:#000}</style></head><body><div class="header"><h1>Bill Receipt</h1><p>${receiptModal.date} ${receiptModal.time}</p></div><table><tr><th colspan="2">Bill ID</th><td style="text-align:right">${receiptModal.id}</td></tr><tr><th colspan="2">Patient</th><td style="text-align:right">${receiptModal.patientName} (${receiptModal.patientNo})</td></tr></table><table><thead><tr><th>Type</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead><tbody>${itemsHtml}</tbody></table><table><tr class="total"><td colspan="2">Total</td><td style="text-align:right">${cur} ${receiptModal.totalAmount.toLocaleString()}</td></tr><tr class="paid"><td colspan="2">Paid</td><td style="text-align:right">${cur} ${receiptModal.paidAmount.toLocaleString()}</td></tr>${balance > 0 ? `<tr class="balance"><td colspan="2">Balance</td><td style="text-align:right">${cur} ${balance.toLocaleString()}</td></tr>` : ''}<tr><td>Status</td><td>${receiptModal.status}</td><td style="text-align:right">${receiptModal.paymentMethod}</td></tr></table><p style="text-align:center;font-size:11px;color:#000;margin-top:20px">Received By: ${receiptModal.receivedBy}</p></body></html>`;
     triggerPrint(html);
   };
 
@@ -412,14 +412,14 @@ export default function AccountsPage() {
     // Generate a clean print-specific HTML instead of sending the entire DOM
     // (sending full DOM via data: URL causes print timeout)
     const html = `<!DOCTYPE html><html><head><title>Accounts Report</title><style>
-      body{font-family:Arial,sans-serif;padding:20px;color:#333;font-size:12px}
-      h2{font-size:16px;margin-bottom:12px;color:#1e293b}
+      body{font-family:Arial,sans-serif;padding:20px;color:#000;font-size:12px}
+      h2{font-size:16px;margin-bottom:12px;color:#000}
       table{width:100%;border-collapse:collapse;margin-top:8px}
-      th,td{padding:5px 8px;text-align:left;border-bottom:1px solid #e2e8f0;font-size:11px}
-      th{background:#f1f5f9;color:#475569;font-weight:600}
+      th,td{padding:5px 8px;text-align:left;border-bottom:1px solid #000;font-size:11px}
+      th{background:#fff;color:#000;font-weight:700}
       .num{text-align:right}
-      .total-row{font-weight:bold;border-top:2px solid #1e293b}
-      .hdr{text-align:center;border-bottom:2px solid #1e293b;padding-bottom:8px;margin-bottom:16px}
+      .total-row{font-weight:bold;border-top:2px solid #000}
+      .hdr{text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:16px}
       @media print{body{padding:10px}}
     </style></head><body>
       <div class="hdr"><h1>BAGA Hospital Management System</h1><p>Accounts Report</p></div>

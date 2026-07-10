@@ -276,33 +276,33 @@ export default function DoctorDischargePage() {
   <title>Discharge Slip - ${selectedPatient.name}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, Helvetica, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #333; background: #fff; }
+    body { font-family: Arial, Helvetica, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #000; background: #fff; }
     @page { size: A4; margin: 15mm; }
-    .header { text-align: center; border-bottom: 3px double #333; padding-bottom: 15px; margin-bottom: 20px; }
-    .header h1 { margin: 0; font-size: 26px; color: #1a1a1a; letter-spacing: 1px; }
-    .header .subtitle { margin: 4px 0; color: #666; font-size: 14px; font-weight: 600; }
-    .header .tagline { font-size: 11px; color: #999; }
-    .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 20px; padding: 14px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef; }
+    .header { text-align: center; border-bottom: 3px double #000; padding-bottom: 15px; margin-bottom: 20px; }
+    .header h1 { margin: 0; font-size: 26px; color: #000; letter-spacing: 1px; }
+    .header .subtitle { margin: 4px 0; color: #000; font-size: 14px; font-weight:700; }
+    .header .tagline { font-size: 11px; color: #000; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 20px; padding: 14px; background: #fff; border-radius: 8px; border: 1px solid #000; }
     .info-item { font-size: 13px; }
-    .info-item span { font-weight: bold; color: #1a1a1a; }
-    .divider { border: none; border-top: 2px solid #e9ecef; margin: 20px 0; }
+    .info-item span { font-weight: bold; color: #000; }
+    .divider { border: none; border-top: 2px solid #000; margin: 20px 0; }
     .section { margin: 20px 0; }
-    .section h3 { color: #1a1a1a; border-bottom: 2px solid #7c3aed; padding-bottom: 6px; margin-bottom: 12px; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .section h3 { color: #000; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 12px; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px; }
     table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
-    th { background: #7c3aed; color: white; text-align: left; padding: 8px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
-    td { padding: 7px 10px; border: 1px solid #dee2e6; }
-    tr:nth-child(even) { background: #f8f9fa; }
+    th { background: #fff; color:#000; text-align: left; padding: 8px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+    td { padding: 7px 10px; border: 1px solid #000; }
+    tr:nth-child(even) { background: #fff; }
     .lab-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
-    .lab-item { background: #f0fdf4; border: 1px solid #bbf7d0; padding: 6px 10px; border-radius: 4px; font-size: 13px; }
-    .lab-item::before { content: "\\2713  "; color: #16a34a; font-weight: bold; }
-    .notes-box { background: #fefce8; border: 1px solid #fde68a; padding: 14px; border-radius: 8px; font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
-    .advice-box { background: #eff6ff; border: 1px solid #bfdbfe; padding: 14px; border-radius: 8px; font-size: 13px; line-height: 1.7; white-space: pre-wrap; margin-top: 10px; }
+    .lab-item { background: #fff; border: 1px solid #000; padding: 6px 10px; border-radius: 4px; font-size: 13px; }
+    .lab-item::before { content: "\\2713  "; color: #000; font-weight: bold; }
+    .notes-box { background: #fff; border: 1px solid #000; padding: 14px; border-radius: 8px; font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
+    .advice-box { background: #fff; border: 1px solid #000; padding: 14px; border-radius: 8px; font-size: 13px; line-height: 1.7; white-space: pre-wrap; margin-top: 10px; }
     .signature-area { display: flex; justify-content: space-between; margin-top: 50px; }
     .sig-block { text-align: center; width: 200px; }
-    .sig-line { border-top: 1px solid #333; padding-top: 6px; font-size: 12px; color: #1a1a1a; }
-    .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #aaa; border-top: 1px solid #e9ecef; padding-top: 10px; }
-    .print-btn { position: fixed; top: 15px; right: 15px; padding: 10px 24px; background: #7c3aed; color: #fff; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(124,58,237,0.4); z-index: 999; }
-    .print-btn:hover { background: #6d28d9; }
+    .sig-line { border-top: 1px solid #000; padding-top: 6px; font-size: 12px; color: #000; }
+    .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #000; border-top: 1px solid #000; padding-top: 10px; }
+    .print-btn { position: fixed; top: 15px; right: 15px; padding: 10px 24px; background: #fff; color: #000; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(124,58,237,0.4); z-index: 999; }
+    .print-btn:hover { background: #fff; }
     @media print { body { padding: 0; } @page { margin: 10mm; } }
   </style>
 </head>
@@ -376,12 +376,12 @@ export default function DoctorDischargePage() {
     <div class="sig-block">
       <div style="height:60px"></div>
       <div class="sig-line">${doctorName}</div>
-      <p style="font-size:11px;color:#666;margin-top:4px">${doctorDept} Department</p>
+      <p style="font-size:11px;color:#000;margin-top:4px">${doctorDept} Department</p>
     </div>
     <div class="sig-block">
       <div style="height:60px"></div>
       <div class="sig-line">Medical Superintendent</div>
-      <p style="font-size:11px;color:#666;margin-top:4px">BAGA Hospital</p>
+      <p style="font-size:11px;color:#000;margin-top:4px">BAGA Hospital</p>
     </div>
   </div>
 

@@ -189,7 +189,7 @@ export default function AppointmentPage() {
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; padding: 20px; }
         .slip {
-          border: 2px solid #1e293b;
+          border: 2px solid #000;
           border-radius: 12px;
           padding: 24px 20px;
           max-width: 400px;
@@ -197,17 +197,17 @@ export default function AppointmentPage() {
         }
         .header {
           text-align: center;
-          border-bottom: 2px dashed #1e293b;
+          border-bottom: 2px dashed #000;
           padding-bottom: 14px;
           margin-bottom: 14px;
         }
-        .header h1 { color: #1e293b; font-size: 20px; }
-        .header p { color: #64748b; font-size: 11px; margin-top: 2px; }
+        .header h1 { color: #000; font-size: 20px; }
+        .header p { color: #000; font-size: 11px; margin-top: 2px; }
         .slip-title {
           text-align: center;
           font-size: 16px;
           font-weight: 700;
-          color: #2563eb;
+          color: #000;
           margin-bottom: 12px;
           text-transform: uppercase;
           letter-spacing: 1px;
@@ -219,13 +219,13 @@ export default function AppointmentPage() {
           font-size: 12px;
           margin-bottom: 14px;
           padding-bottom: 14px;
-          border-bottom: 1px solid #e2e8f0;
+          border-bottom: 1px solid #000;
         }
-        .info-grid .label { color: #64748b; }
-        .info-grid .value { color: #1e293b; font-weight: 600; }
+        .info-grid .label { color: #000; }
+        .info-grid .value { color: #000; font-weight:700; }
         .detail-box {
-          background: #f1f5f9;
-          border: 1px solid #cbd5e1;
+          background: #fff;
+          border: 1px solid #000;
           border-radius: 8px;
           padding: 12px 14px;
           margin-bottom: 14px;
@@ -235,39 +235,39 @@ export default function AppointmentPage() {
           justify-content: space-between;
           padding: 5px 0;
           font-size: 12px;
-          border-bottom: 1px solid #e2e8f0;
+          border-bottom: 1px solid #000;
         }
         .detail-row:last-child { border-bottom: none; }
-        .detail-row .dl { color: #64748b; }
-        .detail-row .dv { color: #1e293b; font-weight: 600; }
+        .detail-row .dl { color: #000; }
+        .detail-row .dv { color: #000; font-weight:700; }
         .fee-box {
           text-align: center;
-          background: #1e293b;
-          color: white;
+          background: #fff;
+          color:#000;
           border-radius: 8px;
           padding: 10px;
           margin-bottom: 14px;
         }
-        .fee-box .fee-label { font-size: 11px; color: #94a3b8; }
+        .fee-box .fee-label { font-size: 11px; color: #000; }
         .fee-box .fee-amount { font-size: 22px; font-weight: 700; margin-top: 2px; }
         .status-box {
           text-align: center;
-          border: 2px solid #2563eb;
+          border: 2px solid #000;
           border-radius: 8px;
           padding: 8px;
           font-size: 14px;
           font-weight: 700;
-          color: #2563eb;
-          background: #eff6ff;
+          color: #000;
+          background: #fff;
         }
         .footer {
           text-align: center;
           margin-top: 16px;
           padding-top: 12px;
-          border-top: 2px dashed #1e293b;
+          border-top: 2px dashed #000;
         }
-        .footer p { font-size: 10px; color: #64748b; }
-        .footer .thank { font-size: 12px; color: #1e293b; font-weight: 600; margin-top: 4px; }
+        .footer p { font-size: 10px; color: #000; }
+        .footer .thank { font-size: 12px; color: #000; font-weight:700; margin-top: 4px; }
         @media print { body { padding: 0; } }
       </style></head>
       <body>
