@@ -262,6 +262,39 @@ function cmdInit() {
   return Buffer.from([ESC, 0x40]);
 }
 
+/** Set print density/darkness (0-8, higher = darker) */
+function cmdDensity(level) {
+  // ESC 7 n — Set print density
+  // n = 0 (lightest) to 8 (darkest)
+  // Some printers use ESC \x7B n, others use GS ! n
+  // The most common is ESC 7 n for thermal density
+  const density = Math.min(Math.max(level || 8, 0), 8);
+  return Buffer.from([ESC, 0x37, density]);
+}
+
+/** Set print speed (lower = slower = darker print) */
+function cmdPrintSpeed(speed) {
+  // GS ( K <parameters> — some printers support speed control
+  // Lower speed = darker print
+  // 0 = fastest (lightest), 1 = normal, 2 = slow (darkest)
+  return Buffer.from([GS, 0x21, speed || 0x01]);
+}
+
+/** Enable double-strike (darker text on impact printers, also works on some thermal) */
+function cmdDoubleStrike(enable) {
+  return Buffer.from([ESC, 0x47, enable ? 0x01 : 0x00]);
+}
+
+/** Set emphasized (bold) mode — stays on until turned off */
+function cmdSetEmphasized(enable) {
+  return Buffer.from([ESC, 0x45, enable ? 0x01 : 0x00]);
+}
+
+/** Set underline mode */
+function cmdSetUnderline(enable) {
+  return Buffer.from([ESC, 0x2D, enable ? 0x01 : 0x00]);
+}
+
 /** Set print mode */
 function cmdPrintMode(mode) {
   return Buffer.from([ESC, 0x21, mode]);
@@ -430,6 +463,11 @@ function createReceiptBuilder() {
     init() {
       commands.push(cmdInit());
       commands.push(cmdCharset(printerConfig.charset));
+      // Set MAXIMUM darkness for full black print
+      commands.push(cmdDensity(8));          // Maximum density (darkest)
+      commands.push(cmdPrintSpeed(2));       // Slowest speed (darkest print)
+      commands.push(cmdDoubleStrike(true));  // Double-strike for darker
+      commands.push(cmdSetEmphasized(true)); // Bold mode ON (stays on)
       commands.push(cmdLineSpacing(printerConfig.lineSpacing));
     },
 
@@ -437,8 +475,12 @@ function createReceiptBuilder() {
       if (align !== undefined) commands.push(cmdAlign(align));
       if (mode !== undefined) commands.push(cmdPrintMode(mode));
       commands.push(Buffer.from(text + '\n', 'utf8'));
-      // Reset to normal after each line
-      if (mode !== undefined) commands.push(cmdPrintMode(FONT_A));
+      // After each line, reset print mode but KEEP bold (emphasized) on
+      // This ensures all text is full black/bold
+      if (mode !== undefined) {
+        commands.push(cmdPrintMode(FONT_A)); // Reset size
+        commands.push(cmdSetEmphasized(true)); // Keep bold ON
+      }
     },
 
     text(text) {
@@ -701,22 +743,23 @@ async function printReceipt(htmlContent, options) {
       }
       // Check if line looks like a title (all caps, short)
       if (trimmed === trimmed.toUpperCase() && trimmed.length < maxWidth && trimmed.length > 3) {
-        rb.setText(trimmed, ALIGN_CENTER, EMPHASIZED);
+        rb.setText(trimmed, ALIGN_CENTER, EMPHASIZED | DOUBLE_H);
       } else if (trimmed.length > maxWidth) {
-        // Wrap long lines
+        // Wrap long lines — ALL text is bold (emphasized stays on from init)
         const words = trimmed.split(' ');
         let currentLine = '';
         for (const word of words) {
           if ((currentLine + ' ' + word).length > maxWidth) {
-            rb.setText(currentLine, ALIGN_LEFT);
+            rb.setText(currentLine, ALIGN_LEFT, EMPHASIZED);
             currentLine = word;
           } else {
             currentLine = currentLine ? currentLine + ' ' + word : word;
           }
         }
-        if (currentLine) rb.setText(currentLine, ALIGN_LEFT);
+        if (currentLine) rb.setText(currentLine, ALIGN_LEFT, EMPHASIZED);
       } else {
-        rb.setText(trimmed, ALIGN_LEFT);
+        // ALL text is bold/EMPHASIZED for full black print
+        rb.setText(trimmed, ALIGN_LEFT, EMPHASIZED);
       }
     }
 
